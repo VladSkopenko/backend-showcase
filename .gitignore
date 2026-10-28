@@ -21,13 +21,6 @@ htmlcov/
 dist/
 build/
 
-# Node and React
-node_modules/
-frontend/dist/
-frontend/coverage/
-*.tsbuildinfo
-npm-debug.log*
-
 # Terraform (.terraform.lock.hcl is committed)
 .terraform/
 *.tfstate
