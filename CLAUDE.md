@@ -17,7 +17,7 @@ Always loaded from `.claude/rules/`:
 - `safety.md`: git, files, secrets, broken environments
 - `workflow.md`: spec first, tests first, reviews, verification
 
-Loaded only for files under `app/`, `tests/` and `migrations/`:
+Loaded only for files under `backend/`:
 - `backend.md`: SQLAlchemy, Alembic, configuration, errors, LLM features
 
 Hard guardrails live in `.claude/settings.json`: git state changes, deletions and migrations always
