@@ -1,0 +1,40 @@
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.tfvars
+!*.tfvars.example
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Node and React
+node_modules/
+frontend/dist/
+frontend/coverage/
+*.tsbuildinfo
+npm-debug.log*
+
+# Terraform (.terraform.lock.hcl is committed)
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/

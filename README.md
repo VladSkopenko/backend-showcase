@@ -12,6 +12,7 @@ infrastructure as code, all running for $0.
 - Public datasets and public APIs only.
 - Each phase ends green in CI and with this README updated, including a screenshot where it helps.
 - Small commits, pull requests only, branch protection on `main`, `rc` and `prod`.
+- Branches: `feature/*` and `fix/*` merge into `main`, `hotfix/*` into `rc`.
 - Every non-obvious choice gets a short decision record in `docs/adr/`.
 
 ## Working with AI agents
@@ -68,17 +69,21 @@ Workflows are exported to `n8n/workflows/` and versioned with the code.
 | Branch | Environment | Deploy |
 |---|---|---|
 | `main` | dev | automatically on every merge |
-| `rc` | staging | automatically on a merge from `main` |
+| `rc` | staging | automatically on a merge from `main` or a `hotfix/*` branch |
 | `prod` | production | on a merge from `rc`, after a manual approval in GitHub Environments |
 
-The image is built once per commit on `main` and the same tag moves from dev to staging to
-production. Nothing is rebuilt on promotion.
+Images are identified by the git tree hash, and each tree is built at most once. The same image moves
+from dev to staging to production by digest, and nothing is rebuilt on promotion. A hotfix merged into
+`rc` is built once there and cherry-picked back into `main`; a check on the next `main` to `rc` pull
+request catches a forgotten cherry-pick. See [ADR 4](docs/adr/0004-image-identity-and-promotion.md).
 
 One free VM runs two layers. The platform stack is deployed once: Caddy, Prometheus, Grafana,
 VictoriaLogs, Tempo, Alertmanager and n8n. The app stack is deployed per environment by the
 pipeline, with its own compose project, network, database and secrets, so app deploys never restart
-the platform. Only the API and Grafana are public; the other UIs are reachable through Tailscale.
-This trade-off gets its own ADR.
+the platform. Only the API and Grafana are public; the other UIs are reachable through Tailscale, and
+CI deploys over the tailnet with SSH closed to the internet. See
+[ADR 2](docs/adr/0002-ci-access-through-tailscale.md), [ADR 3](docs/adr/0003-deploy-entrypoint-verifies-commit.md)
+and [ADR 7](docs/adr/0007-single-vm-platform-and-app-stacks.md).
 
 ## Running it for $0
 
@@ -91,6 +96,7 @@ This trade-off gets its own ADR.
 | Terraform state and backups | OCI Object Storage | 20 GB in total |
 | Private access | Tailscale | free personal plan |
 | Alerts | Telegram bot | none |
+| Dead-man switch | healthchecks.io | free plan |
 
 Oracle caveats:
 - Signup asks for a payment card for verification. Always Free resources stay free in the home region.
@@ -114,15 +120,15 @@ Oracle caveats:
 | Git hooks | pre-commit: ruff and mypy on commit, pytest on pre-push |
 | Containers | multi-stage Dockerfile for `linux/arm64`, non-root user, healthcheck; docker compose per layer and environment |
 | CI | GitHub Actions on every pull request: lint, types, tests with Postgres and Redis services, coverage |
-| CD | build once, Trivy scan, push to GHCR, promote the same tag through dev, staging and production |
+| CD | build each tree once, Trivy scan, push to GHCR, promote the same digest through dev, staging and production |
 | Metrics | one Prometheus for all environments, labelled by `env`; app, node, Postgres and Redis exporters |
 | Dashboards | Grafana provisioned from the repo: technical metrics plus business analytics from PostgreSQL |
 | Logs and traces | VictoriaLogs, lighter than Loki, decided in an ADR; OpenTelemetry traces in Tempo |
-| Alerts | Alertmanager to a Telegram bot |
+| Alerts | Alertmanager to a Telegram bot, Watchdog to healthchecks.io as a dead-man switch |
 | Automation | n8n workflows fed by backend events through a transactional outbox |
 | AI | LLM review triage and a Telegram booking agent in n8n |
-| Private access | Tailscale for Prometheus, VictoriaLogs and n8n |
-| Infrastructure | Terraform for the Oracle Cloud VM, network and firewall; Caddy with automatic HTTPS |
+| Private access | Tailscale for Prometheus, VictoriaLogs, n8n and CI deploys |
+| Infrastructure | Terraform for the Oracle Cloud VM, network, firewall and data volume; cloud-init for the base OS; Caddy with automatic HTTPS |
 | Frontend | minimal pages, framework decided in an ADR |
 | Load testing | k6 with thresholds, results published in this README |
 | Stretch | k3s with Helm instead of docker compose |
@@ -155,11 +161,13 @@ Done when: `make up` starts everything and `make test` passes locally.
 Done when: a pull request with a failing test cannot be merged.
 
 ### Phase 3. Containers and delivery
+- [ ] Terraform for the Oracle Cloud VM, network, firewall and data volume, with state in Object Storage; cloud-init for the base OS
+- [ ] Deploy access only through Tailscale, port 22 closed, a forced-command entrypoint that deploys only commits from the environment's branch
 - [ ] Multi-stage Dockerfile with a small runtime image and a non-root user
-- [ ] Build on an arm64 runner, scan with Trivy, push to GHCR tagged with the commit sha
+- [ ] Build on an arm64 runner, scan with Trivy, push to GHCR tagged with the tree hash and the commit sha
 - [ ] Three app compose projects on the VM: dev, staging and production, each with its own database and secrets
-- [ ] Deploy runs migrations, gates on `/health` and rolls back to the previous tag on failure
-- [ ] Promotion by pull requests `main` to `rc` and `rc` to `prod`, with manual approval for production
+- [ ] Deploy runs migrations, gates on `/health`, and on failure downgrades the migrations and rolls back to the previous digest
+- [ ] Promotion by pull requests `main` to `rc` and `rc` to `prod`, with manual approval for production; hotfixes through `rc`
 
 Done when: a merge to `main` reaches dev without manual steps, and the same image reaches production
 after two pull requests and one approval.
@@ -170,13 +178,14 @@ after two pull requests and one approval.
 - [ ] Prometheus scraping all three environments and the exporters
 - [ ] Grafana dashboards provisioned from the repo, with an environment selector
 - [ ] Structured JSON logs in VictoriaLogs, traces in Tempo, linked from Grafana
-- [ ] Alert rules with Alertmanager sending to Telegram
+- [ ] Alert rules with Alertmanager sending to Telegram, a dead-man switch on healthchecks.io, an alert on orders stuck in `placed`
 - [ ] n8n in the platform stack; Prometheus, VictoriaLogs and n8n reachable only through Tailscale
 
 Done when: a broken production deploy raises an alert in Telegram within minutes.
 
 ### Phase 5. Infrastructure as code
-- [ ] Terraform for the Oracle Cloud VM, network and firewall, with state in Object Storage
+- [ ] Server replacement with `terraform apply -replace`, data reattached from the block volume
+- [ ] Tailnet policy managed by Terraform
 - [ ] Caddy in front of all three environments with automatic HTTPS on DuckDNS subdomains
 - [ ] Nightly `pg_dump` of production to Object Storage, with one tested restore
 - [ ] Secrets only in GitHub environments, never in the repo
@@ -208,9 +217,12 @@ and the manager sees all of it in Grafana and Telegram.
 
 ```
 .
-├── app/                 # FastAPI application
-├── migrations/          # Alembic
-├── tests/
+├── backend/
+│   ├── app/             # FastAPI application
+│   ├── migrations/      # Alembic
+│   ├── tests/
+│   ├── Dockerfile
+│   └── pyproject.toml
 ├── frontend/            # menu and booking, order tracker, kitchen screen
 ├── n8n/workflows/       # exported n8n workflows
 ├── deploy/
@@ -223,9 +235,7 @@ and the manager sees all of it in Grafana and Telegram.
 │   └── architecture.md  # Mermaid diagram
 ├── .github/workflows/
 ├── .pre-commit-config.yaml
-├── Dockerfile
-├── Makefile
-└── pyproject.toml
+└── Makefile
 ```
 
 ## What a reviewer should see

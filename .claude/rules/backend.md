@@ -1,8 +1,6 @@
 ---
 paths:
-  - "app/**"
-  - "tests/**"
-  - "migrations/**"
+  - "backend/**"
 ---
 
 # Backend
