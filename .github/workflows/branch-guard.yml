@@ -1,0 +1,25 @@
+name: branch-guard
+
+on:
+  pull_request:
+    branches: [rc, prod]
+    # "edited" re-runs the check when a PR is retargeted to another base branch
+    types: [opened, synchronize, reopened, edited]
+
+permissions: {}
+
+jobs:
+  source-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check source branch
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          [ "$SAME_REPO" = "true" ] || { echo "PRs from forks are not allowed"; exit 1; }
+          case "$BASE:$HEAD" in
+            rc:main|rc:hotfix/*|prod:rc) exit 0 ;;
+            *) echo "PR from $HEAD into $BASE is not allowed"; exit 1 ;;
+          esac
