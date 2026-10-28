@@ -245,3 +245,4 @@ and the manager sees all of it in Grafana and Telegram.
 - A GIF of the live order tracker and the kitchen screen
 - An architecture diagram and the decision records
 - Grafana screenshots and load test numbers
+
