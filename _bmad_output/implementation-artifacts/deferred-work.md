@@ -1,17 +1,14 @@
 # Deferred work
 
 - source_spec: `_bmad_output/implementation-artifacts/spec-backend-skeleton-health.md`
-  summary: Settings are read at import through a cached get_settings(), so tests can override them only via cache_clear().
-  evidence: app.main builds the app at import; resolve when database settings arrive (factory without module-level settings read, or Depends(get_settings)).
+  summary: Add a test that the module-level `app.main:app` serves `/health`.
+  evidence: Renaming the module attribute keeps the suite green but breaks `uvicorn app.main:app`; the DevOps phase healthcheck will cover it end to end.
 - source_spec: `_bmad_output/implementation-artifacts/spec-backend-skeleton-health.md`
-  summary: No test covers the module-level `app` that uvicorn serves.
-  evidence: renaming it keeps tests green; the DevOps-phase container healthcheck will exercise app.main:app.
+  summary: Complete the ADR 11 import rules for `config`, core-to-core imports and the callers of `application_services`.
+  evidence: The current wording does not list `config`, makes "features never import each other" clash with "may import core features", and does not say who calls `application_services`.
 - source_spec: `_bmad_output/implementation-artifacts/spec-backend-skeleton-health.md`
-  summary: Clarify ADR 11 and backend.md import rules for config, core-to-core imports and callers of application_services.
-  evidence: current wording says features import only core and common, which omits config and leaves core-to-core and application_services callers undefined.
+  summary: Bring `naming_convention` and "background tasks open their own session" from ADR 11 into `.claude/rules/backend.md`.
+  evidence: Agents load `backend.md`, not the ADR, so the first model or background task can miss these rules.
 - source_spec: `_bmad_output/implementation-artifacts/spec-backend-skeleton-health.md`
-  summary: Carry the ADR 11 naming_convention and background-task session rules into backend.md.
-  evidence: agents load backend.md, not the ADR, when editing backend/**.
-- source_spec: `_bmad_output/implementation-artifacts/spec-backend-skeleton-health.md`
-  summary: Decide expire_on_commit=False or build response schemas before the session dependency commits.
-  evidence: unverified; with async SQLAlchemy, lazy-loading expired attributes after commit raises MissingGreenlet; settle in the database spec.
+  summary: Decide `expire_on_commit=False` or build response schemas before the session dependency exits.
+  evidence: Unverified (medium if true): it depends on whether response serialization runs after the `scope="function"` commit; settle when the session dependency is written.

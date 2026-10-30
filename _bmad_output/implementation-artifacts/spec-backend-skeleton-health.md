@@ -100,6 +100,18 @@ context:
 | 7 | Schemas and endpoints follow different layouts | low | schemas mirror the endpoints pattern |
 | 8 | Design note claimed uv_build may ship an empty package | low | corrected |
 | 9 | Settings fields without defaults trip mypy without the pydantic plugin | low | noted in Design Notes |
+| R1 | HEAD /health returns 405 (edge-case) | low | rejected: every planned probe (deploy gate, compose healthcheck, Prometheus) uses GET; the fix adds a parameter for an unseen caller |
+| R2 | `get_settings()` cache is filled at import, so overrides are ignored (edge-case, blind) | low | rejected: no test overrides settings yet; the first one fails loudly and is fixed with `get_settings.cache_clear()` |
+| R3 | A generic `APP_NAME` env var replaces the title (edge-case) | low | rejected: cosmetic, and the fix adds an env prefix nobody asked for |
+| R4 | OpenAPI contract (`HealthResponse` ref, literal, title) is not tested (verification-gap) | medium | patch: add `test_openapi_lists_health_schema` |
+| R5 | The "no warnings" criterion is not enforced (verification-gap, blind) | medium | patch: `filterwarnings = ["error"]` in pytest config |
+| R6 | Module-level `app` is not exercised by any test (verification-gap) | low | defer: the DevOps phase healthcheck runs `app.main:app` end to end |
+| R7 | The review diff left out `uv.lock` and the spec (blind) | false | `uv.lock` is generated and left out of the review on purpose; the spec is the claims file, not code |
+| R8 | ADR 11 import rules: `config`, core-to-core imports and the `application_services` callers are unspecified (blind) | medium | defer: the fix edits the ADR and agent rules |
+| R9 | `backend.md` Data section drops `naming_convention` and background sessions from ADR 11 (blind) | medium | defer: the fix edits agent rules |
+| R10 | `expire_on_commit` is not pinned, so expired ORM attributes may reload after commit (blind) | maybe-false | defer: no database code yet; settle when the session dependency is written |
+| R11 | CLAUDE.md still names `app/`, `tests/` and `migrations/` (blind) | false | CLAUDE.md already says "Loaded only for files under `backend/`" |
+| R12 | `TestClient` used without `with`, so lifespan is skipped and the first test sets the template (blind) | low | patch: use `with TestClient(create_app()) as client` (direct correction) |
 | R1 | Edge: `HEAD /health` returns 405 | low, rejected | no planned probe uses HEAD; the deploy gate and the healthcheck use GET |
 | R2 | Edge/Blind: `create_app()` at import fills the `get_settings` cache, so overrides need `cache_clear()` | medium | defer: real once settings vary per test; resolve when the database settings land |
 | R3 | Edge: a generic `APP_NAME` env var would override the title | low, rejected | unlikely in containers with an explicit env; adding a prefix is a new convention |
