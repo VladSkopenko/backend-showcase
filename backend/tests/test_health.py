@@ -13,12 +13,13 @@ def test_health_returns_ok() -> None:
 
 def test_openapi_lists_health_schema() -> None:
     with TestClient(create_app()) as client:
-        spec = client.get("/openapi.json").json()
+        response = client.get("/openapi.json")
 
-    response_schema = spec["paths"]["/health"]["get"]["responses"]["200"]["content"][
-        "application/json"
-    ]["schema"]
-    assert response_schema["$ref"] == "#/components/schemas/HealthResponse"
-    status = spec["components"]["schemas"]["HealthResponse"]["properties"]["status"]
-    assert status.get("const") == "ok" or status.get("enum") == ["ok"]
+    assert response.status_code == 200
+    spec = response.json()
     assert spec["info"]["title"] == "backend-showcase"
+    health_200 = spec["paths"]["/health"]["get"]["responses"]["200"]
+    schema_ref = health_200["content"]["application/json"]["schema"]["$ref"]
+    assert schema_ref == "#/components/schemas/HealthResponse"
+    status = spec["components"]["schemas"]["HealthResponse"]["properties"]["status"]
+    assert status["const"] == "ok"
