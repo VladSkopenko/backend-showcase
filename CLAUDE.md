@@ -27,4 +27,10 @@ Personal notes that should stay out of git go to `CLAUDE.local.md`.
 
 ## Commands
 
-Filled in as phases land. There is no code to run before Phase 1.
+Run from `backend/`:
+
+- Install: `uv sync`
+- Run: `uv run uvicorn app.main:app --port 8000`
+- Test: `uv run pytest`
+- Lint: `uv run ruff check . && uv run ruff format --check .`
+- Type-check: `uv run mypy src tests`

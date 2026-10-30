@@ -116,7 +116,7 @@ Oracle caveats:
 | Background jobs | Celery or Taskiq on Redis, decided in an ADR |
 | Dependencies | uv with a lockfile |
 | Code quality | ruff for lint and format, mypy |
-| Tests | pytest, pytest-asyncio, httpx, testcontainers, coverage with a minimum threshold |
+| Tests | pytest, pytest-asyncio, httpx2, testcontainers, coverage with a minimum threshold |
 | Git hooks | pre-commit: ruff and mypy on commit, pytest on pre-push |
 | Containers | multi-stage Dockerfile for `linux/arm64`, non-root user, healthcheck; docker compose per layer and environment |
 | CI | GitHub Actions on every pull request: lint, types, tests with Postgres and Redis services, coverage |
@@ -218,7 +218,7 @@ and the manager sees all of it in Grafana and Telegram.
 ```
 .
 ├── backend/
-│   ├── app/             # FastAPI application
+│   ├── src/app/         # FastAPI application
 │   ├── migrations/      # Alembic
 │   ├── tests/
 │   ├── Dockerfile
