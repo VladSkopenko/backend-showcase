@@ -12,3 +12,6 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-backend-skeleton-health.md`
   summary: Decide `expire_on_commit=False` or build response schemas before the session dependency exits.
   evidence: Unverified (medium if true): it depends on whether response serialization runs after the `scope="function"` commit; settle when the session dependency is written.
+- source_spec: `_bmad_output/implementation-artifacts/spec-import-linter-contracts.md`
+  summary: Decide where domain exceptions live and where the handler that maps them to HTTP responses is registered.
+  evidence: ADR 11 says services raise domain exceptions and the API layer translates them, but not where either lives; the first real feature would choose on its own.

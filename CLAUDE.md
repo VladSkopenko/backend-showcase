@@ -34,3 +34,4 @@ Run from `backend/`:
 - Test: `uv run pytest`
 - Lint: `uv run ruff check . && uv run ruff format --check .`
 - Type-check: `uv run mypy src tests`
+- Import rules: `uv run lint-imports`
