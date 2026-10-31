@@ -93,6 +93,10 @@ ignore_imports = [
     "app.features.** -> app.features.core.**",
     "app.features.** -> app.features.application_services.**",
     "app.features.application_services.** -> app.features.**",
+    # `.**` matches only descendants, so the package roots need their own entries.
+    "app.features.** -> app.features.core",
+    "app.features.** -> app.features.application_services",
+    "app.features.application_services -> app.features.**",
 ]
 unmatched_ignore_imports_alerting = "none"
 
