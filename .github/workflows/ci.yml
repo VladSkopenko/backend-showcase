@@ -1,0 +1,59 @@
+name: CI 
+
+on:                    
+  pull_request:
+    branches: [main, rc, prod]
+  push:
+    branches: [main]
+  workflow_dispatch: # manual run from the Actions tab
+
+permissions:                  
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+
+jobs:                         
+  backend:    
+    name: Backend checks              
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.14"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies
+        id: install
+        run: uv sync --locked
+
+      - name: Run lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: uv run ruff check .
+
+      - name: Run format
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: uv run ruff format --check .
+
+      - name: Run type check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: uv run mypy src tests
+
+      - name: Run architecture linter
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: uv run lint-imports
+
+      - name: Run tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: uv run pytest
+
+

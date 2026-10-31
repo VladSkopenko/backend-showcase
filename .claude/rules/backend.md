@@ -8,15 +8,28 @@ paths:
 ## Structure
 - Layout and import rules are in `docs/adr/0011-feature-sliced-backend-layout.md`. The package is
   `app` under `backend/src/`; never import it as `src.app`.
-- Inside a feature: `endpoints → services → repositories → models`. Features import only `core`
-  features and `common`, never each other. Cross-feature work lives in `application_services`.
+- Inside a feature: `endpoints → services → repositories → models`. Endpoints never import
+  `repositories` or `models`; services may import `models`. Only
+  `endpoints` import `schemas`; services take plain arguments or a command dataclass and return
+  models or dataclasses.
+- `services`, `repositories` and `models` never import `fastapi` or `starlette`. Services raise
+  domain exceptions; the API layer turns them into HTTP responses.
+- Regular features never import each other. Core features may be imported by anyone and import
+  each other one way only. `app.config` and `common` are importable everywhere.
+- Cross-feature work lives in `application_services`, called only by endpoints of regular features
+  and `infrastructure.background_tasks`, never by core features.
+- `common` imports no features. Import contracts live in `backend/pyproject.toml`; wildcards
+  cover new features. When `app.common`, `app.features.application_services` or
+  `app.infrastructure.background_tasks` is created, drop `.**` for it there. `uv run lint-imports`
+  must pass.
 - Create a directory together with its first file, never empty in advance.
 
 ## Data
-- Models use `DeclarativeBase` and `Mapped[...]`. Every model module is imported by the model
-  registry that Alembic's `env.py` loads.
+- Models use `DeclarativeBase` and `Mapped[...]`. The base `MetaData` has a `naming_convention`.
+  Every model module is imported by the model registry that Alembic's `env.py` loads.
 - Repositories only `flush()`, never `commit()`. The request session dependency commits, and it is
   always used with `scope="function"` so the commit happens before the response is sent.
+  Background tasks open their own session and transaction.
 - SQLAlchemy stores the enum member name, not its value. PostgreSQL enum labels and
   `server_default` values must be the uppercase names; lowercase values are for API JSON only.
 - A second foreign key to the same table needs an explicit `foreign_keys=` on both sides of every

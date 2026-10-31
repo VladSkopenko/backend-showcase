@@ -30,9 +30,89 @@ strict = true
 testpaths = ["tests"]
 filterwarnings = ["error"]
 
+# Import rules from docs/adr/0011-feature-sliced-backend-layout.md.
+# `*` matches one module level, `**` any depth; a wildcard that matches nothing passes.
+# A plain module name must exist, so packages not created yet use `.**`. When such a package
+# appears, drop the `.**` so its own __init__ is checked too.
+[tool.importlinter]
+root_package = "app"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Feature layers: endpoints > services > repositories > models"
+type = "layers"
+containers = ["app.features.*", "app.features.core.*"]
+layers = ["(endpoints)", "(services)", "(repositories)", "(models)"]
+
+[[tool.importlinter.contracts]]
+name = "Endpoints never import repositories or models"
+type = "forbidden"
+source_modules = ["app.features.*.endpoints", "app.features.core.*.endpoints"]
+forbidden_modules = [
+    "app.features.*.repositories",
+    "app.features.*.models",
+    "app.features.core.*.repositories",
+    "app.features.core.*.models",
+]
+# endpoints -> services -> models is the allowed path; only direct imports are banned.
+allow_indirect_imports = "true"
+
+[[tool.importlinter.contracts]]
+name = "Only endpoints import schemas"
+type = "forbidden"
+source_modules = [
+    "app.features.*.services",
+    "app.features.*.repositories",
+    "app.features.*.models",
+    "app.features.core.*.services",
+    "app.features.core.*.repositories",
+    "app.features.core.*.models",
+]
+forbidden_modules = ["app.features.*.schemas", "app.features.core.*.schemas"]
+
+[[tool.importlinter.contracts]]
+name = "Code below endpoints knows nothing about HTTP"
+type = "forbidden"
+source_modules = [
+    "app.features.*.services",
+    "app.features.*.repositories",
+    "app.features.*.models",
+    "app.features.core.*.services",
+    "app.features.core.*.repositories",
+    "app.features.core.*.models",
+    "app.features.application_services.**",
+    "app.infrastructure.background_tasks.**",
+]
+forbidden_modules = ["fastapi", "starlette"]
+
+[[tool.importlinter.contracts]]
+name = "Regular features are independent"
+type = "independence"
+modules = ["app.features.*"]
+ignore_imports = [
+    "app.features.** -> app.features.core.**",
+    "app.features.** -> app.features.application_services.**",
+    "app.features.application_services.** -> app.features.**",
+]
+unmatched_ignore_imports_alerting = "none"
+
+[[tool.importlinter.contracts]]
+# app.features.* also matches app.features.core, so common may not import core features either.
+name = "Common imports no features; core never imports regular features"
+type = "forbidden"
+source_modules = ["app.common.**", "app.features.core"]
+forbidden_modules = ["app.features.*"]
+
+[[tool.importlinter.contracts]]
+name = "Only regular endpoints and background tasks call application services"
+type = "protected"
+protected_modules = ["app.features.application_services.**"]
+allowed_importers = ["app.features.*.endpoints", "app.infrastructure.background_tasks.**"]
+
 [dependency-groups]
 dev = [
     "httpx2>=2.16.0",
+    "import-linter>=2.15",
     "mypy>=2.4.1",
     "pytest>=9.2.0",
     "ruff>=0.17.3",

@@ -4,7 +4,8 @@ Date: 2026-10-28
 
 ## Status
 
-Accepted
+Accepted. Amended 2026-11-01: the import rules were completed and are now enforced by
+import-linter in CI.
 
 ## Context
 
@@ -33,10 +34,23 @@ app/
 
 Dependency rules:
 
-- Inside a feature, calls go one way: `endpoints → services → repositories → models`.
-- A feature may import `core` features and `common`. Features never import each other.
-- Work that spans features lives only in `application_services`.
-- `common` and `core` never import non-core features.
+- Inside a feature, calls go one way: `endpoints → services → repositories → models`. Endpoints
+  never import `repositories` or `models`; they reach data only through services. Services may
+  import `models` directly, because they return them.
+- Only `endpoints` import `schemas`. An endpoint parses the request schema, calls the service with
+  plain arguments or a small command dataclass, and builds the response schema from what the
+  service returns (`Schema.model_validate(obj)` with `from_attributes`).
+- Services know nothing about HTTP. `services`, `repositories`, `models`, `application_services`
+  and background tasks never import `fastapi` or `starlette`. Services raise domain exceptions, and the API layer translates them into HTTP
+  responses, so a service can run from an endpoint, a background task, a cron job or a script.
+- Everything may import `app.config` and `common`.
+- Regular features never import each other. Any feature may import `core` features. Core features
+  may import each other in one direction only, never in a cycle.
+- `common` imports no features at all, core included. Core never imports regular features.
+- Work that spans features lives only in `application_services`. Only endpoints of regular
+  features and `infrastructure.background_tasks` call it; core features never do.
+- Core features importing each other in one direction only is a convention; no contract checks it.
+- These rules are checked by import-linter contracts in `backend/pyproject.toml`, run in CI.
 
 Data rules, binding from the first model on:
 
@@ -62,5 +76,8 @@ Directories are created with their first file. Nothing exists ahead of time to s
 - Each feature can be read, tested and changed in one place. A cross-feature flow is easy to find,
   because it can only live in `application_services`.
 - A commit that fails reaches the client as an error, not as a 200 with lost data.
-- The import rules are a convention for now. An import linter can enforce them later if they start
-  slipping.
+- The import rules are enforced by import-linter in CI, so a violation fails the pull request
+  instead of waiting for a reviewer to notice it.
+- New features are picked up by the contracts' wildcards automatically. The one manual step: when
+  `app.common`, `app.features.application_services` or `app.infrastructure.background_tasks` is
+  created, drop the `.**` suffix in the contracts so the package's own `__init__` is checked too.
