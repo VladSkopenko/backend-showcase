@@ -12,7 +12,9 @@ COPY src ./src
 RUN uv sync --locked --no-dev --no-editable
 
 FROM python:3.14-slim
-RUN useradd --create-home --uid 10001 app
+# The runtime never installs packages; dropping the base image's pip also drops its vendored,
+# vulnerable dependencies that Trivy reports.
+RUN python -m pip uninstall --yes pip && useradd --create-home --uid 10001 app
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
