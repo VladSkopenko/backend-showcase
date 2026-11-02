@@ -1,0 +1,36 @@
+#cloud-config
+# Rendered by templatefile() in compute.tf into metadata.user_data. Runs once, at first boot (ADR 8).
+
+# TODO: packages
+#   - Docker from the docker.com apt repo (Ubuntu 26.04 "resolute" is published)
+#   - Tailscale from the pkgs.tailscale.com apt repo ("resolute" is published)
+#   - git for the deploy entrypoint
+
+# TODO: data volume (ADR 6, AD-11)
+#   - device /dev/oracleoci/oraclevdb, check it exists on Ubuntu
+#   - create the filesystem only when the volume is empty: overwrite false, mount by label
+#   - mount at /srv/data, fstab entry with nofail
+
+# TODO: Tailscale (ADR 2, AD-4)
+#   - tailscale up with the one-off auth key, advertise tag:server
+#   - variable tailscale_auth_key, sensitive
+
+# TODO: users
+#   - deploy: authorized_keys with four keys (dev, staging, prod, platform), each with a forced command
+#     that runs the entrypoint for its target only; docker group; no password
+#   - ubuntu: password hash for the serial console break-glass (ADR 2), no SSH keys
+#   - variable ubuntu_password_hash, sensitive
+
+# TODO: deploy entrypoint (ADR 3, AD-5)
+#   - single argument: commit sha
+#   - clone of the public repo, fetch the target branch, refuse a sha not reachable from it
+#     (git merge-base --is-ancestor), run deploy/<app|platform>/deploy.sh from that commit
+#   - secrets arrive on stdin and land in the target .env with mode 600, never in argv or logs
+
+# TODO: sshd (ADR 2)
+#   - listen only on the tailscale0 address, no password auth, no root login
+#   - ordering: sshd must start after tailscaled has the address, also after a reboot
+
+# TODO: DuckDNS (AD-18)
+#   - point backend-showcase-{dev,staging,prod,grafana} at the VM public IP via the update API
+#   - variable duckdns_token, sensitive
