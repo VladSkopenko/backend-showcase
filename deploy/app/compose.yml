@@ -1,0 +1,17 @@
+# One compose file for every environment; only /srv/app/<env>/.env differs (ADR 6).
+# deploy.sh runs it as project app-<env> and writes APP_ENV and IMAGE into that .env.
+services:
+  api:
+    image: ${IMAGE:?IMAGE is written by deploy.sh}
+    restart: unless-stopped
+    mem_limit: 256m
+    networks:
+      default:
+      # Caddy and n8n reach each environment's API as app-<env>-api (AD-13, AD-15).
+      edge:
+        aliases:
+          - app-${APP_ENV:?APP_ENV is written by deploy.sh}-api
+
+networks:
+  edge:
+    external: true

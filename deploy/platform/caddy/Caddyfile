@@ -1,0 +1,3 @@
+backend-showcase-dev.duckdns.org {
+	reverse_proxy app-dev-api:8000
+}
