@@ -14,6 +14,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.import_linter_cache/
 .coverage
 .coverage.*
 htmlcov/
@@ -21,18 +22,13 @@ htmlcov/
 dist/
 build/
 
-# Node and React
-node_modules/
-frontend/dist/
-frontend/coverage/
-*.tsbuildinfo
-npm-debug.log*
-
 # Terraform (.terraform.lock.hcl is committed)
 .terraform/
 *.tfstate
 *.tfstate.*
 crash.log
+# Saved plans hold sensitive variables in plain text
+tfplan
 
 # OS and editors
 .DS_Store

@@ -10,7 +10,7 @@ created: '2026-10-28'
 updated: '2026-10-28'
 binds: [phase-3-containers-and-delivery, phase-4-observability-and-platform, phase-5-infrastructure-as-code]
 sources: [README.md, .memlog.md]
-companions: [docs/adr/0002 to docs/adr/0009]
+companions: [docs/adr/0002 to docs/adr/0010]
 ---
 
 # Architecture Spine: backend-showcase deployment and infrastructure
@@ -152,7 +152,13 @@ A solid arrow means the lower layer cannot exist without the upper one. Dotted a
 
 - **Binds:** cloud-init, Caddy
 - **Prevents:** public hosts pointing at a dead IP after the VM is replaced.
-- **Rule:** cloud-init sets every DuckDNS record to the VM's public IP at first boot through the DuckDNS update API. Each public host routes entirely to one stack: an environment host to that environment's app stack (frontend included), the Grafana host to Grafana. Caddy holds no app files.
+- **Rule:** cloud-init sets every DuckDNS record to the VM's public IP at first boot through the DuckDNS update API. Each public host routes entirely to one stack: an environment host to that environment's API, the Grafana host to Grafana. Caddy holds no app files, and no frontend runs on the VM.
+
+### AD-19: Frontend contract [ADOPTED]
+
+- **Binds:** API auth and WebSocket endpoints, the separate frontend repository
+- **Prevents:** a login that browsers silently break because the cookie is third-party, and a second origin the API has to trust.
+- **Rule:** The frontend is a separate Next.js repository hosted on Vercel. Browsers reach the API only through the frontend's server-side proxy (rewrites of `/api/*`), so the API sets no CORS headers. The auth cookie is host-only (no `Domain` attribute), `HttpOnly`, `Secure` and `SameSite=Lax`, so it binds to the frontend's domain when proxied. Tokens never go to `localStorage`. WebSocket connections go to the API host directly (see Deferred).
 
 ## Consistency Conventions
 
@@ -296,7 +302,8 @@ deploy/
 
 - **Zero-downtime deploys (blue-green behind Caddy).** `compose up` sends traffic to the new container before the health verdict. This is acceptable for a demo without real load. Revisit if a lost write is ever observed.
 - **Log shipping agent and log/metrics retention.** Phase 4. AD-13 and AD-14 already fix the network and failure mode.
-- **VictoriaLogs vs Loki, Celery vs Taskiq, frontend framework.** Separate ADRs already planned in the README; none of them changes topology.
+- **VictoriaLogs vs Loki, Celery vs Taskiq.** Separate ADRs already planned in the README; neither changes topology.
+- **WebSocket auth for the order tracker and kitchen screen.** Planned shape: a short-lived ticket fetched through the proxied `/api`, then `wss://` straight to the API host, with an allowlist of `Origin` values. Decided in the Phase 7 spec. Vercel's own WebSocket support is in beta, and proxying WebSockets through its rewrites is unconfirmed.
 - **Exact `mem_limit` per container.** Measured in Phase 3 and 4, then held by AD-12.
 - **VM OS image.** Current Ubuntu LTS for aarch64, picked when Terraform is written.
 - **Rate limits, demo data cleanup, LLM cost caps, kitchen workflow internals.** Application and workflow specs.
