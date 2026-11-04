@@ -1,9 +1,11 @@
+import os
 from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
 from alembic import command
 from alembic.config import Config
+from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import (
     AsyncConnection,
     AsyncEngine,
@@ -14,7 +16,22 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import NullPool
 
 from app.common import database
+from app.config import settings as settings_module
 from app.config.settings import get_settings
+
+# A developer's backend/.env must never change test behaviour or send mail. Runs at collection,
+# before any test module builds the app and fills the cached get_settings().
+for value in vars(settings_module).values():
+    if isinstance(value, type) and issubclass(value, BaseSettings) and value is not BaseSettings:
+        value.model_config["env_file"] = None
+
+
+@pytest.fixture(autouse=True)
+def isolated_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    # DATABASE_ variables stay, so a test run can point at another database.
+    for name in list(os.environ):
+        if name.startswith(("APP_", "EMAIL_", "AUTH_")):
+            monkeypatch.delenv(name)
 
 
 @pytest.fixture

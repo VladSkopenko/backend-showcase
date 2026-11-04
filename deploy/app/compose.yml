@@ -29,9 +29,14 @@ services:
     restart: unless-stopped
     mem_limit: 256m
     environment:
+      APP_ENVIRONMENT: ${APP_ENV:?APP_ENV is written by deploy.sh}
       DATABASE_HOST: postgres
       DATABASE_PORT: "5432"
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD comes from the GitHub Environment}
+      # Gmail SMTP from the GitHub Environment. Left empty, the API runs and logs an error per unsent email.
+      EMAIL_USERNAME: ${EMAIL_USERNAME:-}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
+      EMAIL_SENDER: ${EMAIL_SENDER:-}
     depends_on:
       postgres:
         condition: service_healthy

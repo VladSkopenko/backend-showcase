@@ -12,6 +12,24 @@ paths:
   `repositories` or `models`; services may import `models`. Only
   `endpoints` import `schemas`; services take plain arguments or a command dataclass and return
   models or dataclasses.
+- Each feature folder answers one question: `models/` are database tables, `schemas/` are HTTP
+  input and output (Pydantic, endpoints only), `dto/` are service input and output (dataclasses),
+  `enums/` are shared enumerations, `templates/` are files a service renders (e.g. emails),
+  `services/` hold only classes with behaviour plus `exceptions.py`. Domain error codes and messages live in `services/exceptions.py`, never in
+  endpoints. import-linter keeps `dto` and `enums` free of HTTP and `dto` free of `schemas`.
+- Route handlers only map the request schema to a service call and the result to a response
+  schema; no helper functions in route modules. FastAPI wiring lives next to them:
+  `endpoints/dependencies.py` (providers and `Annotated` aliases) and `endpoints/errors.py`
+  (domain error to HTTP status). Any decision or side effect, including email sending and
+  environment-dependent behaviour, belongs to a service.
+- Object-oriented style, as in `app/infrastructure/email`: repositories are classes holding the
+  session, services are classes with constructor-injected dependencies, one class per file,
+  keyword-only arguments on public methods. A service builds its own repositories from the
+  injected session, because endpoints may not import repositories; every other collaborator is
+  injected. Services receive only the settings values they use, not the whole `Settings`. Plain functions only for generic stateless helpers in
+  `app/common`.
+- Code explains itself through names and structure. No comments or docstrings that restate the
+  code; a comment is allowed only for a reason the code cannot show, such as a library gotcha.
 - `services`, `repositories` and `models` never import `fastapi` or `starlette`. Services raise
   domain exceptions; the API layer turns them into HTTP responses.
 - Regular features never import each other. Core features may be imported by anyone and import
@@ -30,11 +48,13 @@ paths:
 - Repositories only `flush()`, never `commit()`. The request session dependency commits, and it is
   always used with `scope="function"` so the commit happens before the response is sent.
   Background tasks open their own session and transaction.
-- SQLAlchemy stores the enum member name, not its value. PostgreSQL enum labels and
-  `server_default` values must be the uppercase names; lowercase values are for API JSON only.
+- Enum members use the same uppercase string for name and value (`VERIFIED = "VERIFIED"`), so the
+  database label, the API JSON and the code always read the same. PostgreSQL enum labels and
+  `server_default` values are these uppercase strings.
 - A second foreign key to the same table needs an explicit `foreign_keys=` on both sides of every
   relationship between those two tables.
-- Existing migrations are never edited. A schema fix is always a new revision.
+- Merged or deployed migrations are never edited; a schema fix to them is always a new revision. A
+  migration that exists only in the current branch may be changed until it is merged.
 - Write migration files but never apply them with `alembic upgrade` unless asked. Running tests is fine.
 
 ## Configuration
