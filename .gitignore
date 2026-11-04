@@ -27,6 +27,8 @@ build/
 *.tfstate
 *.tfstate.*
 crash.log
+# Saved plans hold sensitive variables in plain text
+tfplan
 
 # OS and editors
 .DS_Store
