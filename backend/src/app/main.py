@@ -5,7 +5,7 @@ from app.features.core.health.endpoints import router as health_router
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title=get_settings().app_name)
+    app = FastAPI(title=get_settings().app.name)
     app.include_router(health_router)
     return app
 

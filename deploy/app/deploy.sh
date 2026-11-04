@@ -21,6 +21,12 @@ umask 077
 mv "$dir/.env.new" "$dir/.env"
 
 docker network inspect edge > /dev/null 2>&1 || docker network create edge > /dev/null
-docker compose --project-name "$project" --file deploy/app/compose.yml --env-file "$dir/.env" up --detach --wait --wait-timeout 120
+compose=(docker compose --project-name "$project" --file deploy/app/compose.yml --env-file "$dir/.env")
+# Postgres first; an unchanged postgres service is left running on redeploys.
+"${compose[@]}" up --detach --wait --wait-timeout 120 postgres
+# Migrate with the new image before it serves traffic. A failed migration rolls back in its own
+# transaction and stops the deploy here, leaving the running API untouched (ADR 5).
+"${compose[@]}" run --rm --no-deps api alembic upgrade head
+"${compose[@]}" up --detach --wait --wait-timeout 120 api
 
 echo "deployed $digest"

@@ -23,6 +23,20 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # Database tests always hit a real PostgreSQL; the settings defaults point at this service.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
 
@@ -51,6 +65,15 @@ jobs:
       - name: Run architecture linter
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: uv run lint-imports
+
+      # Every migration must downgrade cleanly (ADR 5). `head`, not `heads`: a second head fails here.
+      - name: Run migration round-trip
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+          uv run alembic check
 
       - name: Run tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}

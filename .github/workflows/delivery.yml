@@ -126,12 +126,14 @@ jobs:
         env:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         run: |
           install -m 600 /dev/null ~/deploy_key
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/deploy_key
+          # Secrets go over stdin, never argv: printf is a shell builtin, and deploy.sh writes stdin to the .env.
           # The server's host key changes with every VM replacement; the tailnet already authenticates the peer.
-          out=$(ssh -i ~/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
-            "deploy@$DEPLOY_HOST" "$GITHUB_SHA" < /dev/null)
+          out=$(printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD" | ssh -i ~/deploy_key -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=accept-new "deploy@$DEPLOY_HOST" "$GITHUB_SHA")
           echo "$out"
           echo "### Dev: $out" >> "$GITHUB_STEP_SUMMARY"
 
