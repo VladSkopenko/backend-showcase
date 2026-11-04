@@ -30,6 +30,16 @@ resource "oci_core_instance" "server" {
     assign_public_ip = true
   }
 
+  metadata = {
+    user_data = base64encode(templatefile("${path.module}/cloud-init.yaml.tftpl", {
+      deploy_entrypoint    = base64encode(file("${path.module}/deploy-entrypoint.sh"))
+      deploy_public_keys   = var.deploy_public_keys
+      duckdns_token        = var.duckdns_token
+      tailscale_auth_key   = var.tailscale_auth_key
+      ubuntu_password_hash = var.ubuntu_password_hash
+    }))
+  }
+
   lifecycle {
     ignore_changes = [source_details[0].source_id]
   }
