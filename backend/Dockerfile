@@ -15,7 +15,11 @@ FROM python:3.14-slim
 # The runtime never installs packages; dropping the base image's pip also drops its vendored,
 # vulnerable dependencies that Trivy reports.
 RUN python -m pip uninstall --yes pip && useradd --create-home --uid 10001 app
+WORKDIR /app
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
+# Deploys run `alembic upgrade head` with the new image, so the migrations ship inside it.
+COPY alembic.ini ./
+COPY migrations ./migrations
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 USER app

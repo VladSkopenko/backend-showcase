@@ -3,9 +3,15 @@ name = "backend"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
+    "aiosmtplib>=5.1.3",
+    "alembic>=1.20.1",
+    "asyncpg>=0.32.0",
     "fastapi>=0.162.0",
-    "pydantic>=2.14.1",
+    "jinja2>=3.1.6",
+    "pwdlib[argon2]>=0.3.1",
+    "pydantic[email]>=2.14.1",
     "pydantic-settings>=2.16.2",
+    "sqlalchemy[asyncio]>=2.1.8",
     "uvicorn>=0.54.0",
 ]
 
@@ -64,9 +70,11 @@ source_modules = [
     "app.features.*.services",
     "app.features.*.repositories",
     "app.features.*.models",
+    "app.features.*.dto",
     "app.features.core.*.services",
     "app.features.core.*.repositories",
     "app.features.core.*.models",
+    "app.features.core.*.dto",
 ]
 forbidden_modules = ["app.features.*.schemas", "app.features.core.*.schemas"]
 
@@ -77,9 +85,13 @@ source_modules = [
     "app.features.*.services",
     "app.features.*.repositories",
     "app.features.*.models",
+    "app.features.*.dto",
+    "app.features.*.enums",
     "app.features.core.*.services",
     "app.features.core.*.repositories",
     "app.features.core.*.models",
+    "app.features.core.*.dto",
+    "app.features.core.*.enums",
     "app.features.application_services.**",
     "app.infrastructure.background_tasks.**",
 ]
@@ -104,7 +116,7 @@ unmatched_ignore_imports_alerting = "none"
 # app.features.* also matches app.features.core, so common may not import core features either.
 name = "Common imports no features; core never imports regular features"
 type = "forbidden"
-source_modules = ["app.common.**", "app.features.core"]
+source_modules = ["app.common", "app.features.core"]
 forbidden_modules = ["app.features.*"]
 
 [[tool.importlinter.contracts]]

@@ -1,10 +1,45 @@
 # One compose file for every environment; only /srv/app/<env>/.env differs (ADR 6).
-# deploy.sh runs it as project app-<env> and writes APP_ENV and IMAGE into that .env.
+# deploy.sh runs it as project app-<env> and writes APP_ENV, IMAGE and the stdin secrets into that .env.
+# That .env feeds interpolation only: a container gets a value only when it is declared under environment.
 services:
+  # Private to the project's default network, never on edge (AD-13).
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    mem_limit: 512m
+    command: postgres -c shared_buffers=128MB
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_DB: app
+      # Applies only to an empty data directory; a later change needs ALTER ROLE in the database.
+      # Must be alphanumeric (openssl rand -hex 32): .env values are unquoted, so $, " #" or a newline get mangled.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD comes from the GitHub Environment}
+    volumes:
+      # PostgreSQL 18 keeps PGDATA under /var/lib/postgresql/18/docker; the data volume survives VM replacement (AD-11).
+      - /srv/data/${APP_ENV:?APP_ENV is written by deploy.sh}/postgres:/var/lib/postgresql
+    healthcheck:
+      # TCP, not the socket: during first init the temporary server listens only on the unix socket.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "app", "-d", "app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   api:
     image: ${IMAGE:?IMAGE is written by deploy.sh}
     restart: unless-stopped
     mem_limit: 256m
+    environment:
+      APP_ENVIRONMENT: ${APP_ENV:?APP_ENV is written by deploy.sh}
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD comes from the GitHub Environment}
+      # Gmail SMTP from the GitHub Environment. Left empty, the API runs and logs an error per unsent email.
+      EMAIL_USERNAME: ${EMAIL_USERNAME:-}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
+      EMAIL_SENDER: ${EMAIL_SENDER:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       default:
       # Caddy and n8n reach each environment's API as app-<env>-api (AD-13, AD-15).
