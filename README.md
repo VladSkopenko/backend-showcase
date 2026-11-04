@@ -42,7 +42,7 @@ live. The restaurant gets invoices, reviews, notifications and analytics.
 | Invoices | PDF with VAT rendered by a background job and stored in Object Storage |
 | Reviews | on a dish, a visit or a booking: one table with three foreign keys and a CHECK that exactly one is set |
 | Analytics | Grafana reads PostgreSQL directly: revenue, popular dishes, ratings, no-shows |
-| Frontend | minimal: menu and booking, order tracker, kitchen screen |
+| Frontend | menu and booking, order tracker, kitchen screen; a separate Next.js repository that reaches this API through its own server-side proxy |
 
 ### n8n as the integration layer
 
@@ -116,7 +116,7 @@ Oracle caveats:
 | Background jobs | Celery or Taskiq on Redis, decided in an ADR |
 | Dependencies | uv with a lockfile |
 | Code quality | ruff for lint and format, mypy |
-| Tests | pytest, pytest-asyncio, httpx, testcontainers, coverage with a minimum threshold |
+| Tests | pytest, pytest-asyncio, httpx2, testcontainers, coverage with a minimum threshold |
 | Git hooks | pre-commit: ruff and mypy on commit, pytest on pre-push |
 | Containers | multi-stage Dockerfile for `linux/arm64`, non-root user, healthcheck; docker compose per layer and environment |
 | CI | GitHub Actions on every pull request: lint, types, tests with Postgres and Redis services, coverage |
@@ -129,7 +129,7 @@ Oracle caveats:
 | AI | LLM review triage and a Telegram booking agent in n8n |
 | Private access | Tailscale for Prometheus, VictoriaLogs, n8n and CI deploys |
 | Infrastructure | Terraform for the Oracle Cloud VM, network, firewall and data volume; cloud-init for the base OS; Caddy with automatic HTTPS |
-| Frontend | minimal pages, framework decided in an ADR |
+| Frontend | Next.js in a separate repository, hosted on Vercel; see [ADR 10](docs/adr/0010-frontend-in-a-separate-repository.md) |
 | Load testing | k6 with thresholds, results published in this README |
 | Stretch | k3s with Helm instead of docker compose |
 
@@ -208,7 +208,7 @@ Each feature starts from its own BMAD spec.
 - [ ] Domain events through an outbox to n8n: confirmations, reminders, morning digest, review triage
 - [ ] Telegram booking agent in n8n on top of the REST API
 - [ ] Business dashboards in Grafana
-- [ ] Minimal frontend: menu and booking, order tracker, kitchen screen
+- [ ] Frontend in its own repository: menu and booking, order tracker, kitchen screen
 
 Done when: a guest books, orders, pays, follows the order live, gets an invoice and leaves a review,
 and the manager sees all of it in Grafana and Telegram.
@@ -218,12 +218,11 @@ and the manager sees all of it in Grafana and Telegram.
 ```
 .
 ├── backend/
-│   ├── app/             # FastAPI application
+│   ├── src/app/         # FastAPI application
 │   ├── migrations/      # Alembic
 │   ├── tests/
 │   ├── Dockerfile
 │   └── pyproject.toml
-├── frontend/            # menu and booking, order tracker, kitchen screen
 ├── n8n/workflows/       # exported n8n workflows
 ├── deploy/
 │   ├── platform/        # Caddy, Prometheus, Grafana, VictoriaLogs, Tempo, Alertmanager, n8n
@@ -242,6 +241,6 @@ and the manager sees all of it in Grafana and Telegram.
 
 - A green CI badge and a coverage badge at the top of this README
 - Three live URLs with HTTPS: dev, staging and production
-- A GIF of the live order tracker and the kitchen screen
+- A GIF of the live order tracker and the kitchen screen, with a link to the frontend repository
 - An architecture diagram and the decision records
 - Grafana screenshots and load test numbers

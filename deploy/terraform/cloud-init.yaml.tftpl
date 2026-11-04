@@ -1,0 +1,92 @@
+#cloud-config
+# Rendered by templatefile() in compute.tf into metadata.user_data. Runs once, at first boot (ADR 8).
+# Shell in this file must avoid the brace form of variables: templatefile() interpolates it.
+
+package_update: true
+package_upgrade: true
+
+apt:
+  sources:
+    docker:
+      source: "deb [signed-by=$KEY_FILE] https://download.docker.com/linux/ubuntu $RELEASE stable"
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+    tailscale:
+      source: "deb [signed-by=$KEY_FILE] https://pkgs.tailscale.com/stable/ubuntu $RELEASE main"
+      keyid: 2596A99EAAB33821893C0A79458CA832957F5868
+
+packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin
+  - tailscale
+  - git
+
+# The users module runs before packages, so the docker group has to exist before Docker is installed.
+groups:
+  - docker
+
+# Without "default" cloud-init would not create the ubuntu user.
+users:
+  - default
+  - name: deploy
+    shell: /bin/bash
+    groups: docker
+    ssh_authorized_keys:
+%{ for target, key in deploy_public_keys ~}
+      - 'restrict,command="/usr/local/bin/deploy-entrypoint ${target}" ${key}'
+%{ endfor ~}
+
+# Break-glass: ubuntu logs in on the serial console with this password, never over SSH (ADR 2).
+ssh_pwauth: false
+chpasswd:
+  expire: false
+  users:
+    - name: ubuntu
+      password: '${ubuntu_password_hash}'
+
+write_files:
+  - path: /usr/local/bin/deploy-entrypoint
+    owner: root:root
+    permissions: "0755"
+    encoding: b64
+    content: ${deploy_entrypoint}
+  # The listen address is added in runcmd, once Tailscale has assigned it.
+  - path: /etc/ssh/sshd_config.d/10-backend-showcase.conf
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin no
+  # After a reboot Docker waits for the data volume, so containers never write state to the boot disk.
+  - path: /etc/systemd/system/docker.service.d/data-volume.conf
+    content: |
+      [Unit]
+      RequiresMountsFor=/srv/data
+
+runcmd:
+  - set -eu
+  # The volume attachment is created after the instance, so the disk can appear after cloud-init starts.
+  # A non-empty volume is never formatted (ADR 6).
+  - |
+    dev=/dev/oracleoci/oraclevdb
+    for i in $(seq 120); do [ -b "$dev" ] && break; sleep 5; done
+    [ -b "$dev" ]
+    blkid "$dev" || mkfs.ext4 -L srv-data "$dev"
+    mkdir -p /srv/data
+    echo 'LABEL=srv-data /srv/data ext4 defaults,nofail 0 2' >> /etc/fstab
+    systemctl daemon-reload
+    mount /srv/data
+  - >-
+    install -d -o deploy -g deploy
+    /srv/deploy /srv/app/dev /srv/app/staging /srv/app/prod /srv/platform
+    /srv/data/dev /srv/data/staging /srv/data/prod /srv/data/platform
+  - tailscale up --auth-key='${tailscale_auth_key}' --hostname=backend-showcase-server --advertise-tags=tag:server
+  # On Ubuntu sshd is socket-activated: the generator turns ListenAddress into ssh.socket, and the socket's
+  # FreeBind lets it bind before tailscale0 has the address after a reboot.
+  - echo "ListenAddress $(tailscale ip -4)" > /etc/ssh/sshd_config.d/20-listen-tailscale.conf
+  - systemctl daemon-reload
+  - systemctl restart ssh.socket
+  # An empty ip makes DuckDNS use the source address, which is the VM's public IP (AD-18).
+  - >-
+    curl -fsS --retry 5 --retry-all-errors
+    'https://www.duckdns.org/update?domains=backend-showcase-dev,backend-showcase-staging,backend-showcase-prod,backend-showcase-grafana&token=${duckdns_token}&ip='
+    | grep -qx OK

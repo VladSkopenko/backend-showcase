@@ -1,0 +1,11 @@
+compartment_ocid     = "ocid1.compartment.oc1..<unique_id>"
+duckdns_token        = "<duckdns_token>"
+tailscale_auth_key   = "tskey-auth-<one_off_key>"
+ubuntu_password_hash = "$6$<salt>$<hash>"
+
+deploy_public_keys = {
+  dev      = "ssh-ed25519 <public_key> backend-showcase-deploy-dev"
+  staging  = "ssh-ed25519 <public_key> backend-showcase-deploy-staging"
+  prod     = "ssh-ed25519 <public_key> backend-showcase-deploy-prod"
+  platform = "ssh-ed25519 <public_key> backend-showcase-deploy-platform"
+}
