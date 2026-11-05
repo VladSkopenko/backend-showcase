@@ -4,15 +4,22 @@ from app.common import clock
 from app.features.core.auth.dto import IssuedCode, VerificationOutcome
 from app.features.core.auth.enums import VerificationPurpose
 from app.features.core.auth.services.exceptions import AlreadyVerifiedError, UserNotFoundError
+from app.features.core.auth.services.session_service import SessionService
 from app.features.core.auth.services.verification_code_service import VerificationCodeService
 from app.features.core.users.models import User
 from app.features.core.users.repositories import UserRepository
 
 
 class EmailVerificationService:
-    def __init__(self, session: AsyncSession, code_service: VerificationCodeService) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        code_service: VerificationCodeService,
+        session_service: SessionService,
+    ) -> None:
         self._user_repository = UserRepository(session)
         self._code_service = code_service
+        self._session_service = session_service
 
     async def verify(self, *, email: str, code: str) -> VerificationOutcome:
         # A wrong or expired code is returned, not raised: raising would roll back the counted
@@ -24,7 +31,7 @@ class EmailVerificationService:
         if error is not None:
             return VerificationOutcome(user=user, error=error)
         user.email_verified_at = clock.now()
-        return VerificationOutcome(user=user)
+        return VerificationOutcome(user=user, session=await self._session_service.start(user=user))
 
     async def resend(self, *, email: str) -> IssuedCode:
         user = await self._lock_unverified_user(email=email)

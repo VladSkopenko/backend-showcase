@@ -14,7 +14,7 @@ ERROR_STATUSES = {**AUTH_ERROR_STATUSES}
 def create_app() -> FastAPI:
     app = FastAPI(title=get_settings().app.name)
     app.include_router(health_router)
-    app.include_router(auth_router)
+    app.include_router(auth_router, prefix="/api/v1")
 
     @app.exception_handler(DomainError)
     async def handle_domain_error(request: Request, exc: DomainError) -> JSONResponse:

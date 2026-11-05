@@ -29,6 +29,8 @@ class DatabaseSettings(BaseSettings):
     user: str = "app"
     password: SecretStr = SecretStr("app")
     name: str = "app"
+    # Must stay under the 2 s urlopen timeout of the Dockerfile HEALTHCHECK.
+    probe_timeout_seconds: float = 1.0
 
     @property
     def url(self) -> URL:
@@ -49,6 +51,21 @@ class AuthSettings(BaseSettings):
     resend_cooldown_seconds: int = 60
     max_code_attempts: int = 5
     max_codes_per_hour: int = 5
+    max_login_attempts: int = 5
+    login_lockout_minutes: int = 5
+
+
+class TokenSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="TOKEN_", env_file=ENV_FILE, extra="ignore")
+
+    # Required: a missing or short key fails at startup instead of signing tokens weakly.
+    secret_key: SecretStr = Field(min_length=32)
+    # HMAC only: an asymmetric algorithm needs a key pair, not a shared secret.
+    algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
+    access_ttl_minutes: int = 15
+    refresh_ttl_days: int = 30
+    access_cookie_path: str = "/"
+    refresh_cookie_path: str = "/api/v1/auth"
 
 
 class EmailSettings(BaseSettings):
@@ -72,6 +89,8 @@ class Settings(BaseSettings):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     email: EmailSettings = Field(default_factory=EmailSettings)
+    # mypy sees the required secret_key argument; pydantic-settings fills it from the environment.
+    token: TokenSettings = Field(default_factory=TokenSettings)  # type: ignore[arg-type]
 
     @classmethod
     def settings_customise_sources(

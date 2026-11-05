@@ -1,14 +1,20 @@
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Cookie, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.database import get_session
 from app.config.settings import Settings, get_settings
+from app.features.core.auth.endpoints.cookies import SessionCookies
+from app.features.core.auth.schemas import UserResponse
+from app.features.core.auth.services.access_token_codec import AccessTokenCodec
+from app.features.core.auth.services.current_user_service import CurrentUserService
 from app.features.core.auth.services.email_verification_service import EmailVerificationService
+from app.features.core.auth.services.login_service import LoginService
 from app.features.core.auth.services.password_hasher import PasswordHasher
 from app.features.core.auth.services.registration_service import RegistrationService
+from app.features.core.auth.services.session_service import SessionService
 from app.features.core.auth.services.verification_code_service import VerificationCodeService
 from app.features.core.auth.services.verification_email_renderer import (
     VerificationEmailRenderer,
@@ -55,6 +61,26 @@ VerificationCodeServiceDep = Annotated[
 ]
 
 
+def get_access_token_codec(settings: SettingsDep) -> AccessTokenCodec:
+    return AccessTokenCodec(
+        secret_key=settings.token.secret_key.get_secret_value(),
+        algorithm=settings.token.algorithm,
+        ttl_minutes=settings.token.access_ttl_minutes,
+    )
+
+
+AccessTokenCodecDep = Annotated[AccessTokenCodec, Depends(get_access_token_codec)]
+
+
+def get_session_service(
+    session: SessionDep, codec: AccessTokenCodecDep, settings: SettingsDep
+) -> SessionService:
+    return SessionService(session, codec, refresh_ttl_days=settings.token.refresh_ttl_days)
+
+
+SessionServiceDep = Annotated[SessionService, Depends(get_session_service)]
+
+
 def get_registration_service(
     session: SessionDep,
     password_hasher: PasswordHasherDep,
@@ -64,9 +90,28 @@ def get_registration_service(
 
 
 def get_email_verification_service(
-    session: SessionDep, code_service: VerificationCodeServiceDep
+    session: SessionDep,
+    code_service: VerificationCodeServiceDep,
+    session_service: SessionServiceDep,
 ) -> EmailVerificationService:
-    return EmailVerificationService(session, code_service)
+    return EmailVerificationService(session, code_service, session_service)
+
+
+def get_login_service(
+    session: SessionDep,
+    password_hasher: PasswordHasherDep,
+    session_service: SessionServiceDep,
+    settings: SettingsDep,
+) -> LoginService:
+    return LoginService(session, password_hasher, session_service, settings.auth)
+
+
+def get_current_user_service(session: SessionDep, codec: AccessTokenCodecDep) -> CurrentUserService:
+    return CurrentUserService(session, codec)
+
+
+def get_session_cookies(request: Request, settings: SettingsDep) -> SessionCookies:
+    return SessionCookies(settings.token, request.cookies)
 
 
 def get_verification_email_service(
@@ -82,3 +127,17 @@ EmailVerificationServiceDep = Annotated[
 VerificationEmailServiceDep = Annotated[
     VerificationEmailService, Depends(get_verification_email_service)
 ]
+LoginServiceDep = Annotated[LoginService, Depends(get_login_service)]
+CurrentUserServiceDep = Annotated[CurrentUserService, Depends(get_current_user_service)]
+SessionCookiesDep = Annotated[SessionCookies, Depends(get_session_cookies)]
+
+
+# Typed as the response schema: endpoints may not import the User model (ADR 11).
+async def get_current_user(
+    current_user: CurrentUserServiceDep,
+    access_token: Annotated[str | None, Cookie(alias=SessionCookies.ACCESS_NAME)] = None,
+) -> UserResponse:
+    return UserResponse.model_validate(await current_user.get(access_token=access_token))
+
+
+CurrentUserDep = Annotated[UserResponse, Depends(get_current_user)]

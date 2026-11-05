@@ -58,8 +58,11 @@ paths:
 - Write migration files but never apply them with `alembic upgrade` unless asked. Running tests is fine.
 
 ## Configuration
-- TTLs, timeouts and limits that may change live in settings with defaults, never as scattered
-  module constants. Protocol codes, such as WebSocket close codes, stay constants.
+- Any value that may plausibly need changing (TTLs, timeouts, limits, the JWT algorithm, cookie
+  paths) lives in settings with a default, so changing it needs no code edit. Protocol codes, such as
+  WebSocket close codes, stay constants.
+- A constant that belongs to one class is a class attribute (`SessionCookies.ACCESS_NAME`). A
+  module-level constant only when no class owns it.
 
 ## Errors
 - HTTP error translation belongs to the API layer. Background workers catch exceptions, roll back

@@ -39,3 +39,36 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-registration-email-verification.md`
   summary: Mask email addresses in logs.
   evidence: Failed sends log the full recipient; matters once logs ship to VictoriaLogs (Phase 4).
+- source_spec: `_bmad_output/implementation-artifacts/spec-login-jwt-sessions.md`
+  summary: Test the row locks in refresh, logout and login with two concurrent connections (two refreshes of one token, reuse versus rotation, parallel wrong passwords).
+  evidence: The shared-connection harness cannot observe locks, so dropping `for_update` or `populate_existing` in `SessionService._lock_token`, `RefreshTokenRepository.get_by_hash` or `LoginService.log_in` passes every test.
+- source_spec: `_bmad_output/implementation-artifacts/spec-login-jwt-sessions.md`
+  summary: Test non-default `TOKEN_*` and `AUTH_*` login values end to end (cookie Max-Age and Path, JWT exp, lockout threshold).
+  evidence: Every assertion holds whether the code reads the setting or a literal; deployed environments run the defaults today.
+- source_spec: `_bmad_output/implementation-artifacts/spec-login-jwt-sessions.md`
+  summary: Delete expired `refresh_tokens` rows, together with the old `verification_codes` cleanup.
+  evidence: Every refresh inserts a row and nothing deletes them; revoked rows matter for reuse detection only until `expires_at`.
+- source_spec: `_bmad_output/implementation-artifacts/spec-login-jwt-sessions.md`
+  summary: Log security events: refresh reuse with mass revocation, lockout, logout with a revoked token (user id only, no tokens).
+  evidence: None of them writes a log line; they are the first alerts worth having once logs ship (Phase 4).
+- source_spec: `_bmad_output/implementation-artifacts/spec-login-jwt-sessions.md`
+  summary: Write an ADR for the session model (rotation without a grace window, non-revocable 15-minute access JWT, HS256 secret, `/api/v1` prefix), with the error-contract ADR after the auth stories.
+  evidence: workflow.md rule 5; AD-19 records only the frontend contract, not the reasons or rejected options.
+- source_spec: `_bmad_output/implementation-artifacts/spec-login-jwt-sessions.md`
+  summary: Settle in AD-19 what the frontend's server-side rendering does on 401 with a live refresh cookie (neutral shell and client check, or redirect).
+  evidence: Refresh is browser-only, so SSR after 15 idle minutes gets 401 from `/me` while the session is still alive.
+- source_spec: `_bmad_output/implementation-artifacts/spec-health-database-check.md`
+  summary: Record in an ADR (with the auth ADR batch) that `/health` now depends on the database, and what that means for the deploy gate, the ADR 5 rollback and alerting.
+  evidence: workflow.md rule 5; ADR 5 and AD-9 rely on `/health` without saying it checks PostgreSQL.
+- source_spec: `_bmad_output/implementation-artifacts/spec-health-database-check.md`
+  summary: Log a failed `/health` database probe with the exception type only (refused, timeout, credentials).
+  evidence: A 503 from the Docker healthcheck or the deploy gate cannot be told apart today; belongs with the Phase 4 logging items.
+- source_spec: `_bmad_output/implementation-artifacts/spec-separate-test-database.md`
+  summary: Test the conftest guard that stops the session when settings were cached with a database other than `app_test` (pytester subprocess).
+  evidence: Removing or inverting the guard passes every test; it was verified manually only.
+- source_spec: `_bmad_output/implementation-artifacts/spec-separate-test-database.md`
+  summary: Add to `.claude/rules/workflow.md` that review subagents never run pytest; only the main agent runs the suite.
+  evidence: Parallel runs drop each other's `app_test`; review prompts in this session needed an explicit "do not run pytest".
+- source_spec: `_bmad_output/implementation-artifacts/spec-separate-test-database.md`
+  summary: Record the test database contract (`app_test` recreated per run, one run per server, CI round-trip on `app`) in the ADR batch.
+  evidence: workflow.md rule 5.

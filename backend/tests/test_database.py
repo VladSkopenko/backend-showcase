@@ -71,6 +71,52 @@ async def test_migrated_users_table_has_the_expected_columns(
         "email": False,
         "password_hash": True,
         "email_verified_at": True,
+        "failed_login_attempts": False,
+        "login_locked_until": True,
         "created_at": False,
         "updated_at": False,
     }
+
+
+async def test_new_users_start_with_no_failed_login_attempts(
+    session_factory: async_sessionmaker[AsyncSession], connection: AsyncConnection
+) -> None:
+    async with session_scope() as session:
+        session.add(User(first_name="Ada", last_name="Lovelace", email="ada@example.com"))
+
+    user = (await connection.execute(select(User).where(User.email == "ada@example.com"))).one()
+    assert user.failed_login_attempts == 0
+    assert user.login_locked_until is None
+
+
+async def test_migrated_refresh_tokens_table_has_the_expected_shape(
+    connection: AsyncConnection,
+) -> None:
+    def describe(sync_connection: Connection) -> dict[str, Any]:
+        inspector = inspect(sync_connection)
+        return {
+            "columns": inspector.get_columns("refresh_tokens"),
+            "foreign_keys": inspector.get_foreign_keys("refresh_tokens"),
+            "unique": inspector.get_unique_constraints("refresh_tokens"),
+            "indexes": inspector.get_indexes("refresh_tokens"),
+        }
+
+    shape = await connection.run_sync(describe)
+
+    assert {column["name"]: column["nullable"] for column in shape["columns"]} == {
+        "id": False,
+        "user_id": False,
+        "token_hash": False,
+        "expires_at": False,
+        "revoked_at": True,
+        "rotated_at": True,
+        "created_at": False,
+    }
+    [foreign_key] = shape["foreign_keys"]
+    assert foreign_key["constrained_columns"] == ["user_id"]
+    assert foreign_key["referred_table"] == "users"
+    assert foreign_key["options"]["ondelete"] == "CASCADE"
+    assert [constraint["column_names"] for constraint in shape["unique"]] == [["token_hash"]]
+    # PostgreSQL backs the unique constraint with an index of its own.
+    indexes = [index for index in shape["indexes"] if not index.get("duplicates_constraint")]
+    assert [index["column_names"] for index in indexes] == [["user_id"]]

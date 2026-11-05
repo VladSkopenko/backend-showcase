@@ -1,22 +1,33 @@
-from fastapi import APIRouter, BackgroundTasks, status
+from typing import Annotated
+
+from fastapi import APIRouter, BackgroundTasks, Cookie, Response, status
 from fastapi.responses import JSONResponse
 
 from app.common.error_responses import domain_error_response
 from app.features.core.auth.dto import RegistrationCommand
+from app.features.core.auth.endpoints.cookies import SessionCookies
 from app.features.core.auth.endpoints.dependencies import (
+    CurrentUserDep,
     EmailVerificationServiceDep,
+    LoginServiceDep,
     RegistrationServiceDep,
+    SessionCookiesDep,
+    SessionServiceDep,
     VerificationEmailServiceDep,
 )
 from app.features.core.auth.endpoints.errors import ERROR_STATUSES
 from app.features.core.auth.schemas import (
+    LoginRequest,
     RegisterRequest,
     RegisterResponse,
     ResendCodeRequest,
     ResendCodeResponse,
+    UserResponse,
     VerifyEmailRequest,
     VerifyEmailResponse,
 )
+
+RefreshTokenCookie = Annotated[str | None, Cookie(alias=SessionCookies.REFRESH_NAME)]
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -48,12 +59,19 @@ async def register_user(
 
 @router.post("/verify-email", response_model=VerifyEmailResponse)
 async def verify_user_email(
-    body: VerifyEmailRequest, email_verification: EmailVerificationServiceDep
-) -> VerifyEmailResponse | JSONResponse:
+    body: VerifyEmailRequest,
+    email_verification: EmailVerificationServiceDep,
+    cookies: SessionCookiesDep,
+) -> JSONResponse:
     outcome = await email_verification.verify(email=body.email, code=body.code)
     if outcome.error is not None:
         return domain_error_response(outcome.error, ERROR_STATUSES)
-    return VerifyEmailResponse.model_validate(outcome.user)
+    assert outcome.session is not None
+    response = JSONResponse(
+        VerifyEmailResponse.model_validate(outcome.user).model_dump(mode="json")
+    )
+    cookies.set(response=response, session=outcome.session)
+    return response
 
 
 @router.post(
@@ -71,3 +89,50 @@ async def resend_verification_code(
     issued = await email_verification.resend(email=body.email)
     background_tasks.add_task(verification_email.send, issued=issued)
     return ResendCodeResponse(debug_code=issued.debug_code)
+
+
+@router.post("/login", response_model=UserResponse)
+async def log_in(
+    body: LoginRequest, login: LoginServiceDep, cookies: SessionCookiesDep
+) -> JSONResponse:
+    outcome = await login.log_in(email=body.email, password=body.password)
+    if outcome.error is not None:
+        return domain_error_response(outcome.error, ERROR_STATUSES)
+    assert outcome.session is not None
+    response = JSONResponse(UserResponse.model_validate(outcome.user).model_dump(mode="json"))
+    cookies.set(response=response, session=outcome.session)
+    return response
+
+
+@router.post("/refresh", status_code=status.HTTP_204_NO_CONTENT)
+async def refresh_session(
+    sessions: SessionServiceDep,
+    cookies: SessionCookiesDep,
+    refresh_token: RefreshTokenCookie = None,
+) -> Response:
+    outcome = await sessions.refresh(refresh_token=refresh_token)
+    if outcome.error is not None:
+        response: Response = domain_error_response(outcome.error, ERROR_STATUSES)
+        cookies.clear(response=response)
+        return response
+    assert outcome.session is not None
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    cookies.set(response=response, session=outcome.session)
+    return response
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def log_out(
+    sessions: SessionServiceDep,
+    cookies: SessionCookiesDep,
+    refresh_token: RefreshTokenCookie = None,
+) -> Response:
+    await sessions.end(refresh_token=refresh_token)
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    cookies.clear(response=response)
+    return response
+
+
+@router.get("/me", response_model=UserResponse)
+async def read_current_user(user: CurrentUserDep) -> UserResponse:
+    return user

@@ -1,5 +1,5 @@
-# Local PostgreSQL for development and tests. Start it once with `docker compose up -d`;
-# the test session migrates it to head itself.
+# Local PostgreSQL for development and tests. Start it once with `docker compose up -d`.
+# Tests recreate their own `app_test` database per run and never touch `app`; run one at a time.
 services:
   postgres:
     image: postgres:18

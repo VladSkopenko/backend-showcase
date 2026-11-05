@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from app.common.errors import DomainError
+from app.features.core.auth.dto.issued_session import IssuedSession
 from app.features.core.users.models import User
 
 
@@ -8,3 +9,4 @@ from app.features.core.users.models import User
 class VerificationOutcome:
     user: User
     error: DomainError | None = None
+    session: IssuedSession | None = None
