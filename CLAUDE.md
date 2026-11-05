@@ -30,7 +30,9 @@ Personal notes that should stay out of git go to `CLAUDE.local.md`.
 Run from `backend/`:
 
 - Install: `uv sync`
-- Local database: `docker compose up -d` (PostgreSQL on 127.0.0.1:5433; tests migrate it themselves)
+- Local database: `docker compose up -d` (PostgreSQL on 127.0.0.1:5433; tests recreate their own
+  `app_test` database and never touch `app`; run one at a time, pytest-xdist is not supported)
+- Migrate the working database: `uv run alembic upgrade head` (tests no longer do it for `app`)
 - Run: `uv run uvicorn app.main:app --port 8000`
 - Test: `uv run pytest`
 - Lint: `uv run ruff check . && uv run ruff format --check .`

@@ -1,3 +1,4 @@
+import asyncio
 import os
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -6,6 +7,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from pydantic_settings import BaseSettings
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncConnection,
     AsyncEngine,
@@ -19,11 +21,14 @@ from app.common import database
 from app.config import settings as settings_module
 from app.config.settings import get_settings
 
-# Set before any test module builds the app, which reads the required secret at import.
+TEST_DATABASE_NAME = "app_test"
+
+# Set before any test module builds the app, which reads the settings at import and caches them.
 for name in list(os.environ):
     if name.startswith("TOKEN_"):
         del os.environ[name]
 os.environ["TOKEN_SECRET_KEY"] = "0123456789abcdef" * 4
+os.environ["DATABASE_NAME"] = TEST_DATABASE_NAME
 
 # A developer's backend/.env must never change test behaviour or send mail. Runs at collection,
 # before any test module builds the app and fills the cached get_settings().
@@ -34,7 +39,7 @@ for value in vars(settings_module).values():
 
 @pytest.fixture(autouse=True)
 def isolated_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    # DATABASE_ variables stay, so a test run can point at another database.
+    # DATABASE_ variables stay, so a test run can point at another server; the name is forced above.
     for name in list(os.environ):
         if name.startswith(("APP_", "EMAIL_", "AUTH_")):
             monkeypatch.delenv(name)
@@ -45,9 +50,34 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
+async def recreate_test_database() -> None:
+    # Dropped and recreated per run, so two runs on one server break each other.
+    # DROP DATABASE and CREATE DATABASE refuse to run inside a transaction block.
+    engine = create_async_engine(
+        get_settings().database.url.set(database="postgres"),
+        poolclass=NullPool,
+        isolation_level="AUTOCOMMIT",
+    )
+    try:
+        async with engine.connect() as connection:
+            await connection.execute(
+                text(f'DROP DATABASE IF EXISTS "{TEST_DATABASE_NAME}" WITH (FORCE)')
+            )
+            await connection.execute(text(f'CREATE DATABASE "{TEST_DATABASE_NAME}"'))
+    finally:
+        await engine.dispose()
+
+
 # Sync on purpose: the async env.py calls asyncio.run, which cannot run inside a test's event loop.
 @pytest.fixture(scope="session")
 def migrated_database() -> None:
+    database_name = get_settings().database.name
+    if database_name != TEST_DATABASE_NAME:
+        pytest.exit(
+            f"Settings were cached with database {database_name!r} before conftest forced "
+            f"{TEST_DATABASE_NAME!r}; refusing to recreate or migrate it."
+        )
+    asyncio.run(recreate_test_database())
     command.upgrade(Config(Path(__file__).resolve().parents[1] / "alembic.ini"), "head")
 
 

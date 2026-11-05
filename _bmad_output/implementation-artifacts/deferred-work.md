@@ -63,3 +63,12 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-health-database-check.md`
   summary: Log a failed `/health` database probe with the exception type only (refused, timeout, credentials).
   evidence: A 503 from the Docker healthcheck or the deploy gate cannot be told apart today; belongs with the Phase 4 logging items.
+- source_spec: `_bmad_output/implementation-artifacts/spec-separate-test-database.md`
+  summary: Test the conftest guard that stops the session when settings were cached with a database other than `app_test` (pytester subprocess).
+  evidence: Removing or inverting the guard passes every test; it was verified manually only.
+- source_spec: `_bmad_output/implementation-artifacts/spec-separate-test-database.md`
+  summary: Add to `.claude/rules/workflow.md` that review subagents never run pytest; only the main agent runs the suite.
+  evidence: Parallel runs drop each other's `app_test`; review prompts in this session needed an explicit "do not run pytest".
+- source_spec: `_bmad_output/implementation-artifacts/spec-separate-test-database.md`
+  summary: Record the test database contract (`app_test` recreated per run, one run per server, CI round-trip on `app`) in the ADR batch.
+  evidence: workflow.md rule 5.
