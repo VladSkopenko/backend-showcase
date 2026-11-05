@@ -19,6 +19,12 @@ from app.common import database
 from app.config import settings as settings_module
 from app.config.settings import get_settings
 
+# Set before any test module builds the app, which reads the required secret at import.
+for name in list(os.environ):
+    if name.startswith("TOKEN_"):
+        del os.environ[name]
+os.environ["TOKEN_SECRET_KEY"] = "0123456789abcdef" * 4
+
 # A developer's backend/.env must never change test behaviour or send mail. Runs at collection,
 # before any test module builds the app and fills the cached get_settings().
 for value in vars(settings_module).values():

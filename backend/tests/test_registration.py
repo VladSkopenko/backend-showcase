@@ -99,7 +99,7 @@ async def client(
     app: FastAPI, session_factory: async_sessionmaker[AsyncSession], fake_clock: FakeClock
 ) -> AsyncIterator[httpx2.AsyncClient]:
     transport = httpx2.ASGITransport(app=app)
-    async with httpx2.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx2.AsyncClient(transport=transport, base_url="https://test") as client:
         yield client
 
 
@@ -116,18 +116,18 @@ def registration(**overrides: str) -> dict[str, str]:
 
 
 async def register(client: httpx2.AsyncClient, **overrides: str) -> dict[str, Any]:
-    response = await client.post("/auth/register", json=registration(**overrides))
+    response = await client.post("/api/v1/auth/register", json=registration(**overrides))
     assert response.status_code == 201, response.text
     body: dict[str, Any] = response.json()
     return body
 
 
 async def verify(client: httpx2.AsyncClient, code: str, email: str = "ada@example.com") -> Any:
-    return await client.post("/auth/verify-email", json={"email": email, "code": code})
+    return await client.post("/api/v1/auth/verify-email", json={"email": email, "code": code})
 
 
 async def resend(client: httpx2.AsyncClient, email: str = "ada@example.com") -> Any:
-    return await client.post("/auth/resend-code", json={"email": email})
+    return await client.post("/api/v1/auth/resend-code", json={"email": email})
 
 
 def wrong(code: str) -> str:
@@ -184,7 +184,9 @@ async def test_register_with_the_email_of_a_verified_user_returns_409(
     fake_clock.advance(minutes=5)
     mailbox.sent.clear()
 
-    response = await client.post("/auth/register", json=registration(email="ADA@example.com"))
+    response = await client.post(
+        "/api/v1/auth/register", json=registration(email="ADA@example.com")
+    )
 
     assert response.status_code == 409
     assert response.json()["code"] == "EMAIL_TAKEN"
@@ -235,7 +237,7 @@ async def test_register_again_too_soon_returns_429_and_changes_nothing(
     fake_clock.advance(seconds=30)
 
     response = await client.post(
-        "/auth/register",
+        "/api/v1/auth/register",
         json=registration(
             first_name="Augusta", password="new-password", password_confirmation="new-password"
         ),
@@ -269,7 +271,7 @@ async def test_sixth_code_within_an_hour_returns_429_until_the_oldest_leaves_the
     async def request_sixth_code() -> Any:
         if sixth_request == "resend":
             return await resend(client)
-        return await client.post("/auth/register", json=registration())
+        return await client.post("/api/v1/auth/register", json=registration())
 
     response = await request_sixth_code()
 
@@ -297,7 +299,7 @@ async def test_register_maps_a_concurrent_unique_violation_to_email_taken(
 
     # Simulates a parallel request that inserted the same email after this one's lookup.
     monkeypatch.setattr(UserRepository, "get_by_email", nobody)
-    response = await client.post("/auth/register", json=registration())
+    response = await client.post("/api/v1/auth/register", json=registration())
 
     assert response.status_code == 409
     assert response.json()["code"] == "EMAIL_TAKEN"
@@ -328,7 +330,7 @@ async def test_register_maps_a_concurrent_unique_violation_to_email_taken(
 async def test_register_rejects_bad_input(
     client: httpx2.AsyncClient, mailbox: FakeEmailSender, overrides: dict[str, str]
 ) -> None:
-    response = await client.post("/auth/register", json=registration(**overrides))
+    response = await client.post("/api/v1/auth/register", json=registration(**overrides))
 
     assert response.status_code == 422
     assert mailbox.sent == []
@@ -352,6 +354,10 @@ async def test_verify_with_the_correct_code_marks_the_email_verified(
     assert user.email_verified_at == fake_clock.current
     [stored] = await get_codes(connection, user.id)
     assert stored.consumed_at == fake_clock.current
+    set_cookies = response.headers.get_list("set-cookie")
+    assert any(header.startswith("access_token=") for header in set_cookies)
+    assert any(header.startswith("refresh_token=") for header in set_cookies)
+    assert (await client.get("/api/v1/auth/me")).json()["id"] == str(user.id)
 
 
 async def test_verify_with_a_wrong_code_counts_the_attempt(
@@ -363,6 +369,7 @@ async def test_verify_with_a_wrong_code_counts_the_attempt(
 
     assert response.status_code == 400
     assert response.json()["code"] == "CODE_INVALID"
+    assert "set-cookie" not in response.headers
     user = await get_user(connection)
     assert user.email_verified_at is None
     [stored] = await get_codes(connection, user.id)
@@ -497,7 +504,7 @@ async def test_unconfigured_email_is_logged_without_the_code(
     generated_codes("987654")
 
     with caplog.at_level(logging.WARNING):
-        response = await client.post("/auth/register", json=registration())
+        response = await client.post("/api/v1/auth/register", json=registration())
 
     assert response.status_code == 201
     records = [record for record in caplog.records if "ada@example.com" in record.getMessage()]
@@ -521,7 +528,7 @@ async def test_a_failing_email_send_is_logged_without_the_code(
     generated_codes("987654")
 
     with caplog.at_level(logging.WARNING):
-        response = await client.post("/auth/register", json=registration())
+        response = await client.post("/api/v1/auth/register", json=registration())
 
     assert response.status_code == 201
     assert any(record.levelno == logging.ERROR for record in caplog.records)

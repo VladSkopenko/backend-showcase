@@ -30,3 +30,30 @@ class CodeInvalidError(DomainError):
 class CodeExpiredError(DomainError):
     def __init__(self) -> None:
         super().__init__("CODE_EXPIRED", "The code has expired. Request a new one.")
+
+
+class InvalidCredentialsError(DomainError):
+    def __init__(self) -> None:
+        super().__init__("INVALID_CREDENTIALS", "The email or password is wrong.")
+
+
+class EmailNotVerifiedError(DomainError):
+    def __init__(self) -> None:
+        super().__init__("EMAIL_NOT_VERIFIED", "Confirm your email before signing in.")
+
+
+class AccountLockedError(DomainError):
+    def __init__(self, lockout_minutes: int) -> None:
+        super().__init__(
+            "ACCOUNT_LOCKED", f"Too many failed attempts. Try again in {lockout_minutes} minutes."
+        )
+
+
+class NotAuthenticatedError(DomainError):
+    def __init__(self) -> None:
+        super().__init__("NOT_AUTHENTICATED", "Sign in to continue.")
+
+
+class SessionInvalidError(DomainError):
+    def __init__(self) -> None:
+        super().__init__("SESSION_INVALID", "The session has ended. Sign in again.")

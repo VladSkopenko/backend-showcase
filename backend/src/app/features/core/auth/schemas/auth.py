@@ -48,3 +48,18 @@ class ResendCodeRequest(BaseModel):
 
 class ResendCodeResponse(BaseModel):
     debug_code: str | None = None
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(max_length=128)
+
+
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    email: str
+    first_name: str
+    last_name: str
+    email_verified_at: datetime | None

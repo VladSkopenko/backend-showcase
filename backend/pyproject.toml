@@ -13,6 +13,7 @@ dependencies = [
     "pydantic-settings>=2.16.2",
     "sqlalchemy[asyncio]>=2.1.8",
     "uvicorn>=0.54.0",
+    "pyjwt>=2.15.1",
 ]
 
 [build-system]

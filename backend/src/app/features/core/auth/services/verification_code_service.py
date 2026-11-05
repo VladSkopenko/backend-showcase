@@ -20,10 +20,10 @@ from app.features.core.auth.services.exceptions import (
 )
 from app.features.core.users.models import User
 
-HOURLY_LIMIT_WINDOW = timedelta(hours=1)
-
 
 class VerificationCodeService:
+    HOURLY_LIMIT_WINDOW = timedelta(hours=1)
+
     def __init__(self, session: AsyncSession, auth: AuthSettings, environment: Environment) -> None:
         self._code_repository = VerificationCodeRepository(session)
         self._auth = auth
@@ -84,10 +84,12 @@ class VerificationCodeService:
                 latest.created_at + timedelta(seconds=self._auth.resend_cooldown_seconds)
             )
         recent = await self._code_repository.list_creation_times_since(
-            user_id=user.id, purpose=purpose, since=now - HOURLY_LIMIT_WINDOW
+            user_id=user.id, purpose=purpose, since=now - self.HOURLY_LIMIT_WINDOW
         )
         if len(recent) >= self._auth.max_codes_per_hour:
-            earliest_allowed.append(recent[-self._auth.max_codes_per_hour] + HOURLY_LIMIT_WINDOW)
+            earliest_allowed.append(
+                recent[-self._auth.max_codes_per_hour] + self.HOURLY_LIMIT_WINDOW
+            )
         wait = max(earliest_allowed) - now
         if wait > timedelta(0):
             raise ResendTooSoonError(retry_after=math.ceil(wait.total_seconds()))

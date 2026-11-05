@@ -37,6 +37,8 @@ services:
       EMAIL_USERNAME: ${EMAIL_USERNAME:-}
       EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
       EMAIL_SENDER: ${EMAIL_SENDER:-}
+      # Signs access tokens; the API refuses to start without it. Hex like POSTGRES_PASSWORD (openssl rand -hex 32).
+      TOKEN_SECRET_KEY: ${TOKEN_SECRET_KEY:?TOKEN_SECRET_KEY comes from the GitHub Environment}
     depends_on:
       postgres:
         condition: service_healthy

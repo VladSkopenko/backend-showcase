@@ -1,6 +1,7 @@
 import pytest
+from pydantic import ValidationError
 
-from app.config.settings import DatabaseSettings, Settings
+from app.config.settings import DatabaseSettings, Settings, TokenSettings
 
 
 def test_env_vars_land_in_their_domain_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -76,3 +77,59 @@ def test_settings_build_with_a_stray_email_variable(monkeypatch: pytest.MonkeyPa
     settings = Settings()
 
     assert settings.email.username == ""
+
+
+def test_token_env_vars_land_in_the_token_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TOKEN_SECRET_KEY", "f" * 64)
+    monkeypatch.setenv("TOKEN_ALGORITHM", "HS512")
+    monkeypatch.setenv("TOKEN_ACCESS_TTL_MINUTES", "5")
+    monkeypatch.setenv("TOKEN_ACCESS_COOKIE_PATH", "/app")
+    monkeypatch.setenv("TOKEN_REFRESH_TTL_DAYS", "7")
+    monkeypatch.setenv("TOKEN_REFRESH_COOKIE_PATH", "/api/v2/auth")
+    monkeypatch.setenv("AUTH_MAX_LOGIN_ATTEMPTS", "3")
+    monkeypatch.setenv("AUTH_LOGIN_LOCKOUT_MINUTES", "10")
+
+    settings = Settings()
+
+    assert settings.token.secret_key.get_secret_value() == "f" * 64
+    assert settings.token.algorithm == "HS512"
+    assert settings.token.access_ttl_minutes == 5
+    assert settings.token.access_cookie_path == "/app"
+    assert settings.token.refresh_ttl_days == 7
+    assert settings.token.refresh_cookie_path == "/api/v2/auth"
+    assert settings.auth.max_login_attempts == 3
+    assert settings.auth.login_lockout_minutes == 10
+
+
+def test_token_defaults() -> None:
+    settings = Settings()
+
+    assert settings.token.algorithm == "HS256"
+    assert settings.token.access_ttl_minutes == 15
+    assert settings.token.access_cookie_path == "/"
+    assert settings.token.refresh_ttl_days == 30
+    assert settings.token.refresh_cookie_path == "/api/v1/auth"
+    assert settings.auth.max_login_attempts == 5
+    assert settings.auth.login_lockout_minutes == 5
+
+
+def test_token_secret_is_hidden_in_repr(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TOKEN_SECRET_KEY", "s" * 40)
+
+    settings = Settings()
+
+    assert "s" * 40 not in repr(settings)
+
+
+def test_missing_token_secret_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TOKEN_SECRET_KEY")
+
+    with pytest.raises(ValidationError, match="secret_key"):
+        TokenSettings()  # type: ignore[call-arg]
+
+
+def test_short_token_secret_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TOKEN_SECRET_KEY", "a" * 31)
+
+    with pytest.raises(ValidationError, match="secret_key"):
+        TokenSettings()  # type: ignore[call-arg]
