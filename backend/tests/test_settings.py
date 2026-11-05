@@ -44,6 +44,24 @@ def test_env_vars_land_in_their_domain_blocks(monkeypatch: pytest.MonkeyPatch) -
     assert settings.database.name == "showcase"
 
 
+def test_database_probe_timeout_env_var_lands_in_the_database_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DATABASE_PROBE_TIMEOUT_SECONDS", "0.5")
+
+    settings = Settings()
+
+    assert settings.database.probe_timeout_seconds == 0.5
+
+
+def test_database_probe_timeout_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DATABASE_PROBE_TIMEOUT_SECONDS", raising=False)
+
+    settings = Settings()
+
+    assert settings.database.probe_timeout_seconds == 1.0
+
+
 def test_database_url_escapes_special_characters_in_the_password(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

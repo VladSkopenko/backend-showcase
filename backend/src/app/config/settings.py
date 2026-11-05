@@ -29,6 +29,8 @@ class DatabaseSettings(BaseSettings):
     user: str = "app"
     password: SecretStr = SecretStr("app")
     name: str = "app"
+    # Must stay under the 2 s urlopen timeout of the Dockerfile HEALTHCHECK.
+    probe_timeout_seconds: float = 1.0
 
     @property
     def url(self) -> URL:

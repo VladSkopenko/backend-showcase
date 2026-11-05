@@ -57,3 +57,9 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-login-jwt-sessions.md`
   summary: Settle in AD-19 what the frontend's server-side rendering does on 401 with a live refresh cookie (neutral shell and client check, or redirect).
   evidence: Refresh is browser-only, so SSR after 15 idle minutes gets 401 from `/me` while the session is still alive.
+- source_spec: `_bmad_output/implementation-artifacts/spec-health-database-check.md`
+  summary: Record in an ADR (with the auth ADR batch) that `/health` now depends on the database, and what that means for the deploy gate, the ADR 5 rollback and alerting.
+  evidence: workflow.md rule 5; ADR 5 and AD-9 rely on `/health` without saying it checks PostgreSQL.
+- source_spec: `_bmad_output/implementation-artifacts/spec-health-database-check.md`
+  summary: Log a failed `/health` database probe with the exception type only (refused, timeout, credentials).
+  evidence: A 503 from the Docker healthcheck or the deploy gate cannot be told apart today; belongs with the Phase 4 logging items.
