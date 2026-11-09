@@ -19,6 +19,7 @@ class AppSettings(BaseSettings):
     name: str = "backend-showcase"
     environment: Environment = "local"
     frontend_url: str = "https://family-rest.vercel.app"
+    backend_url: str = "https://backend-showcase-dev.duckdns.org"
 
 
 class DatabaseSettings(BaseSettings):
@@ -51,8 +52,11 @@ class AuthSettings(BaseSettings):
     resend_cooldown_seconds: int = 60
     max_code_attempts: int = 5
     max_codes_per_hour: int = 5
+    max_reset_codes_per_day: int = 10
     max_login_attempts: int = 5
     login_lockout_minutes: int = 5
+    oauth_state_max_age_seconds: int = 600
+    oauth_state_cookie_path: str = "/api/v1/auth"
 
 
 class TokenSettings(BaseSettings):
@@ -82,6 +86,17 @@ class EmailSettings(BaseSettings):
         return bool(self.username and self.password.get_secret_value() and self.sender)
 
 
+class GoogleSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="GOOGLE_", env_file=ENV_FILE, extra="ignore")
+
+    client_id: str = ""
+    client_secret: SecretStr = SecretStr("")
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.client_id and self.client_secret.get_secret_value())
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -89,6 +104,7 @@ class Settings(BaseSettings):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     email: EmailSettings = Field(default_factory=EmailSettings)
+    google: GoogleSettings = Field(default_factory=GoogleSettings)
     # mypy sees the required secret_key argument; pydantic-settings fills it from the environment.
     token: TokenSettings = Field(default_factory=TokenSettings)  # type: ignore[arg-type]
 

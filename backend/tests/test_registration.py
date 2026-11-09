@@ -288,6 +288,19 @@ async def test_sixth_code_within_an_hour_returns_429_until_the_oldest_leaves_the
     assert len(await get_codes(connection, user.id)) == 6
 
 
+async def test_the_daily_reset_cap_does_not_limit_verification_codes(
+    client: httpx2.AsyncClient, connection: AsyncConnection, fake_clock: FakeClock
+) -> None:
+    await register(client)
+    # Four codes an hour stay under the hourly limit, so only a daily cap could refuse.
+    for _ in range(10):
+        fake_clock.advance(minutes=15)
+        assert (await resend(client)).status_code == 202
+
+    user = await get_user(connection)
+    assert len(await get_codes(connection, user.id)) == 11
+
+
 async def test_register_maps_a_concurrent_unique_violation_to_email_taken(
     client: httpx2.AsyncClient, mailbox: FakeEmailSender, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -14,6 +14,9 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.1.8",
     "uvicorn>=0.54.0",
     "pyjwt>=2.15.1",
+    "authlib>=1.9.5",
+    "itsdangerous>=2.2.0",
+    "httpx2>=2.16.0",
 ]
 
 [build-system]
@@ -32,6 +35,11 @@ select = ["E", "W", "F", "I", "B", "UP"]
 
 [tool.mypy]
 strict = true
+
+[[tool.mypy.overrides]]
+# authlib ships no type information (no py.typed, no stubs package in use).
+module = ["authlib.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

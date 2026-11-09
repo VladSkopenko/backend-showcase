@@ -10,6 +10,7 @@ from app.features.core.auth.endpoints.dependencies import (
     CurrentUserDep,
     EmailVerificationServiceDep,
     LoginServiceDep,
+    PasswordResetServiceDep,
     RegistrationServiceDep,
     SessionCookiesDep,
     SessionServiceDep,
@@ -18,6 +19,9 @@ from app.features.core.auth.endpoints.dependencies import (
 from app.features.core.auth.endpoints.errors import ERROR_STATUSES
 from app.features.core.auth.schemas import (
     LoginRequest,
+    PasswordResetCodeRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
     RegisterRequest,
     RegisterResponse,
     ResendCodeRequest,
@@ -89,6 +93,43 @@ async def resend_verification_code(
     issued = await email_verification.resend(email=body.email)
     background_tasks.add_task(verification_email.send, issued=issued)
     return ResendCodeResponse(debug_code=issued.debug_code)
+
+
+@router.post(
+    "/password-reset/request",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=ResendCodeResponse,
+    response_model_exclude_none=True,
+)
+async def request_password_reset(
+    body: PasswordResetRequest,
+    background_tasks: BackgroundTasks,
+    password_reset: PasswordResetServiceDep,
+    verification_email: VerificationEmailServiceDep,
+) -> ResendCodeResponse:
+    issued = await password_reset.request(email=body.email)
+    background_tasks.add_task(verification_email.send, issued=issued)
+    return ResendCodeResponse(debug_code=issued.debug_code)
+
+
+@router.post("/password-reset/verify-code", status_code=status.HTTP_204_NO_CONTENT)
+async def verify_password_reset_code(
+    body: PasswordResetCodeRequest, password_reset: PasswordResetServiceDep
+) -> Response:
+    error = await password_reset.verify_code(email=body.email, code=body.code)
+    if error is not None:
+        return domain_error_response(error, ERROR_STATUSES)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/password-reset/confirm", status_code=status.HTTP_204_NO_CONTENT)
+async def confirm_password_reset(
+    body: PasswordResetConfirmRequest, password_reset: PasswordResetServiceDep
+) -> Response:
+    error = await password_reset.confirm(email=body.email, code=body.code, password=body.password)
+    if error is not None:
+        return domain_error_response(error, ERROR_STATUSES)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/login", response_model=UserResponse)

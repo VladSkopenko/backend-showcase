@@ -72,3 +72,18 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-separate-test-database.md`
   summary: Record the test database contract (`app_test` recreated per run, one run per server, CI round-trip on `app`) in the ADR batch.
   evidence: workflow.md rule 5.
+- source_spec: `_bmad_output/implementation-artifacts/spec-password-reset.md`
+  summary: Test the 0004 downgrade with `PASSWORD_RESET` and `EMAIL_VERIFICATION` rows present (reset rows deleted, verification rows survive the enum rebuild).
+  evidence: CI round-trip and the throwaway verification ran on empty tables; dropping the DELETE would only fail on a database that has issued reset codes. Belongs with the AD-9 rollback item.
+- source_spec: `_bmad_output/implementation-artifacts/spec-password-reset.md`
+  summary: Add the password reset decisions to the auth ADR batch (access token survives a reset, reset verifies the email, daily cap for reset codes only, check-then-confirm without a reset token).
+  evidence: workflow.md rule 5; they live only in the spec.
+- source_spec: `_bmad_output/implementation-artifacts/spec-google-oauth.md`
+  summary: Test that the real `get_oauth_clients` wiring registers Google from the same settings the provider registry reads.
+  evidence: Every app test overrides the dependency; a drift would answer `OAUTH_FAILED` on every real sign-in with all tests green. The dev live sign-in covers it today.
+- source_spec: `_bmad_output/implementation-artifacts/spec-google-oauth.md`
+  summary: Check Google's guidance on trusting `email_verified` for non-Gmail addresses (the `hd` claim) before linking a Google account to an existing password account.
+  evidence: Unverified (medium if true): a third-party address that changed owners could link to an existing account; the review cited the guidance from memory.
+- source_spec: `_bmad_output/implementation-artifacts/spec-google-oauth.md`
+  summary: Add the Google sign-in decisions to the auth ADR batch (email linking only when verified, password wipe on unverified accounts, one link per provider, OAuth through the frontend proxy).
+  evidence: workflow.md rule 5.

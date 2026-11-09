@@ -57,3 +57,32 @@ class NotAuthenticatedError(DomainError):
 class SessionInvalidError(DomainError):
     def __init__(self) -> None:
         super().__init__("SESSION_INVALID", "The session has ended. Sign in again.")
+
+
+class OAuthCancelledError(DomainError):
+    def __init__(self) -> None:
+        super().__init__("OAUTH_CANCELLED", "Sign-in was cancelled.")
+
+
+class OAuthEmailUnverifiedError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "OAUTH_EMAIL_UNVERIFIED", "The provider did not confirm an email for this account."
+        )
+
+
+class OAuthAccountConflictError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "OAUTH_ACCOUNT_CONFLICT", "This account is already linked to another provider account."
+        )
+
+
+class OAuthUnavailableError(DomainError):
+    def __init__(self) -> None:
+        super().__init__("OAUTH_UNAVAILABLE", "This sign-in method is not available.")
+
+
+class OAuthFailedError(DomainError):
+    def __init__(self) -> None:
+        super().__init__("OAUTH_FAILED", "Sign-in failed. Try again.")

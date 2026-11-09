@@ -23,6 +23,7 @@ from app.features.core.users.models import User
 
 class VerificationCodeService:
     HOURLY_LIMIT_WINDOW = timedelta(hours=1)
+    DAILY_LIMIT_WINDOW = timedelta(days=1)
 
     def __init__(self, session: AsyncSession, auth: AuthSettings, environment: Environment) -> None:
         self._code_repository = VerificationCodeRepository(session)
@@ -47,26 +48,39 @@ class VerificationCodeService:
         )
         # Deployed environments are reachable from the internet, so only `local` echoes the code.
         debug_code = plain_code if self._environment == "local" else None
-        return IssuedCode(user=user, plain_code=plain_code, debug_code=debug_code)
+        return IssuedCode(user=user, purpose=purpose, plain_code=plain_code, debug_code=debug_code)
+
+    async def check(
+        self, *, user: User, purpose: VerificationPurpose, code: str
+    ) -> DomainError | None:
+        result = await self._find_valid(user=user, purpose=purpose, code=code)
+        return result if isinstance(result, DomainError) else None
 
     async def consume(
         self, *, user: User, purpose: VerificationPurpose, code: str
     ) -> DomainError | None:
+        result = await self._find_valid(user=user, purpose=purpose, code=code)
+        if isinstance(result, DomainError):
+            return result
+        result.consumed_at = clock.now()
+        return None
+
+    async def _find_valid(
+        self, *, user: User, purpose: VerificationPurpose, code: str
+    ) -> VerificationCode | DomainError:
         current = await self._code_repository.get_latest(user_id=user.id, purpose=purpose)
-        now = clock.now()
         if (
             current is None
             or current.consumed_at is not None
             or current.attempts >= self._auth.max_code_attempts
         ):
             return CodeInvalidError()
-        if current.expires_at <= now:
+        if current.expires_at <= clock.now():
             return CodeExpiredError()
         if not self._matches(code, current.code_hash):
             await self._code_repository.increment_attempts(code_id=current.id)
             return CodeInvalidError()
-        current.consumed_at = now
-        return None
+        return current
 
     def _hash_code(self, code: str) -> str:
         return hashlib.sha256(code.encode()).hexdigest()
@@ -90,6 +104,14 @@ class VerificationCodeService:
             earliest_allowed.append(
                 recent[-self._auth.max_codes_per_hour] + self.HOURLY_LIMIT_WINDOW
             )
+        if purpose is VerificationPurpose.PASSWORD_RESET:
+            today = await self._code_repository.list_creation_times_since(
+                user_id=user.id, purpose=purpose, since=now - self.DAILY_LIMIT_WINDOW
+            )
+            if len(today) >= self._auth.max_reset_codes_per_day:
+                earliest_allowed.append(
+                    today[-self._auth.max_reset_codes_per_day] + self.DAILY_LIMIT_WINDOW
+                )
         wait = max(earliest_allowed) - now
         if wait > timedelta(0):
             raise ResendTooSoonError(retry_after=math.ceil(wait.total_seconds()))

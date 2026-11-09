@@ -4,7 +4,7 @@ Alembic's env.py loads this module. Add each new feature's models here.
 """
 
 from app.common.database import Base
-from app.features.core.auth.models import RefreshToken, VerificationCode
+from app.features.core.auth.models import OAuthAccount, RefreshToken, VerificationCode
 from app.features.core.users.models import User
 
-__all__ = ["Base", "RefreshToken", "User", "VerificationCode"]
+__all__ = ["Base", "OAuthAccount", "RefreshToken", "User", "VerificationCode"]

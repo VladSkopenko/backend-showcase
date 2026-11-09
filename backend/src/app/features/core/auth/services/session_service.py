@@ -67,6 +67,9 @@ class SessionService:
         if token.revoked_at is None:
             token.revoked_at = now
 
+    async def revoke_all(self, *, user: User) -> None:
+        await self._token_repository.revoke_all_active(user_id=user.id, now=clock.now())
+
     async def _lock_token(self, *, refresh_token: str | None) -> tuple[RefreshToken, User] | None:
         # The user row is locked before the token is re-read, so a concurrent rotation cannot
         # insert a new token past a mass revocation, and two refreshes of one token serialise.

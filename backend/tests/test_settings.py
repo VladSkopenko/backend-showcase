@@ -22,6 +22,7 @@ def test_env_vars_land_in_their_domain_blocks(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("AUTH_RESEND_COOLDOWN_SECONDS", "30")
     monkeypatch.setenv("AUTH_MAX_CODE_ATTEMPTS", "3")
     monkeypatch.setenv("AUTH_MAX_CODES_PER_HOUR", "7")
+    monkeypatch.setenv("AUTH_MAX_RESET_CODES_PER_DAY", "20")
 
     settings = Settings()
 
@@ -37,6 +38,7 @@ def test_env_vars_land_in_their_domain_blocks(monkeypatch: pytest.MonkeyPatch) -
     assert settings.auth.resend_cooldown_seconds == 30
     assert settings.auth.max_code_attempts == 3
     assert settings.auth.max_codes_per_hour == 7
+    assert settings.auth.max_reset_codes_per_day == 20
     assert settings.database.host == "db.internal"
     assert settings.database.port == 6543
     assert settings.database.user == "svc"
@@ -151,3 +153,50 @@ def test_short_token_secret_fails(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ValidationError, match="secret_key"):
         TokenSettings()  # type: ignore[call-arg]
+
+
+def test_max_reset_codes_per_day_default() -> None:
+    settings = Settings()
+
+    assert settings.auth.max_reset_codes_per_day == 10
+
+
+def test_google_env_vars_land_in_the_google_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-id.apps.googleusercontent.com")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "google-secret")
+
+    settings = Settings()
+
+    assert settings.google.client_id == "client-id.apps.googleusercontent.com"
+    assert settings.google.client_secret.get_secret_value() == "google-secret"
+    assert settings.google.is_configured
+    assert "google-secret" not in repr(settings)
+
+
+@pytest.mark.parametrize(
+    ("client_id", "client_secret"), [("", ""), ("client-id", ""), ("", "google-secret")]
+)
+def test_google_is_not_configured_without_both_values(
+    monkeypatch: pytest.MonkeyPatch, client_id: str, client_secret: str
+) -> None:
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", client_id)
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", client_secret)
+
+    assert not Settings().google.is_configured
+
+
+def test_oauth_state_env_vars_land_in_the_auth_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AUTH_OAUTH_STATE_MAX_AGE_SECONDS", "300")
+    monkeypatch.setenv("AUTH_OAUTH_STATE_COOKIE_PATH", "/api/v2/auth")
+
+    settings = Settings()
+
+    assert settings.auth.oauth_state_max_age_seconds == 300
+    assert settings.auth.oauth_state_cookie_path == "/api/v2/auth"
+
+
+def test_oauth_state_defaults() -> None:
+    settings = Settings()
+
+    assert settings.auth.oauth_state_max_age_seconds == 600
+    assert settings.auth.oauth_state_cookie_path == "/api/v1/auth"

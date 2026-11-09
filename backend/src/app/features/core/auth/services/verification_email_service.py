@@ -19,8 +19,11 @@ class VerificationEmailService:
         to = issued.user.email
         try:
             email = self._renderer.render(
-                first_name=issued.user.first_name, email=to, code=issued.plain_code
+                purpose=issued.purpose,
+                first_name=issued.user.first_name,
+                email=to,
+                code=issued.plain_code,
             )
             await self._sender.send(to=to, subject=email.subject, html=email.html, text=email.text)
         except Exception:
-            logger.exception("Sending the verification email to %s failed", to)
+            logger.exception("Sending the %s email to %s failed", issued.purpose.value, to)
