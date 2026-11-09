@@ -235,3 +235,58 @@ async def test_oauth_account_unique_constraints(
 
         with pytest.raises(IntegrityError, match=constraint):
             await session.flush()
+
+
+async def test_migrated_dishes_table_has_the_expected_shape(connection: AsyncConnection) -> None:
+    def describe(sync_connection: Connection) -> dict[str, Any]:
+        inspector = inspect(sync_connection)
+        return {
+            "columns": inspector.get_columns("dishes"),
+            "unique": inspector.get_unique_constraints("dishes"),
+            "indexes": inspector.get_indexes("dishes"),
+            "checks": inspector.get_check_constraints("dishes"),
+        }
+
+    shape = await connection.run_sync(describe)
+
+    assert {column["name"]: column["nullable"] for column in shape["columns"]} == {
+        "id": False,
+        "slug": False,
+        "name": False,
+        "description": False,
+        "category": False,
+        "price_cents": False,
+        "weight_grams": False,
+        "calories": False,
+        "protein": False,
+        "fats": False,
+        "carbs": False,
+        "vitamins": False,
+        "is_available": False,
+        "popularity": False,
+        "image_key": False,
+        "created_at": False,
+        "updated_at": False,
+    }
+    assert [(c["name"], c["column_names"]) for c in shape["unique"]] == [
+        ("uq_dishes_slug", ["slug"])
+    ]
+    indexes = [index for index in shape["indexes"] if not index.get("duplicates_constraint")]
+    assert sorted((index["name"], index["column_names"]) for index in indexes) == [
+        ("ix_dishes_category_popularity", ["category", "popularity"]),
+        ("ix_dishes_created_at", ["created_at"]),
+        ("ix_dishes_popularity", ["popularity"]),
+        ("ix_dishes_price_cents", ["price_cents"]),
+    ]
+    assert sorted(check["name"] for check in shape["checks"]) == [
+        "ck_dishes_calories_non_negative",
+        "ck_dishes_popularity_non_negative",
+        "ck_dishes_price_cents_positive",
+        "ck_dishes_weight_grams_positive",
+    ]
+
+
+async def test_dish_category_enum_has_the_three_menu_tabs(connection: AsyncConnection) -> None:
+    labels = await connection.scalar(text("SELECT enum_range(NULL::dish_category)::text[]"))
+
+    assert labels == ["APPETIZER", "MAIN_COURSE", "DESSERT"]

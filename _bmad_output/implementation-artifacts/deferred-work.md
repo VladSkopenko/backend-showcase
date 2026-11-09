@@ -87,3 +87,6 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-google-oauth.md`
   summary: Add the Google sign-in decisions to the auth ADR batch (email linking only when verified, password wipe on unverified accounts, one link per provider, OAuth through the frontend proxy).
   evidence: workflow.md rule 5.
+- source_spec: `_bmad_output/implementation-artifacts/spec-menu-dishes.md`
+  summary: Decide caching for dish pictures: `Cache-Control` on upload and content-hashed keys, together with whether anonymous GETs count toward the 50,000 Always Free requests.
+  evidence: Same key on every seed run and no cache headers; replaced pictures stay stale in caches, and each view may hit the bucket.

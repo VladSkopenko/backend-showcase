@@ -133,14 +133,15 @@ jobs:
           TOKEN_SECRET_KEY: ${{ secrets.TOKEN_SECRET_KEY }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          MEDIA_PUBLIC_BASE_URL: ${{ vars.MEDIA_PUBLIC_BASE_URL }}
         run: |
           install -m 600 /dev/null ~/deploy_key
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/deploy_key
           # Secrets go over stdin, never argv: printf is a shell builtin, and deploy.sh writes stdin to the .env.
           # The server's host key changes with every VM replacement; the tailnet already authenticates the peer.
-          out=$(printf 'POSTGRES_PASSWORD=%s\nEMAIL_USERNAME=%s\nEMAIL_PASSWORD=%s\nEMAIL_SENDER=%s\nTOKEN_SECRET_KEY=%s\nGOOGLE_CLIENT_ID=%s\nGOOGLE_CLIENT_SECRET=%s\n' \
+          out=$(printf 'POSTGRES_PASSWORD=%s\nEMAIL_USERNAME=%s\nEMAIL_PASSWORD=%s\nEMAIL_SENDER=%s\nTOKEN_SECRET_KEY=%s\nGOOGLE_CLIENT_ID=%s\nGOOGLE_CLIENT_SECRET=%s\nMEDIA_PUBLIC_BASE_URL=%s\n' \
             "$POSTGRES_PASSWORD" "$EMAIL_USERNAME" "$EMAIL_PASSWORD" "$EMAIL_SENDER" "$TOKEN_SECRET_KEY" \
-            "$GOOGLE_CLIENT_ID" "$GOOGLE_CLIENT_SECRET" \
+            "$GOOGLE_CLIENT_ID" "$GOOGLE_CLIENT_SECRET" "$MEDIA_PUBLIC_BASE_URL" \
             | ssh -i ~/deploy_key -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=accept-new "deploy@$DEPLOY_HOST" "$GITHUB_SHA")
           echo "$out"

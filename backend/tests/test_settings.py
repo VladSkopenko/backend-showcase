@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.config.settings import DatabaseSettings, Settings, TokenSettings
+from app.config.settings import DatabaseSettings, MediaSettings, Settings, TokenSettings
 
 
 def test_env_vars_land_in_their_domain_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -200,3 +200,40 @@ def test_oauth_state_defaults() -> None:
 
     assert settings.auth.oauth_state_max_age_seconds == 600
     assert settings.auth.oauth_state_cookie_path == "/api/v1/auth"
+
+
+def test_media_env_vars_land_in_the_media_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MEDIA_S3_ENDPOINT_URL", "https://ns.compat.objectstorage.example.com")
+    monkeypatch.setenv("MEDIA_REGION", "eu-frankfurt-1")
+    monkeypatch.setenv("MEDIA_BUCKET", "backend-showcase-media-dev")
+    monkeypatch.setenv("MEDIA_ACCESS_KEY_ID", "access-key")
+    monkeypatch.setenv("MEDIA_SECRET_ACCESS_KEY", "media-secret")
+    monkeypatch.setenv("MEDIA_PUBLIC_BASE_URL", "https://media.example.com/o/")
+
+    settings = Settings()
+
+    assert settings.media.s3_endpoint_url == "https://ns.compat.objectstorage.example.com"
+    assert settings.media.region == "eu-frankfurt-1"
+    assert settings.media.bucket == "backend-showcase-media-dev"
+    assert settings.media.access_key_id == "access-key"
+    assert settings.media.secret_access_key.get_secret_value() == "media-secret"
+    assert settings.media.public_base_url == "https://media.example.com/o"
+    assert settings.media.can_write
+    assert "media-secret" not in repr(settings)
+
+
+def test_media_cannot_write_without_the_write_keys() -> None:
+    assert not Settings().media.can_write
+
+
+@pytest.mark.parametrize("value", [None, ""])
+def test_missing_media_public_base_url_fails(
+    monkeypatch: pytest.MonkeyPatch, value: str | None
+) -> None:
+    if value is None:
+        monkeypatch.delenv("MEDIA_PUBLIC_BASE_URL")
+    else:
+        monkeypatch.setenv("MEDIA_PUBLIC_BASE_URL", value)
+
+    with pytest.raises(ValidationError, match="public_base_url"):
+        MediaSettings()  # type: ignore[call-arg]

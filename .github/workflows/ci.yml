@@ -23,9 +23,10 @@ jobs:
     defaults:
       run:
         working-directory: backend
-    # Not a secret: the settings require a key of at least 32 characters, and alembic builds them too.
+    # Not secrets: the settings require both, and alembic builds them too.
     env:
       TOKEN_SECRET_KEY: 4e6f742d612d7365637265742d63692d6f6e6c792d746f6b656e2d6b65792121
+      MEDIA_PUBLIC_BASE_URL: https://media.example.com/ci
     # Database tests always hit a real PostgreSQL; the settings defaults point at this service.
     services:
       postgres:

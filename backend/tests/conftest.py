@@ -29,6 +29,11 @@ for name in list(os.environ):
         del os.environ[name]
 os.environ["TOKEN_SECRET_KEY"] = "0123456789abcdef" * 4
 os.environ["DATABASE_NAME"] = TEST_DATABASE_NAME
+TEST_MEDIA_PUBLIC_BASE_URL = "https://media.example.com/n/ns/b/media/o"
+for name in list(os.environ):
+    if name.startswith("MEDIA_"):
+        del os.environ[name]
+os.environ["MEDIA_PUBLIC_BASE_URL"] = TEST_MEDIA_PUBLIC_BASE_URL
 
 # A developer's backend/.env must never change test behaviour or send mail. Runs at collection,
 # before any test module builds the app and fills the cached get_settings().
@@ -41,8 +46,10 @@ for value in vars(settings_module).values():
 def isolated_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
     # DATABASE_ variables stay, so a test run can point at another server; the name is forced above.
     for name in list(os.environ):
-        if name.startswith(("APP_", "EMAIL_", "AUTH_", "GOOGLE_")):
+        if name.startswith(("APP_", "EMAIL_", "AUTH_", "GOOGLE_", "MEDIA_")):
             monkeypatch.delenv(name)
+    # Required by the settings; the write keys stay unset, so nothing can reach a bucket.
+    monkeypatch.setenv("MEDIA_PUBLIC_BASE_URL", TEST_MEDIA_PUBLIC_BASE_URL)
 
 
 @pytest.fixture

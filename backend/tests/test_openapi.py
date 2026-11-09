@@ -25,6 +25,10 @@ FLOWS = {
         ("get", "/api/v1/auth/{provider_slug}/login"),
         ("get", "/api/v1/auth/{provider_slug}/callback"),
     ],
+    "Menu": [
+        ("get", "/api/v1/menu/dishes"),
+        ("get", "/api/v1/menu/dishes/{dish_id}"),
+    ],
     "Health": [
         ("get", "/"),
         ("get", "/health"),

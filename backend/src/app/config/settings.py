@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -97,6 +97,34 @@ class GoogleSettings(BaseSettings):
         return bool(self.client_id and self.client_secret.get_secret_value())
 
 
+class MediaSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="MEDIA_", env_file=ENV_FILE, extra="ignore")
+
+    # Write access through the S3 Compatibility API; only the local seed uses it.
+    s3_endpoint_url: str = ""
+    region: str = ""
+    bucket: str = ""
+    access_key_id: str = ""
+    secret_access_key: SecretStr = SecretStr("")
+    # Required: every image_url is built from it, so a missing value fails at startup.
+    public_base_url: str = Field(min_length=1)
+
+    @field_validator("public_base_url")
+    @classmethod
+    def strip_trailing_slash(cls, value: str) -> str:
+        return value.rstrip("/")
+
+    @property
+    def can_write(self) -> bool:
+        return bool(
+            self.s3_endpoint_url
+            and self.region
+            and self.bucket
+            and self.access_key_id
+            and self.secret_access_key.get_secret_value()
+        )
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -107,6 +135,7 @@ class Settings(BaseSettings):
     google: GoogleSettings = Field(default_factory=GoogleSettings)
     # mypy sees the required secret_key argument; pydantic-settings fills it from the environment.
     token: TokenSettings = Field(default_factory=TokenSettings)  # type: ignore[arg-type]
+    media: MediaSettings = Field(default_factory=MediaSettings)  # type: ignore[arg-type]
 
     @classmethod
     def settings_customise_sources(

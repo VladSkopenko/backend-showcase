@@ -134,8 +134,27 @@ type = "protected"
 protected_modules = ["app.features.application_services.**"]
 allowed_importers = ["app.features.*.endpoints", "app.infrastructure.background_tasks.**"]
 
+[[tool.importlinter.contracts]]
+# Scripts run from a developer's machine with dev-only dependencies such as boto3; the runtime
+# app must never import them. A module overlapping app.scripts (app.scripts itself) is skipped.
+name = "Nothing in the app imports scripts"
+type = "forbidden"
+source_modules = ["app.*"]
+forbidden_modules = ["app.scripts"]
+
+[[tool.importlinter.contracts]]
+# app.infrastructure.storage imports boto3, a dev-only dependency the runtime image lacks. The seed
+# service's import sits under TYPE_CHECKING; import-linter still counts it (the default
+# exclude_type_checking_imports = false), so that module is listed as an allowed importer.
+name = "Only the menu seed imports the S3 storage"
+type = "protected"
+protected_modules = ["app.infrastructure.storage"]
+allowed_importers = ["app.scripts.**", "app.features.menu.services.dish_seed_service"]
+
 [dependency-groups]
 dev = [
+    "boto3>=1.43.126",
+    "boto3-stubs[s3]>=1.43.126",
     "httpx2>=2.16.0",
     "import-linter>=2.15",
     "mypy>=2.4.1",
