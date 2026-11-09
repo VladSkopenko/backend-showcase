@@ -6,7 +6,8 @@ from typing import Any
 import httpx2
 import pytest
 from fastapi import FastAPI
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionmaker
 
 from app.config.settings import Settings, get_settings
 from app.features.menu.enums import DishCategory
@@ -51,6 +52,12 @@ def make_dish(slug: str, **overrides: Any) -> Dish:
     }
     values.update(overrides)
     return Dish(**values)
+
+
+@pytest.fixture(autouse=True)
+async def empty_menu(connection: AsyncConnection) -> None:
+    # Migration 0007 fills the menu; these tests build their own dishes.
+    await connection.execute(text("DELETE FROM dishes"))
 
 
 @pytest.fixture
