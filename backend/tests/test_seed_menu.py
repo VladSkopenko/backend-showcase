@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import func, select, text, update
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionmaker
 
 from app.common import clock
 from app.config.settings import MediaSettings
@@ -50,6 +50,12 @@ def write_seed(directory: Path, entries: list[dict[str, Any]]) -> Path:
         if isinstance(image, str):
             (directory / image).write_bytes(b"picture-bytes")
     return directory
+
+
+@pytest.fixture
+async def empty_menu(connection: AsyncConnection) -> None:
+    # Migration 0007 fills the menu; these tests build their own dishes.
+    await connection.execute(text("DELETE FROM dishes"))
 
 
 @pytest.fixture(autouse=True)
@@ -127,6 +133,7 @@ def test_load_parses_entries_and_derives_keys_and_content_types(tmp_path: Path) 
         entry("bad", unexpected="field"),
     ],
 )
+@pytest.mark.usefixtures("empty_menu")
 async def test_a_bad_entry_fails_before_anything_is_written(
     tmp_path: Path,
     storage: S3FileStorage,
@@ -143,6 +150,7 @@ async def test_a_bad_entry_fails_before_anything_is_written(
 
 
 @pytest.mark.parametrize("problem", ["missing_picture", "duplicate_slug", "not_json", "no_file"])
+@pytest.mark.usefixtures("empty_menu")
 async def test_a_bad_file_fails_before_anything_is_written(
     tmp_path: Path,
     storage: S3FileStorage,
@@ -166,6 +174,7 @@ async def test_a_bad_file_fails_before_anything_is_written(
     assert await load_dishes(session_factory) == {}
 
 
+@pytest.mark.usefixtures("empty_menu")
 async def test_save_inserts_new_dishes_with_created_at_by_file_position(
     tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
@@ -186,6 +195,7 @@ async def test_save_inserts_new_dishes_with_created_at_by_file_position(
     assert dishes["first"].fats == "22-24g"
 
 
+@pytest.mark.usefixtures("empty_menu")
 async def test_saving_twice_updates_content_and_keeps_id_popularity_and_created_at(
     tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
@@ -212,6 +222,7 @@ async def test_saving_twice_updates_content_and_keeps_id_popularity_and_created_
     assert after["cake"].price_cents == 700
 
 
+@pytest.mark.usefixtures("empty_menu")
 async def test_dishes_missing_from_the_file_stay(
     tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
@@ -226,6 +237,7 @@ async def test_dishes_missing_from_the_file_stay(
     assert count == 2
 
 
+@pytest.mark.usefixtures("empty_menu")
 async def test_saving_again_touches_updated_at_only_for_changed_dishes(
     tmp_path: Path,
     storage: S3FileStorage,
