@@ -12,9 +12,14 @@ COPY src ./src
 RUN uv sync --locked --no-dev --no-editable
 
 FROM python:3.14-slim
-# The runtime never installs packages; dropping the base image's pip also drops its vendored,
-# vulnerable dependencies that Trivy reports.
-RUN python -m pip uninstall --yes pip && useradd --create-home --uid 10001 app
+# The base image lags behind Debian security updates (Trivy fails on fixed HIGH CVEs such as
+# zlib1g), so the runtime upgrades the packages it already has; nothing new is installed.
+# Dropping the base image's pip also drops its vendored, vulnerable dependencies.
+RUN apt-get update \
+    && apt-get upgrade --yes --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip uninstall --yes pip \
+    && useradd --create-home --uid 10001 app
 WORKDIR /app
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 # Deploys run `alembic upgrade head` with the new image, so the migrations ship inside it.
