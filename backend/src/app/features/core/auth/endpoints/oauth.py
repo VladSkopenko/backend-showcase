@@ -9,12 +9,22 @@ from app.features.core.auth.endpoints.dependencies import (
     SessionCookiesDep,
 )
 from app.features.core.auth.endpoints.oauth_redirects import OAuthRedirects
+from app.features.core.auth.endpoints.openapi_tags import AuthOpenApiTags
 from app.infrastructure.oauth import OAuthExchangeError
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=[AuthOpenApiTags.OAUTH])
 
 
-@router.get("/{provider_slug}/login", status_code=status.HTTP_302_FOUND)
+@router.get(
+    "/{provider_slug}/login",
+    status_code=status.HTTP_302_FOUND,
+    response_class=RedirectResponse,
+    description=(
+        "Open it as a browser navigation, never with fetch: redirects to the provider's "
+        "consent screen and sets the oauth_state cookie. Failures redirect to the frontend "
+        "with auth_error."
+    ),
+)
 async def start_oauth_sign_in(
     request: Request,
     provider: OAuthProviderDep,
@@ -42,6 +52,12 @@ async def start_oauth_sign_in(
     "/{provider_slug}/callback",
     name=OAuthRedirects.CALLBACK_ROUTE,
     status_code=status.HTTP_302_FOUND,
+    response_class=RedirectResponse,
+    description=(
+        "The provider sends the browser here; never call it with fetch. Signs the user in "
+        "with the session cookies and redirects to the frontend; failures redirect with "
+        "auth_error."
+    ),
 )
 async def complete_oauth_sign_in(
     request: Request,

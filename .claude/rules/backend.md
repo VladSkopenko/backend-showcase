@@ -68,6 +68,20 @@ paths:
 - HTTP error translation belongs to the API layer. Background workers catch exceptions, roll back
   and log; they never raise HTTP exceptions.
 
+## API docs
+- Swagger groups routes by user flow, not by feature: every route has exactly one OpenAPI tag named
+  after the flow it serves (for example Registration, Password reset, Session). A
+  feature keeps its tag names and descriptions as class attributes in `endpoints/openapi_tags.py`;
+  `create_app` passes them to `openapi_tags` in reading order. `tests/test_openapi.py` pins each
+  route to its tag.
+- Every route has a short `description`: what it does and the effects a caller sees (cookies set,
+  emails sent, limits). Name limits without their numbers: those come from settings and differ
+  per environment. Routes a browser must navigate to, such as OAuth redirects, say they are
+  never called with `fetch`.
+- Paths never change to regroup the docs. A path parameter with a closed set of values documents
+  them (`json_schema_extra={"enum": ...}`) without changing its validation when the error status
+  matters.
+
 ## LLM features
 - AI orchestration lives in its own module. Domain services never import it.
 - Before designing an AI tool, ask what users will actually ask. Do not infer scope from the data shape.

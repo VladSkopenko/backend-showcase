@@ -17,6 +17,7 @@ from app.features.core.auth.endpoints.dependencies import (
     VerificationEmailServiceDep,
 )
 from app.features.core.auth.endpoints.errors import ERROR_STATUSES
+from app.features.core.auth.endpoints.openapi_tags import AuthOpenApiTags
 from app.features.core.auth.schemas import (
     LoginRequest,
     PasswordResetCodeRequest,
@@ -33,7 +34,7 @@ from app.features.core.auth.schemas import (
 
 RefreshTokenCookie = Annotated[str | None, Cookie(alias=SessionCookies.REFRESH_NAME)]
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth")
 
 
 @router.post(
@@ -41,6 +42,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     status_code=status.HTTP_201_CREATED,
     response_model=RegisterResponse,
     response_model_exclude_none=True,
+    tags=[AuthOpenApiTags.REGISTRATION],
+    description=(
+        "Creates an unverified account and emails a 6-digit code that expires. Registering "
+        "an unverified email again replaces that account. `debug_code` is returned only in "
+        "local."
+    ),
 )
 async def register_user(
     body: RegisterRequest,
@@ -61,7 +68,15 @@ async def register_user(
     )
 
 
-@router.post("/verify-email", response_model=VerifyEmailResponse)
+@router.post(
+    "/verify-email",
+    response_model=VerifyEmailResponse,
+    tags=[AuthOpenApiTags.REGISTRATION],
+    description=(
+        "Confirms the email with the code and signs the user in: sets the session cookies. "
+        "Wrong codes count toward a limit of attempts."
+    ),
+)
 async def verify_user_email(
     body: VerifyEmailRequest,
     email_verification: EmailVerificationServiceDep,
@@ -83,6 +98,11 @@ async def verify_user_email(
     status_code=status.HTTP_202_ACCEPTED,
     response_model=ResendCodeResponse,
     response_model_exclude_none=True,
+    tags=[AuthOpenApiTags.REGISTRATION],
+    description=(
+        "Emails a new verification code to an unverified account; codes are rate-limited "
+        "(cooldown, hourly cap)."
+    ),
 )
 async def resend_verification_code(
     body: ResendCodeRequest,
@@ -100,6 +120,11 @@ async def resend_verification_code(
     status_code=status.HTTP_202_ACCEPTED,
     response_model=ResendCodeResponse,
     response_model_exclude_none=True,
+    tags=[AuthOpenApiTags.PASSWORD_RESET],
+    description=(
+        "Emails a password reset code that expires; calling it again resends. Codes are "
+        "rate-limited (cooldown, hourly and daily caps)."
+    ),
 )
 async def request_password_reset(
     body: PasswordResetRequest,
@@ -112,7 +137,15 @@ async def request_password_reset(
     return ResendCodeResponse(debug_code=issued.debug_code)
 
 
-@router.post("/password-reset/verify-code", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/password-reset/verify-code",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=[AuthOpenApiTags.PASSWORD_RESET],
+    description=(
+        "Checks the reset code without using it up (the Confirm step). Wrong codes count "
+        "toward a limit of attempts."
+    ),
+)
 async def verify_password_reset_code(
     body: PasswordResetCodeRequest, password_reset: PasswordResetServiceDep
 ) -> Response:
@@ -122,7 +155,15 @@ async def verify_password_reset_code(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/password-reset/confirm", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/password-reset/confirm",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=[AuthOpenApiTags.PASSWORD_RESET],
+    description=(
+        "Checks and uses up the code, sets the new password, verifies the email if it was "
+        "not, clears the login lockout and ends every session. Does not sign in."
+    ),
+)
 async def confirm_password_reset(
     body: PasswordResetConfirmRequest, password_reset: PasswordResetServiceDep
 ) -> Response:
@@ -132,7 +173,15 @@ async def confirm_password_reset(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/login", response_model=UserResponse)
+@router.post(
+    "/login",
+    response_model=UserResponse,
+    tags=[AuthOpenApiTags.SESSION],
+    description=(
+        "Signs in with email and password and sets the session cookies. Repeated wrong "
+        "passwords lock login for a while (423)."
+    ),
+)
 async def log_in(
     body: LoginRequest, login: LoginServiceDep, cookies: SessionCookiesDep
 ) -> JSONResponse:
@@ -145,7 +194,15 @@ async def log_in(
     return response
 
 
-@router.post("/refresh", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/refresh",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=[AuthOpenApiTags.SESSION],
+    description=(
+        "Rotates the refresh cookie and sets a new pair. Presenting an already rotated token "
+        "ends every session."
+    ),
+)
 async def refresh_session(
     sessions: SessionServiceDep,
     cookies: SessionCookiesDep,
@@ -162,7 +219,12 @@ async def refresh_session(
     return response
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=[AuthOpenApiTags.SESSION],
+    description="Ends the session of the refresh cookie and clears both cookies.",
+)
 async def log_out(
     sessions: SessionServiceDep,
     cookies: SessionCookiesDep,
@@ -174,6 +236,11 @@ async def log_out(
     return response
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    tags=[AuthOpenApiTags.SESSION],
+    description="Returns the user signed in with the access cookie.",
+)
 async def read_current_user(user: CurrentUserDep) -> UserResponse:
     return user
