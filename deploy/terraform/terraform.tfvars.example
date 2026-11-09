@@ -1,3 +1,4 @@
+media_writer_email   = "you+media-{env}@gmail.com"
 compartment_ocid     = "ocid1.compartment.oc1..<unique_id>"
 duckdns_token        = "<duckdns_token>"
 tailscale_auth_key   = "tskey-auth-<one_off_key>"

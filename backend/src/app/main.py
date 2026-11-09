@@ -10,16 +10,23 @@ from app.features.core.auth.endpoints import AuthOpenApiTags, oauth_router
 from app.features.core.auth.endpoints import router as auth_router
 from app.features.core.health.endpoints import HealthOpenApiTags
 from app.features.core.health.endpoints import router as health_router
+from app.features.menu.endpoints import ERROR_STATUSES as MENU_ERROR_STATUSES
+from app.features.menu.endpoints import MenuOpenApiTags
+from app.features.menu.endpoints import router as menu_router
 from app.infrastructure.oauth import OAuthClients
 
-ERROR_STATUSES = {**AUTH_ERROR_STATUSES}
+ERROR_STATUSES = {**AUTH_ERROR_STATUSES, **MENU_ERROR_STATUSES}
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
         title=settings.app.name,
-        openapi_tags=[*AuthOpenApiTags.METADATA, *HealthOpenApiTags.METADATA],
+        openapi_tags=[
+            *AuthOpenApiTags.METADATA,
+            *MenuOpenApiTags.METADATA,
+            *HealthOpenApiTags.METADATA,
+        ],
     )
     app.state.oauth_clients = OAuthClients(google=settings.google)
     # Holds only the OAuth state, nonce and PKCE verifier between /login and /callback.
@@ -35,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(oauth_router, prefix="/api/v1")
+    app.include_router(menu_router, prefix="/api/v1")
 
     @app.exception_handler(DomainError)
     async def handle_domain_error(request: Request, exc: DomainError) -> JSONResponse:

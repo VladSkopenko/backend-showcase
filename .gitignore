@@ -34,3 +34,6 @@ tfplan
 .DS_Store
 .idea/
 .vscode/
+
+# Menu seed data (dishes.json and pictures), kept only on the developer machine
+backend/seed/

@@ -3,6 +3,17 @@ variable "compartment_ocid" {
   type        = string
 }
 
+variable "media_writer_email" {
+  description = "Email for the media writer users; identity domains require one. Use a plus-address, e.g. you+media-{env}@gmail.com, where {env} is replaced per environment"
+  type        = string
+
+  validation {
+    # Without the placeholder every environment's writer user would get the same email.
+    condition     = strcontains(var.media_writer_email, "{env}")
+    error_message = "media_writer_email must contain {env}, e.g. you+media-{env}@gmail.com."
+  }
+}
+
 variable "deploy_public_keys" {
   description = "Public SSH key of each deploy target (dev, staging, prod, platform), keyed by target"
   type        = map(string)

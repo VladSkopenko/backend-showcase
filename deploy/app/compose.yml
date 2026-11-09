@@ -42,6 +42,9 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       # Signs access tokens; the API refuses to start without it. Hex like POSTGRES_PASSWORD (openssl rand -hex 32).
       TOKEN_SECRET_KEY: ${TOKEN_SECRET_KEY:?TOKEN_SECRET_KEY comes from the GitHub Environment}
+      # Public base URL of the environment's media bucket; a plain GitHub Environment variable, not a secret.
+      # The API refuses to start without it. No write keys here: only the local seed uploads pictures.
+      MEDIA_PUBLIC_BASE_URL: ${MEDIA_PUBLIC_BASE_URL:?MEDIA_PUBLIC_BASE_URL comes from the GitHub Environment}
     depends_on:
       postgres:
         condition: service_healthy
