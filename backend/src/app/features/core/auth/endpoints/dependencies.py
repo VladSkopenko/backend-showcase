@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Cookie, Depends, HTTPException, Request, status
+from fastapi import Cookie, Depends, HTTPException, Path, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.database import get_session
@@ -150,8 +150,14 @@ SessionCookiesDep = Annotated[SessionCookies, Depends(get_session_cookies)]
 OAUTH_PROVIDERS_BY_SLUG = {provider.slug: provider for provider in OAuthProvider}
 
 
-# The path carries the lowercase slug; an enum parameter would accept only "GOOGLE" and answer 422.
-def get_oauth_provider(provider_slug: str) -> OAuthProvider:
+# The path carries the lowercase slug. An enum parameter would accept only "GOOGLE" and answer
+# 422, so the known slugs are only documented and an unknown one stays a 404.
+def get_oauth_provider(
+    provider_slug: Annotated[
+        str,
+        Path(json_schema_extra={"enum": list(OAUTH_PROVIDERS_BY_SLUG)}),
+    ],
+) -> OAuthProvider:
     provider = OAUTH_PROVIDERS_BY_SLUG.get(provider_slug)
     if provider is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
