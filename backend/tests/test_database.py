@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -8,7 +9,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionmaker
 
 from app.common.database import get_session
-from app.model_registry import User
+from app.features.core.auth.enums import OAuthProvider
+from app.model_registry import OAuthAccount, User
 
 pytestmark = pytest.mark.anyio
 
@@ -148,3 +150,88 @@ async def test_migrated_verification_codes_table_has_the_index_and_cascading_fk(
     assert [(index["name"], index["column_names"]) for index in shape["indexes"]] == [
         ("ix_verification_codes_user_id_purpose_created_at", ["user_id", "purpose", "created_at"])
     ]
+
+
+async def test_migrated_user_oauth_accounts_table_has_the_expected_shape(
+    connection: AsyncConnection,
+) -> None:
+    def describe(sync_connection: Connection) -> dict[str, Any]:
+        inspector = inspect(sync_connection)
+        return {
+            "columns": inspector.get_columns("user_oauth_accounts"),
+            "foreign_keys": inspector.get_foreign_keys("user_oauth_accounts"),
+            "unique": inspector.get_unique_constraints("user_oauth_accounts"),
+            "indexes": inspector.get_indexes("user_oauth_accounts"),
+        }
+
+    shape = await connection.run_sync(describe)
+
+    assert {column["name"]: column["nullable"] for column in shape["columns"]} == {
+        "id": False,
+        "user_id": False,
+        "provider": False,
+        "subject": False,
+        "created_at": False,
+    }
+    [foreign_key] = shape["foreign_keys"]
+    assert foreign_key["constrained_columns"] == ["user_id"]
+    assert foreign_key["referred_table"] == "users"
+    assert foreign_key["options"]["ondelete"] == "CASCADE"
+    assert sorted(
+        (constraint["name"], constraint["column_names"]) for constraint in shape["unique"]
+    ) == [
+        ("uq_user_oauth_accounts_provider_subject", ["provider", "subject"]),
+        ("uq_user_oauth_accounts_user_id_provider", ["user_id", "provider"]),
+    ]
+    indexes = [index for index in shape["indexes"] if not index.get("duplicates_constraint")]
+    assert [(index["name"], index["column_names"]) for index in indexes] == [
+        ("ix_user_oauth_accounts_user_id", ["user_id"])
+    ]
+
+
+async def test_oauth_provider_enum_has_google(connection: AsyncConnection) -> None:
+    labels = await connection.scalar(text("SELECT enum_range(NULL::oauth_provider)::text[]"))
+
+    assert labels == ["GOOGLE"]
+
+
+@pytest.mark.parametrize(
+    ("second_user_email", "second_subject", "constraint"),
+    [
+        ("grace@example.com", "google-sub", "uq_user_oauth_accounts_provider_subject"),
+        (None, "other-sub", "uq_user_oauth_accounts_user_id_provider"),
+    ],
+)
+async def test_oauth_account_unique_constraints(
+    session_factory: async_sessionmaker[AsyncSession],
+    second_user_email: str | None,
+    second_subject: str,
+    constraint: str,
+) -> None:
+    now = datetime(2026, 11, 9, tzinfo=UTC)
+    async with session_factory() as session:
+        ada = User(first_name="Ada", last_name="Lovelace", email="ada@example.com")
+        session.add(ada)
+        await session.flush()
+        owner = ada
+        if second_user_email is not None:
+            owner = User(first_name="Grace", last_name="Hopper", email=second_user_email)
+            session.add(owner)
+            await session.flush()
+        session.add(
+            OAuthAccount(
+                user_id=ada.id, provider=OAuthProvider.GOOGLE, subject="google-sub", created_at=now
+            )
+        )
+        await session.flush()
+        session.add(
+            OAuthAccount(
+                user_id=owner.id,
+                provider=OAuthProvider.GOOGLE,
+                subject=second_subject,
+                created_at=now,
+            )
+        )
+
+        with pytest.raises(IntegrityError, match=constraint):
+            await session.flush()

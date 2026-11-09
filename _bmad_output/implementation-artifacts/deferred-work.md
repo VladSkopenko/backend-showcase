@@ -78,3 +78,12 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-password-reset.md`
   summary: Add the password reset decisions to the auth ADR batch (access token survives a reset, reset verifies the email, daily cap for reset codes only, check-then-confirm without a reset token).
   evidence: workflow.md rule 5; they live only in the spec.
+- source_spec: `_bmad_output/implementation-artifacts/spec-google-oauth.md`
+  summary: Test that the real `get_oauth_clients` wiring registers Google from the same settings the provider registry reads.
+  evidence: Every app test overrides the dependency; a drift would answer `OAUTH_FAILED` on every real sign-in with all tests green. The dev live sign-in covers it today.
+- source_spec: `_bmad_output/implementation-artifacts/spec-google-oauth.md`
+  summary: Check Google's guidance on trusting `email_verified` for non-Gmail addresses (the `hd` claim) before linking a Google account to an existing password account.
+  evidence: Unverified (medium if true): a third-party address that changed owners could link to an existing account; the review cited the guidance from memory.
+- source_spec: `_bmad_output/implementation-artifacts/spec-google-oauth.md`
+  summary: Add the Google sign-in decisions to the auth ADR batch (email linking only when verified, password wipe on unverified accounts, one link per provider, OAuth through the frontend proxy).
+  evidence: workflow.md rule 5.
