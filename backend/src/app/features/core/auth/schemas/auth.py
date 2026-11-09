@@ -50,6 +50,28 @@ class ResendCodeResponse(BaseModel):
     debug_code: str | None = None
 
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetCodeRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(pattern=r"^\d{6}$")
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(pattern=r"^\d{6}$")
+    password: str = Field(min_length=8, max_length=128)
+    password_confirmation: str = Field(max_length=128)
+
+    @model_validator(mode="after")
+    def passwords_match(self) -> Self:
+        if self.password != self.password_confirmation:
+            raise ValueError("Passwords do not match")
+        return self
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(max_length=128)

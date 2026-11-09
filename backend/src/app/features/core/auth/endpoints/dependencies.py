@@ -13,6 +13,7 @@ from app.features.core.auth.services.current_user_service import CurrentUserServ
 from app.features.core.auth.services.email_verification_service import EmailVerificationService
 from app.features.core.auth.services.login_service import LoginService
 from app.features.core.auth.services.password_hasher import PasswordHasher
+from app.features.core.auth.services.password_reset_service import PasswordResetService
 from app.features.core.auth.services.registration_service import RegistrationService
 from app.features.core.auth.services.session_service import SessionService
 from app.features.core.auth.services.verification_code_service import VerificationCodeService
@@ -106,6 +107,15 @@ def get_login_service(
     return LoginService(session, password_hasher, session_service, settings.auth)
 
 
+def get_password_reset_service(
+    session: SessionDep,
+    password_hasher: PasswordHasherDep,
+    code_service: VerificationCodeServiceDep,
+    session_service: SessionServiceDep,
+) -> PasswordResetService:
+    return PasswordResetService(session, password_hasher, code_service, session_service)
+
+
 def get_current_user_service(session: SessionDep, codec: AccessTokenCodecDep) -> CurrentUserService:
     return CurrentUserService(session, codec)
 
@@ -128,6 +138,7 @@ VerificationEmailServiceDep = Annotated[
     VerificationEmailService, Depends(get_verification_email_service)
 ]
 LoginServiceDep = Annotated[LoginService, Depends(get_login_service)]
+PasswordResetServiceDep = Annotated[PasswordResetService, Depends(get_password_reset_service)]
 CurrentUserServiceDep = Annotated[CurrentUserService, Depends(get_current_user_service)]
 SessionCookiesDep = Annotated[SessionCookies, Depends(get_session_cookies)]
 

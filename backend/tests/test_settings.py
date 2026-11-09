@@ -22,6 +22,7 @@ def test_env_vars_land_in_their_domain_blocks(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("AUTH_RESEND_COOLDOWN_SECONDS", "30")
     monkeypatch.setenv("AUTH_MAX_CODE_ATTEMPTS", "3")
     monkeypatch.setenv("AUTH_MAX_CODES_PER_HOUR", "7")
+    monkeypatch.setenv("AUTH_MAX_RESET_CODES_PER_DAY", "20")
 
     settings = Settings()
 
@@ -37,6 +38,7 @@ def test_env_vars_land_in_their_domain_blocks(monkeypatch: pytest.MonkeyPatch) -
     assert settings.auth.resend_cooldown_seconds == 30
     assert settings.auth.max_code_attempts == 3
     assert settings.auth.max_codes_per_hour == 7
+    assert settings.auth.max_reset_codes_per_day == 20
     assert settings.database.host == "db.internal"
     assert settings.database.port == 6543
     assert settings.database.user == "svc"
@@ -151,3 +153,9 @@ def test_short_token_secret_fails(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ValidationError, match="secret_key"):
         TokenSettings()  # type: ignore[call-arg]
+
+
+def test_max_reset_codes_per_day_default() -> None:
+    settings = Settings()
+
+    assert settings.auth.max_reset_codes_per_day == 10

@@ -19,6 +19,7 @@ class AppSettings(BaseSettings):
     name: str = "backend-showcase"
     environment: Environment = "local"
     frontend_url: str = "https://family-rest.vercel.app"
+    backend_url: str = "https://backend-showcase-dev.duckdns.org"
 
 
 class DatabaseSettings(BaseSettings):
@@ -51,6 +52,7 @@ class AuthSettings(BaseSettings):
     resend_cooldown_seconds: int = 60
     max_code_attempts: int = 5
     max_codes_per_hour: int = 5
+    max_reset_codes_per_day: int = 10
     max_login_attempts: int = 5
     login_lockout_minutes: int = 5
 

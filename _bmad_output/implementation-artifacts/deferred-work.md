@@ -72,3 +72,9 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-separate-test-database.md`
   summary: Record the test database contract (`app_test` recreated per run, one run per server, CI round-trip on `app`) in the ADR batch.
   evidence: workflow.md rule 5.
+- source_spec: `_bmad_output/implementation-artifacts/spec-password-reset.md`
+  summary: Test the 0004 downgrade with `PASSWORD_RESET` and `EMAIL_VERIFICATION` rows present (reset rows deleted, verification rows survive the enum rebuild).
+  evidence: CI round-trip and the throwaway verification ran on empty tables; dropping the DELETE would only fail on a database that has issued reset codes. Belongs with the AD-9 rollback item.
+- source_spec: `_bmad_output/implementation-artifacts/spec-password-reset.md`
+  summary: Add the password reset decisions to the auth ADR batch (access token survives a reset, reset verifies the email, daily cap for reset codes only, check-then-confirm without a reset token).
+  evidence: workflow.md rule 5; they live only in the spec.

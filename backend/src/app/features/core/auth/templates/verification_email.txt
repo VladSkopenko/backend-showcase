@@ -2,7 +2,7 @@ Hi {{ first_name }},
 
 Thanks for creating an account. Confirm your email by opening this link:
 
-{{ confirm_url }}
+{{ action_url }}
 
 Or enter this code on the confirmation screen: {{ code }}
 

@@ -1,5 +1,8 @@
 from app.features.core.auth.schemas.auth import (
     LoginRequest,
+    PasswordResetCodeRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
     RegisterRequest,
     RegisterResponse,
     ResendCodeRequest,
@@ -11,6 +14,9 @@ from app.features.core.auth.schemas.auth import (
 
 __all__ = [
     "LoginRequest",
+    "PasswordResetCodeRequest",
+    "PasswordResetConfirmRequest",
+    "PasswordResetRequest",
     "RegisterRequest",
     "RegisterResponse",
     "ResendCodeRequest",
