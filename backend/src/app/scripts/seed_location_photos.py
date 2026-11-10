@@ -1,0 +1,32 @@
+import asyncio
+import sys
+from pathlib import Path
+
+from app.common.database import get_engine, get_sessionmaker
+from app.config.settings import get_settings
+from app.features.core.locations.services.exceptions import LocationPhotoSeedError
+from app.features.core.locations.services.location_photo_seed_service import (
+    LocationPhotoSeedService,
+)
+from app.infrastructure.storage import S3FileStorage
+
+
+async def seed(directory: Path) -> None:
+    settings = get_settings()
+    if not settings.media.can_write:
+        raise SystemExit("Set the MEDIA_* write keys in backend/.env to upload photos.")
+    storage = S3FileStorage(settings.media)
+    try:
+        async with get_sessionmaker()() as session:
+            count = await LocationPhotoSeedService(session, storage).run(directory=directory)
+    except LocationPhotoSeedError as error:
+        raise SystemExit(error.message) from None
+    finally:
+        await get_engine().dispose()
+    print(f"Uploaded {count} location photos.")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        raise SystemExit("usage: python -m app.scripts.seed_location_photos <dir>")
+    asyncio.run(seed(Path(sys.argv[1])))

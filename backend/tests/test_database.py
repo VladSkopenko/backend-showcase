@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionm
 
 from app.common.database import get_session
 from app.features.core.auth.enums import OAuthProvider
-from app.model_registry import OAuthAccount, User
+from app.model_registry import DiningTable, Location, OAuthAccount, User
 
 pytestmark = pytest.mark.anyio
 
@@ -290,3 +290,85 @@ async def test_dish_category_enum_has_the_three_menu_tabs(connection: AsyncConne
     labels = await connection.scalar(text("SELECT enum_range(NULL::dish_category)::text[]"))
 
     assert labels == ["APPETIZER", "MAIN_COURSE", "DESSERT"]
+
+
+async def test_migrated_locations_table_has_the_expected_shape(
+    connection: AsyncConnection,
+) -> None:
+    def describe(sync_connection: Connection) -> dict[str, Any]:
+        inspector = inspect(sync_connection)
+        return {
+            "columns": inspector.get_columns("locations"),
+            "unique": inspector.get_unique_constraints("locations"),
+            "indexes": inspector.get_indexes("locations"),
+        }
+
+    shape = await connection.run_sync(describe)
+
+    assert {column["name"]: column["nullable"] for column in shape["columns"]} == {
+        "id": False,
+        "slug": False,
+        "address": False,
+        "description": False,
+        "image_key": False,
+        "created_at": False,
+        "updated_at": False,
+    }
+    assert [(c["name"], c["column_names"]) for c in shape["unique"]] == [
+        ("uq_locations_slug", ["slug"])
+    ]
+    assert [index for index in shape["indexes"] if not index.get("duplicates_constraint")] == []
+
+
+async def test_migrated_dining_tables_table_has_the_expected_shape(
+    connection: AsyncConnection,
+) -> None:
+    def describe(sync_connection: Connection) -> dict[str, Any]:
+        inspector = inspect(sync_connection)
+        return {
+            "columns": inspector.get_columns("dining_tables"),
+            "foreign_keys": inspector.get_foreign_keys("dining_tables"),
+            "unique": inspector.get_unique_constraints("dining_tables"),
+            "indexes": inspector.get_indexes("dining_tables"),
+            "checks": inspector.get_check_constraints("dining_tables"),
+        }
+
+    shape = await connection.run_sync(describe)
+
+    assert {column["name"]: column["nullable"] for column in shape["columns"]} == {
+        "id": False,
+        "location_id": False,
+        "label": False,
+        "capacity": False,
+    }
+    [foreign_key] = shape["foreign_keys"]
+    assert foreign_key["name"] == "fk_dining_tables_location_id_locations"
+    assert foreign_key["constrained_columns"] == ["location_id"]
+    assert foreign_key["referred_table"] == "locations"
+    assert foreign_key["options"]["ondelete"] == "CASCADE"
+    assert [(c["name"], c["column_names"]) for c in shape["unique"]] == [
+        ("uq_dining_tables_location_id_label", ["location_id", "label"])
+    ]
+    assert [index for index in shape["indexes"] if not index.get("duplicates_constraint")] == []
+    assert [check["name"] for check in shape["checks"]] == [
+        "ck_dining_tables_capacity_between_2_and_8"
+    ]
+
+
+@pytest.mark.parametrize("capacity", [1, 9])
+async def test_dining_table_capacity_must_be_between_2_and_8(
+    session_factory: async_sessionmaker[AsyncSession], capacity: int
+) -> None:
+    async with session_factory() as session:
+        location = Location(
+            slug="test-square",
+            address="Test Square",
+            description="About test-square",
+            image_key="locations/test-square.jpg",
+        )
+        session.add(location)
+        await session.flush()
+        session.add(DiningTable(location_id=location.id, label="Table 1", capacity=capacity))
+
+        with pytest.raises(IntegrityError, match="ck_dining_tables_capacity_between_2_and_8"):
+            await session.flush()

@@ -90,3 +90,11 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-menu-dishes.md`
   summary: Decide caching for dish pictures: `Cache-Control` on upload and content-hashed keys, together with whether anonymous GETs count toward the 50,000 Always Free requests.
   evidence: Same key on every seed run and no cache headers; replaced pictures stay stale in caches, and each view may hit the bucket.
+- source_spec: `_bmad_output/implementation-artifacts/spec-locations.md`
+  summary: Document the local picture seeds (`app.scripts.seed_menu`, `app.scripts.seed_location_photos`) and the per-environment bucket upload in README or CLAUDE.md Commands.
+  evidence: Both commands live only in specs; every environment bucket needs the pictures before `image_url`s work.
+
+## Deferred from: code review of spec-locations.md (2026-11-10)
+
+- Change the `uq` naming convention to `uq_%(table_name)s_%(column_0_N_name)s` so composite unique constraints get full names without explicit `name=`; existing single-column names stay the same.
+- Move the per-feature `SessionDep` and `SettingsDep` aliases (auth, menu, locations, health) to one shared place.

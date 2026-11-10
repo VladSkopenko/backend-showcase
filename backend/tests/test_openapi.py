@@ -29,6 +29,10 @@ FLOWS = {
         ("get", "/api/v1/menu/dishes"),
         ("get", "/api/v1/menu/dishes/{dish_id}"),
     ],
+    "Locations": [
+        ("get", "/api/v1/locations"),
+        ("get", "/api/v1/locations/{location_id}"),
+    ],
     "Health": [
         ("get", "/"),
         ("get", "/health"),

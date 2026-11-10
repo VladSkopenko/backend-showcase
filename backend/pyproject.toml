@@ -144,12 +144,16 @@ forbidden_modules = ["app.scripts"]
 
 [[tool.importlinter.contracts]]
 # app.infrastructure.storage imports boto3, a dev-only dependency the runtime image lacks. The seed
-# service's import sits under TYPE_CHECKING; import-linter still counts it (the default
-# exclude_type_checking_imports = false), so that module is listed as an allowed importer.
-name = "Only the menu seed imports the S3 storage"
+# services' imports sit under TYPE_CHECKING; import-linter still counts them (the default
+# exclude_type_checking_imports = false), so those modules are listed as allowed importers.
+name = "Only the seed services import the S3 storage"
 type = "protected"
 protected_modules = ["app.infrastructure.storage"]
-allowed_importers = ["app.scripts.**", "app.features.core.menu.services.dish_seed_service"]
+allowed_importers = [
+    "app.scripts.**",
+    "app.features.core.menu.services.dish_seed_service",
+    "app.features.core.locations.services.location_photo_seed_service",
+]
 
 [dependency-groups]
 dev = [
