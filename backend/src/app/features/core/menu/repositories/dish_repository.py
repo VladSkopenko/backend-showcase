@@ -7,8 +7,8 @@ from sqlalchemy import UnaryExpression, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.menu.enums import DishCategory, DishSort
-from app.features.menu.models import Dish
+from app.features.core.menu.enums import DishCategory, DishSort
+from app.features.core.menu.models import Dish
 
 
 class DishRepository:

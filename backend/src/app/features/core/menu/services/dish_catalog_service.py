@@ -2,11 +2,11 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.menu.dto import DishPage, DishView
-from app.features.menu.enums import DishCategory, DishSort
-from app.features.menu.models import Dish
-from app.features.menu.repositories import DishRepository
-from app.features.menu.services.exceptions import DishNotFoundError
+from app.features.core.menu.dto import DishPage, DishView
+from app.features.core.menu.enums import DishCategory, DishSort
+from app.features.core.menu.models import Dish
+from app.features.core.menu.repositories import DishRepository
+from app.features.core.menu.services.exceptions import DishNotFoundError
 
 
 class DishCatalogService:

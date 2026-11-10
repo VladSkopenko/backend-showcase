@@ -6,9 +6,9 @@ from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common import clock
-from app.features.menu.dto import DishSeedEntry
-from app.features.menu.repositories import DishRepository
-from app.features.menu.services.exceptions import MenuSeedFileError
+from app.features.core.menu.dto import DishSeedEntry
+from app.features.core.menu.repositories import DishRepository
+from app.features.core.menu.services.exceptions import MenuSeedFileError
 
 # boto3 is a dev dependency and the runtime image lacks it, so the storage type is imported only
 # for type checking: importing this module must never pull boto3 in.

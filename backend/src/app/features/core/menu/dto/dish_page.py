@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.features.menu.dto.dish_view import DishView
+from app.features.core.menu.dto.dish_view import DishView
 
 
 @dataclass(frozen=True)

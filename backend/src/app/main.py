@@ -10,9 +10,9 @@ from app.features.core.auth.endpoints import AuthOpenApiTags, oauth_router
 from app.features.core.auth.endpoints import router as auth_router
 from app.features.core.health.endpoints import HealthOpenApiTags
 from app.features.core.health.endpoints import router as health_router
-from app.features.menu.endpoints import ERROR_STATUSES as MENU_ERROR_STATUSES
-from app.features.menu.endpoints import MenuOpenApiTags
-from app.features.menu.endpoints import router as menu_router
+from app.features.core.menu.endpoints import ERROR_STATUSES as MENU_ERROR_STATUSES
+from app.features.core.menu.endpoints import MenuOpenApiTags
+from app.features.core.menu.endpoints import router as menu_router
 from app.infrastructure.oauth import OAuthClients
 
 ERROR_STATUSES = {**AUTH_ERROR_STATUSES, **MENU_ERROR_STATUSES}

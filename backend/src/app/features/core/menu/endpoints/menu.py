@@ -3,10 +3,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.features.menu.endpoints.dependencies import DishCatalogServiceDep
-from app.features.menu.endpoints.openapi_tags import MenuOpenApiTags
-from app.features.menu.enums import DishCategory, DishSort
-from app.features.menu.schemas import DishPageResponse, DishResponse
+from app.features.core.menu.endpoints.dependencies import DishCatalogServiceDep
+from app.features.core.menu.endpoints.openapi_tags import MenuOpenApiTags
+from app.features.core.menu.enums import DishCategory, DishSort
+from app.features.core.menu.schemas import DishPageResponse, DishResponse
 
 router = APIRouter(prefix="/menu", tags=[MenuOpenApiTags.MENU])
 

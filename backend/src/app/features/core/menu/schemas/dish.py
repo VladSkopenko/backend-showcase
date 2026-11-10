@@ -2,7 +2,7 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict
 
-from app.features.menu.enums import DishCategory
+from app.features.core.menu.enums import DishCategory
 
 
 class DishCardResponse(BaseModel):

@@ -1,7 +1,7 @@
 import uuid
 from dataclasses import dataclass
 
-from app.features.menu.enums import DishCategory
+from app.features.core.menu.enums import DishCategory
 
 
 @dataclass(frozen=True)

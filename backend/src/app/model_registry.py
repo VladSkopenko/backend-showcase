@@ -5,7 +5,7 @@ Alembic's env.py loads this module. Add each new feature's models here.
 
 from app.common.database import Base
 from app.features.core.auth.models import OAuthAccount, RefreshToken, VerificationCode
+from app.features.core.menu.models import Dish
 from app.features.core.users.models import User
-from app.features.menu.models import Dish
 
 __all__ = ["Base", "Dish", "OAuthAccount", "RefreshToken", "User", "VerificationCode"]

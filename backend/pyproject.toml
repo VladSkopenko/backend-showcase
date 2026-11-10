@@ -149,7 +149,7 @@ forbidden_modules = ["app.scripts"]
 name = "Only the menu seed imports the S3 storage"
 type = "protected"
 protected_modules = ["app.infrastructure.storage"]
-allowed_importers = ["app.scripts.**", "app.features.menu.services.dish_seed_service"]
+allowed_importers = ["app.scripts.**", "app.features.core.menu.services.dish_seed_service"]
 
 [dependency-groups]
 dev = [

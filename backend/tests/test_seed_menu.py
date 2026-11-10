@@ -10,9 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionm
 
 from app.common import clock
 from app.config.settings import MediaSettings
-from app.features.menu.enums import DishCategory
-from app.features.menu.services.dish_seed_service import DishSeedService
-from app.features.menu.services.exceptions import MenuSeedFileError
+from app.features.core.menu.enums import DishCategory
+from app.features.core.menu.services.dish_seed_service import DishSeedService
+from app.features.core.menu.services.exceptions import MenuSeedFileError
 from app.infrastructure.storage import S3FileStorage
 from app.model_registry import Dish
 

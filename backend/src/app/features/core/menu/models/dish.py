@@ -5,7 +5,7 @@ from sqlalchemy import CheckConstraint, DateTime, Enum, Index, String, Text, fun
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.common.database import Base
-from app.features.menu.enums import DishCategory
+from app.features.core.menu.enums import DishCategory
 
 
 class Dish(Base):

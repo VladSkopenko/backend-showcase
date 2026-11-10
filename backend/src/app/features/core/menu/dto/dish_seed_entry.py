@@ -4,7 +4,7 @@ from typing import Annotated, ClassVar
 
 from pydantic import ConfigDict, Field
 
-from app.features.menu.enums import DishCategory
+from app.features.core.menu.enums import DishCategory
 
 ShortText = Annotated[str, Field(min_length=1, max_length=50)]
 
