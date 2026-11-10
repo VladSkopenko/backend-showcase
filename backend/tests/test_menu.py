@@ -10,7 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionmaker
 
 from app.config.settings import Settings, get_settings
-from app.features.menu.enums import DishCategory
+from app.features.core.menu.enums import DishCategory
 from app.main import create_app
 from app.model_registry import Dish
 

@@ -4,8 +4,8 @@ from pathlib import Path
 
 from app.common.database import get_engine, get_sessionmaker
 from app.config.settings import get_settings
-from app.features.menu.services.dish_seed_service import DishSeedService
-from app.features.menu.services.exceptions import MenuSeedFileError
+from app.features.core.menu.services.dish_seed_service import DishSeedService
+from app.features.core.menu.services.exceptions import MenuSeedFileError
 from app.infrastructure.storage import S3FileStorage
 
 
