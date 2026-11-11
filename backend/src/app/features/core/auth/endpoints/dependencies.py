@@ -202,3 +202,15 @@ async def get_current_user(
 
 
 CurrentUserDep = Annotated[UserResponse, Depends(get_current_user)]
+
+
+async def get_optional_user(
+    current_user: CurrentUserServiceDep,
+    access_token: Annotated[str | None, Cookie(alias=SessionCookies.ACCESS_NAME)] = None,
+) -> UserResponse | None:
+    if access_token is None:
+        return None
+    return UserResponse.model_validate(await current_user.get(access_token=access_token))
+
+
+OptionalUserDep = Annotated[UserResponse | None, Depends(get_optional_user)]

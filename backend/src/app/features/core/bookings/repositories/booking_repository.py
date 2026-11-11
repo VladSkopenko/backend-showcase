@@ -5,8 +5,8 @@ from datetime import datetime
 from sqlalchemy import ColumnElement, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.core.bookings.enums import BookingStatus
-from app.features.core.bookings.models import Booking
+from app.features.core.bookings.enums import BookingStatus, ParticipantRole
+from app.features.core.bookings.models import Booking, BookingParticipant
 from app.features.core.locations.models import DiningTable
 
 
@@ -66,14 +66,50 @@ class BookingRepository:
             ),
         )
 
-    async def list_for_user(self, *, user_id: uuid.UUID) -> Sequence[tuple[Booking, DiningTable]]:
+    async def list_for_user(
+        self, *, user_id: uuid.UUID
+    ) -> Sequence[tuple[Booking, DiningTable, ParticipantRole]]:
         rows = await self._session.execute(
-            select(Booking, DiningTable)
+            select(Booking, DiningTable, BookingParticipant.role)
             .join(DiningTable, DiningTable.id == Booking.table_id)
-            .where(Booking.user_id == user_id)
+            .join(BookingParticipant, BookingParticipant.booking_id == Booking.id)
+            .where(BookingParticipant.user_id == user_id)
             .order_by(Booking.starts_at.desc(), Booking.id.asc())
         )
-        return [(booking, table) for booking, table in rows]
+        return [(booking, table, role) for booking, table, role in rows]
+
+    async def get_for_participant(
+        self, *, booking_id: uuid.UUID, user_id: uuid.UUID | None, guest_id: uuid.UUID | None
+    ) -> tuple[Booking, DiningTable, ParticipantRole] | None:
+        identity = (
+            BookingParticipant.user_id == user_id
+            if user_id is not None
+            else BookingParticipant.guest_id == guest_id
+        )
+        row = (
+            await self._session.execute(
+                select(Booking, DiningTable, BookingParticipant.role)
+                .join(DiningTable, DiningTable.id == Booking.table_id)
+                .join(BookingParticipant, BookingParticipant.booking_id == Booking.id)
+                .where(Booking.id == booking_id, identity)
+            )
+        ).first()
+        return None if row is None else (row[0], row[1], row[2])
+
+    async def get(
+        self, *, booking_id: uuid.UUID, for_update: bool = False
+    ) -> tuple[Booking, DiningTable] | None:
+        statement = (
+            select(Booking, DiningTable)
+            .join(DiningTable, DiningTable.id == Booking.table_id)
+            .where(Booking.id == booking_id)
+        )
+        if for_update:
+            statement = statement.with_for_update(of=Booking).execution_options(
+                populate_existing=True
+            )
+        row = (await self._session.execute(statement)).first()
+        return None if row is None else (row[0], row[1])
 
     async def get_for_user(
         self, *, booking_id: uuid.UUID, user_id: uuid.UUID, for_update: bool = False

@@ -40,6 +40,12 @@ FLOWS = {
         ("post", "/api/v1/bookings/{booking_id}/cancel"),
         ("put", "/api/v1/bookings/{booking_id}"),
         ("get", "/api/v1/bookings/{booking_id}/slots"),
+        ("get", "/api/v1/bookings/{booking_id}"),
+    ],
+    "Invites": [
+        ("get", "/api/v1/bookings/{booking_id}/invite"),
+        ("get", "/api/v1/invites/{code}"),
+        ("post", "/api/v1/invites/{code}/join"),
     ],
     "Health": [
         ("get", "/"),
@@ -93,3 +99,13 @@ def test_provider_slug_lists_the_known_providers(schema: dict[str, Any]) -> None
 
         assert parameter["name"] == "provider_slug"
         assert parameter["schema"]["enum"] == ["google"]
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [("get", "/api/v1/bookings/{booking_id}"), ("post", "/api/v1/invites/{code}/join")],
+)
+def test_guest_routes_mention_the_guest_cookie(
+    schema: dict[str, Any], method: str, path: str
+) -> None:
+    assert "`guest_token`" in schema["paths"][path][method]["description"]

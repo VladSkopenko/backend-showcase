@@ -21,6 +21,9 @@ from app.common import database
 from app.config import settings as settings_module
 from app.config.settings import get_settings
 
+pytest.register_assert_rewrite("support")
+pytest_plugins = ["support.booking_fixtures"]
+
 TEST_DATABASE_NAME = "app_test"
 
 # Set before any test module builds the app, which reads the settings at import and caches them.

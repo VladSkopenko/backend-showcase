@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionmaker
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, Response
+from support.http import set_cookies
 
 from app.common import clock
 from app.config.settings import GoogleSettings, Settings, get_settings
@@ -108,20 +109,6 @@ async def client(
     transport = httpx2.ASGITransport(app=app)
     async with httpx2.AsyncClient(transport=transport, base_url="https://test") as client:
         yield client
-
-
-def set_cookies(response: httpx2.Response) -> dict[str, dict[str, str]]:
-    """Parses raw Set-Cookie headers: name -> {"value": ..., lowercased attribute -> value}."""
-    cookies: dict[str, dict[str, str]] = {}
-    for header in response.headers.get_list("set-cookie"):
-        pair, *attributes = (part.strip() for part in header.split(";"))
-        name, value = pair.split("=", 1)
-        parsed = {"value": value}
-        for attribute in attributes:
-            key, _, attribute_value = attribute.partition("=")
-            parsed[key.lower()] = attribute_value
-        cookies[name] = parsed
-    return cookies
 
 
 async def start(client: httpx2.AsyncClient, slug: str = "google") -> httpx2.Response:

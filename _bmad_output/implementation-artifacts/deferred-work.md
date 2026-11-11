@@ -113,3 +113,6 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-n8n-booking-simulator.md`
   summary: End the bots' sessions: the simulator logs in on every run and never calls `/auth/logout`, so dev gains one `refresh_tokens` row per run (about 288 a day) with no cleanup.
   evidence: `SessionService` inserts a `RefreshToken` on every login; nothing deletes expired rows. A logout must run on every branch, including the ones that stop early.
+- source_spec: `_bmad_output/implementation-artifacts/spec-booking-invites.md`
+  summary: Test the join locks (the joiner's user row, then the booking row with `populate_existing`, two joins racing for the last seat, a join racing an edit that lowers `party_size`) and the first-link race (two first `GET /bookings/{id}/invite` requests answering the same code) with two concurrent connections.
+  evidence: The shared-connection test harness cannot observe locks or a stale identity-map object, so dropping `for_update=True` in `ParticipantService.join` or `lock_owned` passes every test.

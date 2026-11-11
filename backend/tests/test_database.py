@@ -10,8 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionm
 
 from app.common.database import get_session
 from app.features.core.auth.enums import OAuthProvider
-from app.features.core.bookings.enums import BookingStatus
-from app.model_registry import Booking, DiningTable, Location, OAuthAccount, User
+from app.features.core.bookings.enums import BookingStatus, ParticipantRole
+from app.model_registry import (
+    Booking,
+    BookingInvite,
+    BookingParticipant,
+    DiningTable,
+    Guest,
+    Location,
+    OAuthAccount,
+    User,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -539,4 +548,252 @@ async def test_booking_checks(
         )
 
         with pytest.raises(IntegrityError, match=constraint):
+            await session.flush()
+
+
+async def test_migrated_guests_table_has_the_expected_shape(connection: AsyncConnection) -> None:
+    def describe(sync_connection: Connection) -> dict[str, Any]:
+        inspector = inspect(sync_connection)
+        return {
+            "columns": inspector.get_columns("guests"),
+            "unique": inspector.get_unique_constraints("guests"),
+            "indexes": inspector.get_indexes("guests"),
+        }
+
+    shape = await connection.run_sync(describe)
+
+    assert {column["name"]: column["nullable"] for column in shape["columns"]} == {
+        "id": False,
+        "name": False,
+        "token_hash": False,
+        "expires_at": False,
+        "created_at": False,
+        "updated_at": False,
+    }
+    assert [(c["name"], c["column_names"]) for c in shape["unique"]] == [
+        ("uq_guests_token_hash", ["token_hash"])
+    ]
+    assert [index for index in shape["indexes"] if not index.get("duplicates_constraint")] == []
+
+
+async def test_migrated_booking_participants_table_has_the_expected_shape(
+    connection: AsyncConnection,
+) -> None:
+    def describe(sync_connection: Connection) -> dict[str, Any]:
+        inspector = inspect(sync_connection)
+        return {
+            "columns": inspector.get_columns("booking_participants"),
+            "foreign_keys": inspector.get_foreign_keys("booking_participants"),
+            "unique": inspector.get_unique_constraints("booking_participants"),
+            "indexes": inspector.get_indexes("booking_participants"),
+            "checks": inspector.get_check_constraints("booking_participants"),
+        }
+
+    shape = await connection.run_sync(describe)
+
+    assert {column["name"]: column["nullable"] for column in shape["columns"]} == {
+        "id": False,
+        "booking_id": False,
+        "user_id": True,
+        "guest_id": True,
+        "role": False,
+        "created_at": False,
+    }
+    assert sorted(
+        (fk["name"], fk["constrained_columns"], fk["referred_table"], fk["options"]["ondelete"])
+        for fk in shape["foreign_keys"]
+    ) == [
+        ("fk_booking_participants_booking_id_bookings", ["booking_id"], "bookings", "CASCADE"),
+        ("fk_booking_participants_guest_id_guests", ["guest_id"], "guests", "CASCADE"),
+        ("fk_booking_participants_user_id_users", ["user_id"], "users", "CASCADE"),
+    ]
+    assert sorted((c["name"], c["column_names"]) for c in shape["unique"]) == [
+        ("uq_booking_participants_booking_id_guest_id", ["booking_id", "guest_id"]),
+        ("uq_booking_participants_booking_id_user_id", ["booking_id", "user_id"]),
+    ]
+    indexes = [index for index in shape["indexes"] if not index.get("duplicates_constraint")]
+    assert sorted((index["name"], index["column_names"], index["unique"]) for index in indexes) == [
+        ("ix_booking_participants_booking_id_owner", ["booking_id"], True),
+        ("ix_booking_participants_guest_id", ["guest_id"], False),
+        ("ix_booking_participants_user_id", ["user_id"], False),
+    ]
+    [owner_index] = [
+        index for index in indexes if index["name"] == "ix_booking_participants_booking_id_owner"
+    ]
+    assert owner_index["dialect_options"]["postgresql_where"] == (
+        "(role = 'OWNER'::participant_role)"
+    )
+    assert [(check["name"], check["sqltext"]) for check in shape["checks"]] == [
+        ("ck_booking_participants_one_of_user_id_guest_id", "num_nonnulls(user_id, guest_id) = 1")
+    ]
+
+
+async def test_participant_role_enum_has_both_labels(connection: AsyncConnection) -> None:
+    labels = await connection.scalar(text("SELECT enum_range(NULL::participant_role)::text[]"))
+
+    assert labels == ["OWNER", "GUEST"]
+
+
+async def test_migrated_booking_invites_table_has_the_expected_shape(
+    connection: AsyncConnection,
+) -> None:
+    def describe(sync_connection: Connection) -> dict[str, Any]:
+        inspector = inspect(sync_connection)
+        return {
+            "columns": inspector.get_columns("booking_invites"),
+            "primary_key": inspector.get_pk_constraint("booking_invites"),
+            "foreign_keys": inspector.get_foreign_keys("booking_invites"),
+            "unique": inspector.get_unique_constraints("booking_invites"),
+            "indexes": inspector.get_indexes("booking_invites"),
+        }
+
+    shape = await connection.run_sync(describe)
+
+    assert {column["name"]: column["nullable"] for column in shape["columns"]} == {
+        "booking_id": False,
+        "code": False,
+        "created_at": False,
+    }
+    assert shape["primary_key"]["name"] == "pk_booking_invites"
+    assert shape["primary_key"]["constrained_columns"] == ["booking_id"]
+    [foreign_key] = shape["foreign_keys"]
+    assert foreign_key["name"] == "fk_booking_invites_booking_id_bookings"
+    assert foreign_key["referred_table"] == "bookings"
+    assert foreign_key["options"]["ondelete"] == "CASCADE"
+    assert [(c["name"], c["column_names"]) for c in shape["unique"]] == [
+        ("uq_booking_invites_code", ["code"])
+    ]
+    assert [index for index in shape["indexes"] if not index.get("duplicates_constraint")] == []
+
+
+async def add_booking_with_owner(session: AsyncSession) -> tuple[Booking, User]:
+    table, user = await add_table_and_user(session)
+    owned = booking(table, user, minutes=0)
+    session.add(owned)
+    await session.flush()
+    session.add(
+        BookingParticipant(
+            booking_id=owned.id,
+            user_id=user.id,
+            role=ParticipantRole.OWNER,
+            created_at=BOOKING_START,
+        )
+    )
+    await session.flush()
+    return owned, user
+
+
+async def add_guest(session: AsyncSession) -> Guest:
+    guest = Guest(name="Alex", token_hash="a" * 64, expires_at=BOOKING_START + timedelta(days=31))
+    session.add(guest)
+    await session.flush()
+    return guest
+
+
+@pytest.mark.parametrize("identity", ["none", "both"])
+async def test_a_participant_is_exactly_one_of_a_user_and_a_guest(
+    session_factory: async_sessionmaker[AsyncSession], identity: str
+) -> None:
+    async with session_factory() as session:
+        owned, user = await add_booking_with_owner(session)
+        guest = await add_guest(session)
+        session.add(
+            BookingParticipant(
+                booking_id=owned.id,
+                user_id=None if identity == "none" else user.id,
+                guest_id=None if identity == "none" else guest.id,
+                role=ParticipantRole.GUEST,
+                created_at=BOOKING_START,
+            )
+        )
+
+        with pytest.raises(IntegrityError, match="ck_booking_participants_one_of_user_id_guest_id"):
+            await session.flush()
+
+
+async def test_a_user_joins_a_booking_once(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        owned, user = await add_booking_with_owner(session)
+        session.add(
+            BookingParticipant(
+                booking_id=owned.id,
+                user_id=user.id,
+                role=ParticipantRole.GUEST,
+                created_at=BOOKING_START,
+            )
+        )
+
+        with pytest.raises(IntegrityError, match="uq_booking_participants_booking_id_user_id"):
+            await session.flush()
+
+
+async def test_a_guest_joins_a_booking_once(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        owned, _ = await add_booking_with_owner(session)
+        guest = await add_guest(session)
+        session.add_all(
+            [
+                BookingParticipant(
+                    booking_id=owned.id,
+                    guest_id=guest.id,
+                    role=ParticipantRole.GUEST,
+                    created_at=BOOKING_START,
+                )
+                for _ in range(2)
+            ]
+        )
+
+        with pytest.raises(IntegrityError, match="uq_booking_participants_booking_id_guest_id"):
+            await session.flush()
+
+
+async def test_a_booking_has_one_owner(session_factory: async_sessionmaker[AsyncSession]) -> None:
+    async with session_factory() as session:
+        owned, _ = await add_booking_with_owner(session)
+        guest = await add_guest(session)
+        session.add(
+            BookingParticipant(
+                booking_id=owned.id,
+                guest_id=guest.id,
+                role=ParticipantRole.OWNER,
+                created_at=BOOKING_START,
+            )
+        )
+
+        with pytest.raises(IntegrityError, match="ix_booking_participants_booking_id_owner"):
+            await session.flush()
+
+
+async def test_guest_token_hashes_are_unique(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        await add_guest(session)
+        session.add(Guest(name="Bea", token_hash="a" * 64, expires_at=BOOKING_START))
+
+        with pytest.raises(IntegrityError, match="uq_guests_token_hash"):
+            await session.flush()
+
+
+async def test_invite_codes_are_unique(session_factory: async_sessionmaker[AsyncSession]) -> None:
+    async with session_factory() as session:
+        first, user = await add_booking_with_owner(session)
+        second = Booking(
+            user_id=user.id,
+            table_id=first.table_id,
+            party_size=2,
+            starts_at=first.ends_at,
+            ends_at=first.ends_at + timedelta(minutes=90),
+        )
+        session.add(second)
+        await session.flush()
+        session.add(BookingInvite(booking_id=first.id, code="same-code", created_at=BOOKING_START))
+        await session.flush()
+        session.add(BookingInvite(booking_id=second.id, code="same-code", created_at=BOOKING_START))
+
+        with pytest.raises(IntegrityError, match="uq_booking_invites_code"):
             await session.flush()

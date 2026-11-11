@@ -141,6 +141,9 @@ class BookingSettings(BaseSettings):
     max_online_party_size: int = 4
     max_duration_minutes: int = 180
     closing_time: time = time(23, 0)
+    preorder_lock_minutes: int = 30
+    guest_token_ttl_days: int = 31
+    guest_cookie_path: str = "/"
 
 
 class Settings(BaseSettings):
