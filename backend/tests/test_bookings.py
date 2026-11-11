@@ -1,82 +1,44 @@
+import hashlib
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from typing import Any
-from zoneinfo import ZoneInfo
 
 import httpx2
 import pytest
 from fastapi import FastAPI
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionmaker
+from support.bookings import (
+    ADA,
+    BOOKINGS,
+    GRACE,
+    SEARCH,
+    START,
+    TODAY,
+    TOMORROW,
+    FakeClock,
+    Venue,
+    add_booking,
+    as_guest,
+    assert_error,
+    at,
+    book,
+    cancel,
+    edit,
+    grid,
+    location_body,
+    sign_in,
+    stored_participants,
+)
 
 from app.common import clock
 from app.config.settings import BookingSettings, Settings, get_settings
-from app.features.core.auth.services.password_hasher import PasswordHasher
-from app.features.core.bookings.enums import BookingStatus
+from app.features.core.bookings.enums import BookingStatus, ParticipantRole
 from app.main import create_app
-from app.model_registry import Booking, DiningTable, Location, User
+from app.model_registry import Booking, BookingParticipant, DiningTable, Guest, User
 
-pytestmark = pytest.mark.anyio
-
-SEARCH = "/api/v1/bookings/tables"
-BOOKINGS = "/api/v1/bookings"
-LOGIN = "/api/v1/auth/login"
-MEDIA_BASE_URL = "https://media.example.com/n/ns/b/media/o"
-PASSWORD = "correct-horse"
-ADA = "ada@example.com"
-GRACE = "grace@example.com"
-TZ = ZoneInfo("Asia/Tbilisi")
-TODAY = date(2026, 11, 12)
-TOMORROW = TODAY + timedelta(days=1)
-DURATION = timedelta(minutes=90)
-
-
-def at(day: date, hour: int, minute: int = 0) -> datetime:
-    return datetime(day.year, day.month, day.day, hour, minute, tzinfo=TZ)
-
-
-# 13:10 in Tbilisi (+04:00).
-START = at(TODAY, 13, 10).astimezone(UTC)
-
-
-def grid(day: date) -> list[datetime]:
-    return [at(day, 10) + timedelta(minutes=30 * step) for step in range(24)]
-
-
-@dataclass
-class FakeClock:
-    current: datetime = START
-
-    def now(self) -> datetime:
-        return self.current
-
-    def advance(self, **delta: float) -> None:
-        self.current += timedelta(**delta)
-
-
-@dataclass
-class Venue:
-    first: Location
-    second: Location
-    four: DiningTable
-    small: DiningTable
-    six: DiningTable
-    other: DiningTable
-    eight: DiningTable
-
-
-@pytest.fixture
-def fake_clock(monkeypatch: pytest.MonkeyPatch) -> FakeClock:
-    fake = FakeClock()
-    monkeypatch.setattr(clock, "now", fake.now)
-    return fake
-
-
-@pytest.fixture(autouse=True)
-async def no_locations(connection: AsyncConnection) -> None:
-    await connection.execute(text("DELETE FROM locations"))
+pytestmark = [pytest.mark.anyio, pytest.mark.usefixtures("no_locations")]
 
 
 @pytest.fixture
@@ -96,116 +58,44 @@ async def client(
         yield client
 
 
-@pytest.fixture
-async def venue(session_factory: async_sessionmaker[AsyncSession]) -> Venue:
-    first = Location(
-        slug="old-town-square",
-        address="Old Town Square",
-        description="About old-town-square",
-        image_key="locations/old-town-square.jpg",
-        created_at=START,
-    )
-    second = Location(
-        slug="river-embankment",
-        address="River Embankment",
-        description="About river-embankment",
-        image_key="locations/river-embankment.jpg",
-        created_at=START + timedelta(minutes=1),
-    )
-    async with session_factory() as session:
-        session.add_all([second, first])
-        await session.flush()
-        venue = Venue(
-            first=first,
-            second=second,
-            small=DiningTable(location_id=first.id, label="Table 10", capacity=2),
-            four=DiningTable(location_id=first.id, label="Table 2", capacity=4),
-            six=DiningTable(location_id=first.id, label="Table 3", capacity=6),
-            other=DiningTable(location_id=second.id, label="Table 1", capacity=4),
-            eight=DiningTable(location_id=second.id, label="Table 2", capacity=8),
-        )
-        session.add_all([venue.small, venue.four, venue.six, venue.other, venue.eight])
-        await session.commit()
-    return venue
-
-
-@pytest.fixture
-async def users(session_factory: async_sessionmaker[AsyncSession]) -> dict[str, User]:
-    password_hash = await PasswordHasher().hash(password=PASSWORD)
-    created = {
-        email: User(
-            first_name=email.split("@")[0].title(),
-            last_name="Tester",
-            email=email,
-            password_hash=password_hash,
-            email_verified_at=START - timedelta(days=1),
-        )
-        for email in (ADA, GRACE)
-    }
-    async with session_factory() as session:
-        session.add_all(created.values())
-        await session.commit()
-    return created
-
-
-async def sign_in(client: httpx2.AsyncClient, email: str) -> None:
-    client.cookies.clear()
-    response = await client.post(LOGIN, json={"email": email, "password": PASSWORD})
-    assert response.status_code == 200, response.text
-
-
-async def add_booking(
+async def add_guest(
     session_factory: async_sessionmaker[AsyncSession],
     *,
-    user: User,
-    table: DiningTable,
-    starts_at: datetime,
-    status: BookingStatus = BookingStatus.CONFIRMED,
-    duration: timedelta = DURATION,
-) -> Booking:
-    booking = Booking(
-        user_id=user.id,
-        table_id=table.id,
-        party_size=2,
-        starts_at=starts_at,
-        ends_at=starts_at + duration,
-        status=status,
+    name: str,
+    token: str,
+    expires_at: datetime = START + timedelta(days=31),
+) -> Guest:
+    guest = Guest(
+        name=name, token_hash=hashlib.sha256(token.encode()).hexdigest(), expires_at=expires_at
     )
     async with session_factory() as session:
-        session.add(booking)
+        session.add(guest)
         await session.commit()
-    return booking
+    return guest
+
+
+async def add_participant(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    booking_id: str | uuid.UUID,
+    user: User | None = None,
+    guest: Guest | None = None,
+) -> BookingParticipant:
+    participant = BookingParticipant(
+        booking_id=uuid.UUID(str(booking_id)),
+        user_id=None if user is None else user.id,
+        guest_id=None if guest is None else guest.id,
+        role=ParticipantRole.GUEST,
+        created_at=clock.now(),
+    )
+    async with session_factory() as session:
+        session.add(participant)
+        await session.commit()
+    return participant
 
 
 async def search(client: httpx2.AsyncClient, **params: Any) -> httpx2.Response:
     return await client.get(SEARCH, params={"date": str(TOMORROW), "party_size": 2, **params})
-
-
-async def book(
-    client: httpx2.AsyncClient, table_id: uuid.UUID, starts_at: datetime | str, party_size: int = 2
-) -> httpx2.Response:
-    start = starts_at if isinstance(starts_at, str) else starts_at.isoformat()
-    return await client.post(
-        BOOKINGS, json={"table_id": str(table_id), "starts_at": start, "party_size": party_size}
-    )
-
-
-async def cancel(client: httpx2.AsyncClient, booking_id: str | uuid.UUID) -> httpx2.Response:
-    return await client.post(f"{BOOKINGS}/{booking_id}/cancel")
-
-
-async def edit(
-    client: httpx2.AsyncClient,
-    booking_id: str | uuid.UUID,
-    starts_at: datetime | str,
-    party_size: int = 2,
-    duration_minutes: int = 90,
-) -> httpx2.Response:
-    start = starts_at if isinstance(starts_at, str) else starts_at.isoformat()
-    return await client.put(
-        f"{BOOKINGS}/{booking_id}",
-        json={"starts_at": start, "party_size": party_size, "duration_minutes": duration_minutes},
-    )
 
 
 async def edit_slots(
@@ -224,19 +114,6 @@ def card_ids(response: httpx2.Response) -> list[str]:
 def availability(response: httpx2.Response, table: DiningTable) -> dict[datetime, bool]:
     [card] = [card for card in response.json()["items"] if card["id"] == str(table.id)]
     return {datetime.fromisoformat(slot["starts_at"]): slot["available"] for slot in card["slots"]}
-
-
-def assert_error(response: httpx2.Response, status_code: int, code: str) -> None:
-    assert response.status_code == status_code, response.text
-    assert response.json()["code"] == code
-
-
-def location_body(location: Location) -> dict[str, str]:
-    return {
-        "id": str(location.id),
-        "address": location.address,
-        "image_url": f"{MEDIA_BASE_URL}/{location.image_key}",
-    }
 
 
 async def count_bookings(connection: AsyncConnection) -> int:
@@ -475,7 +352,7 @@ async def test_search_reports_the_first_failing_check(
 
 
 async def test_create_confirms_the_booking_and_blocks_the_overlapping_starts(
-    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User]
+    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User], connection: AsyncConnection
 ) -> None:
     await sign_in(client, ADA)
 
@@ -483,6 +360,7 @@ async def test_create_confirms_the_booking_and_blocks_the_overlapping_starts(
 
     assert response.status_code == 201, response.text
     body = response.json()
+    [owner] = body["participants"]
     assert body == {
         "id": body["id"],
         "status": "CONFIRMED",
@@ -491,7 +369,12 @@ async def test_create_confirms_the_booking_and_blocks_the_overlapping_starts(
         "ends_at": "2026-11-13T13:30:00+04:00",
         "table": {"id": str(venue.four.id), "label": "Table 2", "capacity": 4},
         "location": location_body(venue.first),
+        "role": "OWNER",
+        "participants": [{"id": owner["id"], "name": "Ada", "role": "OWNER"}],
     }
+    assert await stored_participants(connection, body["id"]) == [
+        (users[ADA].id, None, ParticipantRole.OWNER)
+    ]
     found = await search(client)
     blocked = {at(TOMORROW, 11), at(TOMORROW, 11, 30), at(TOMORROW, 12), at(TOMORROW, 12, 30)}
     blocked.add(at(TOMORROW, 13))
@@ -697,6 +580,7 @@ async def test_create_reports_the_first_failing_check(
         ("post", f"{BOOKINGS}/{uuid.uuid4()}/cancel"),
         ("put", f"{BOOKINGS}/{uuid.uuid4()}"),
         ("get", f"{BOOKINGS}/{uuid.uuid4()}/slots"),
+        ("get", f"{BOOKINGS}/{uuid.uuid4()}"),
     ],
 )
 async def test_booking_routes_need_sign_in(
@@ -1318,3 +1202,269 @@ async def test_search_marks_starts_that_would_end_after_closing_unavailable(
     assert availability(response, venue.four) == {
         start: start <= at(TOMORROW, 21) for start in grid(TOMORROW)
     }
+
+
+async def test_list_includes_joined_bookings_with_the_callers_role(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    joined = await add_booking(
+        session_factory, user=users[GRACE], table=venue.other, starts_at=at(TOMORROW, 18)
+    )
+    await add_participant(session_factory, booking_id=joined.id, user=users[ADA])
+    await add_booking(
+        session_factory, user=users[GRACE], table=venue.small, starts_at=at(TOMORROW, 20)
+    )
+    await sign_in(client, ADA)
+    owned = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+
+    response = await client.get(BOOKINGS)
+
+    assert response.status_code == 200, response.text
+    first, second = response.json()
+    assert first["id"] == str(joined.id)
+    assert first["role"] == "GUEST"
+    assert [(p["name"], p["role"]) for p in first["participants"]] == [
+        ("Grace", "OWNER"),
+        ("Ada", "GUEST"),
+    ]
+    assert second == owned
+
+
+async def test_participant_view_answers_every_participant_with_their_role(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+    fake_clock: FakeClock,
+) -> None:
+    booking = await add_booking(
+        session_factory, user=users[ADA], table=venue.four, starts_at=at(TOMORROW, 12), party_size=3
+    )
+    fake_clock.advance(minutes=2)
+    alex = await add_guest(session_factory, name="Alex", token="alex-token")
+    await add_participant(session_factory, booking_id=booking.id, guest=alex)
+    fake_clock.current = START + timedelta(minutes=1)
+    await add_participant(session_factory, booking_id=booking.id, user=users[GRACE])
+    await sign_in(client, ADA)
+
+    as_owner = await client.get(f"{BOOKINGS}/{booking.id}")
+    await sign_in(client, GRACE)
+    as_user = await client.get(f"{BOOKINGS}/{booking.id}")
+    client.cookies.clear()
+    as_guest_of_it = await client.get(f"{BOOKINGS}/{booking.id}", headers=as_guest("alex-token"))
+
+    assert as_owner.status_code == 200, as_owner.text
+    body = as_owner.json()
+    assert body == {
+        "id": str(booking.id),
+        "status": "CONFIRMED",
+        "party_size": 3,
+        "starts_at": "2026-11-13T12:00:00+04:00",
+        "ends_at": "2026-11-13T13:30:00+04:00",
+        "table": {"id": str(venue.four.id), "label": "Table 2", "capacity": 4},
+        "location": location_body(venue.first),
+        "role": "OWNER",
+        "participants": body["participants"],
+    }
+    assert [(p["name"], p["role"]) for p in body["participants"]] == [
+        ("Ada", "OWNER"),
+        ("Grace", "GUEST"),
+        ("Alex", "GUEST"),
+    ]
+    assert as_user.json() == {**body, "role": "GUEST"}
+    assert as_guest_of_it.status_code == 200, as_guest_of_it.text
+    assert as_guest_of_it.json() == {**body, "role": "GUEST"}
+
+
+@pytest.mark.parametrize("token", [None, "unknown-token", "expired-token"])
+async def test_participant_view_without_a_user_or_a_valid_guest_is_not_authenticated(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+    token: str | None,
+) -> None:
+    booking = await add_booking(
+        session_factory, user=users[ADA], table=venue.four, starts_at=at(TOMORROW, 12)
+    )
+    expired = await add_guest(session_factory, name="Alex", token="expired-token", expires_at=START)
+    await add_participant(session_factory, booking_id=booking.id, guest=expired)
+
+    response = await client.get(
+        f"{BOOKINGS}/{booking.id}", headers={} if token is None else as_guest(token)
+    )
+
+    assert_error(response, 401, "NOT_AUTHENTICATED")
+
+
+async def test_participant_view_of_a_booking_one_did_not_join_is_not_found(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    booking = await add_booking(
+        session_factory, user=users[ADA], table=venue.four, starts_at=at(TOMORROW, 12)
+    )
+    other = await add_booking(
+        session_factory, user=users[ADA], table=venue.other, starts_at=at(TOMORROW, 18)
+    )
+    alex = await add_guest(session_factory, name="Alex", token="alex-token")
+    await add_participant(session_factory, booking_id=booking.id, guest=alex)
+    bea = await add_guest(session_factory, name="Bea", token="bea-token")
+    await add_participant(session_factory, booking_id=other.id, guest=bea)
+    await sign_in(client, GRACE)
+    access_token = client.cookies["access_token"]
+
+    stranger = await client.get(f"{BOOKINGS}/{booking.id}")
+    client.cookies.clear()
+    stranger_with_guest_cookie = await client.get(
+        f"{BOOKINGS}/{booking.id}",
+        headers={"Cookie": f"access_token={access_token}; guest_token=alex-token"},
+    )
+    guest_of_another = await client.get(f"{BOOKINGS}/{booking.id}", headers=as_guest("bea-token"))
+    await sign_in(client, ADA)
+    unknown = await client.get(f"{BOOKINGS}/{uuid.uuid4()}")
+
+    assert_error(stranger, 404, "BOOKING_NOT_FOUND")
+    assert_error(stranger_with_guest_cookie, 404, "BOOKING_NOT_FOUND")
+    assert_error(guest_of_another, 404, "BOOKING_NOT_FOUND")
+    assert_error(unknown, 404, "BOOKING_NOT_FOUND")
+
+
+async def test_a_joined_user_can_neither_edit_nor_cancel(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+    connection: AsyncConnection,
+) -> None:
+    booking = await add_booking(
+        session_factory, user=users[ADA], table=venue.four, starts_at=at(TOMORROW, 12)
+    )
+    await add_participant(session_factory, booking_id=booking.id, user=users[GRACE])
+    await sign_in(client, GRACE)
+
+    assert_error(await edit(client, booking.id, at(TOMORROW, 14)), 404, "BOOKING_NOT_FOUND")
+    assert_error(await cancel(client, booking.id), 404, "BOOKING_NOT_FOUND")
+    assert_error(await edit_slots(client, booking.id, 90), 404, "BOOKING_NOT_FOUND")
+    assert await stored_status(connection, booking.id) == BookingStatus.CONFIRMED
+    assert await stored_period(connection, booking.id) == (
+        at(TOMORROW, 12),
+        at(TOMORROW, 13, 30),
+        2,
+    )
+
+
+async def test_edit_refuses_a_party_below_the_participant_count(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+    connection: AsyncConnection,
+    fake_clock: FakeClock,
+) -> None:
+    booking = await add_booking(
+        session_factory, user=users[ADA], table=venue.four, starts_at=at(TOMORROW, 12), party_size=3
+    )
+    await add_participant(session_factory, booking_id=booking.id, user=users[GRACE])
+    fake_clock.advance(minutes=1)
+    alex = await add_guest(session_factory, name="Alex", token="alex-token")
+    await add_participant(session_factory, booking_id=booking.id, guest=alex)
+    await sign_in(client, ADA)
+
+    smaller = await edit(client, booking.id, at(TOMORROW, 12), party_size=2)
+
+    assert_error(smaller, 409, "PARTY_BELOW_PARTICIPANTS")
+    assert await stored_period(connection, booking.id) == (
+        at(TOMORROW, 12),
+        at(TOMORROW, 13, 30),
+        3,
+    )
+    same = await edit(client, booking.id, at(TOMORROW, 12), party_size=3)
+    assert same.status_code == 200, same.text
+    assert [(p["name"], p["role"]) for p in same.json()["participants"]] == [
+        ("Ada", "OWNER"),
+        ("Grace", "GUEST"),
+        ("Alex", "GUEST"),
+    ]
+
+
+async def test_cancel_answers_the_booking_with_its_participants(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    booking = await add_booking(
+        session_factory, user=users[ADA], table=venue.four, starts_at=at(TOMORROW, 12)
+    )
+    alex = await add_guest(session_factory, name="Alex", token="alex-token")
+    await add_participant(session_factory, booking_id=booking.id, guest=alex)
+    await sign_in(client, ADA)
+
+    response = await cancel(client, booking.id)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["role"] == "OWNER"
+    assert [(p["name"], p["role"]) for p in response.json()["participants"]] == [
+        ("Ada", "OWNER"),
+        ("Alex", "GUEST"),
+    ]
+
+
+async def test_participant_view_with_an_invalid_access_cookie_is_not_authenticated(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    booking = await add_booking(
+        session_factory, user=users[ADA], table=venue.four, starts_at=at(TOMORROW, 12)
+    )
+    alex = await add_guest(session_factory, name="Alex", token="alex-token")
+    await add_participant(session_factory, booking_id=booking.id, guest=alex)
+
+    response = await client.get(
+        f"{BOOKINGS}/{booking.id}",
+        headers={"Cookie": "access_token=not-a-token; guest_token=alex-token"},
+    )
+
+    assert_error(response, 401, "NOT_AUTHENTICATED")
+
+
+async def test_edit_checks_the_participants_after_the_input_and_before_the_overlaps(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    booking = await add_booking(
+        session_factory, user=users[ADA], table=venue.small, starts_at=at(TOMORROW, 12)
+    )
+    await add_participant(session_factory, booking_id=booking.id, user=users[GRACE])
+    await add_booking(
+        session_factory, user=users[GRACE], table=venue.small, starts_at=at(TOMORROW, 14, 30)
+    )
+    await add_booking(
+        session_factory, user=users[ADA], table=venue.other, starts_at=at(TOMORROW, 17)
+    )
+    await sign_in(client, ADA)
+
+    assert_error(
+        await edit(client, booking.id, at(TOMORROW, 12), party_size=3), 400, "TABLE_NOT_SUITABLE"
+    )
+    assert_error(
+        await edit(client, booking.id, at(TOMORROW, 14), party_size=1),
+        409,
+        "PARTY_BELOW_PARTICIPANTS",
+    )
+    assert_error(
+        await edit(client, booking.id, at(TOMORROW, 16, 30), party_size=1),
+        409,
+        "PARTY_BELOW_PARTICIPANTS",
+    )
+    assert_error(await edit(client, booking.id, at(TOMORROW, 14)), 409, "SLOT_UNAVAILABLE")

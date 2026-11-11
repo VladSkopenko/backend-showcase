@@ -1,3 +1,3 @@
-from app.features.core.bookings.models.booking import Booking
+from app.features.core.bookings.models.booking import Booking, BookingParticipant, Guest
 
-__all__ = ["Booking"]
+__all__ = ["Booking", "BookingParticipant", "Guest"]

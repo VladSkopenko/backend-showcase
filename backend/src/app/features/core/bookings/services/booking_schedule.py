@@ -11,6 +11,7 @@ from app.features.core.bookings.services.exceptions import (
     DurationInvalidError,
     EditClosedError,
     EndsAfterClosingError,
+    InviteClosedError,
     PartyTooLargeError,
     SlotInvalidError,
 )
@@ -85,6 +86,10 @@ class BookingSchedule:
     def check_editable(self, *, starts_at: datetime) -> None:
         if self._cutoff_passed(starts_at=starts_at):
             raise EditClosedError()
+
+    def check_joinable(self, *, starts_at: datetime) -> None:
+        if starts_at - clock.now() < timedelta(minutes=self._settings.preorder_lock_minutes):
+            raise InviteClosedError()
 
     def _cutoff_passed(self, *, starts_at: datetime) -> bool:
         return starts_at - clock.now() < timedelta(minutes=self._settings.cancel_cutoff_minutes)

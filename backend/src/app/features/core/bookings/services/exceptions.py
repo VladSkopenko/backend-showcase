@@ -97,3 +97,31 @@ class EndsAfterClosingError(DomainError):
 
     def __init__(self) -> None:
         super().__init__("This stay would end after the restaurant closes.")
+
+
+class InviteClosedError(DomainError):
+    code = "INVITE_CLOSED"
+
+    def __init__(self) -> None:
+        super().__init__("This invitation is closed: the booking was cancelled or starts soon.")
+
+
+class BookingFullError(DomainError):
+    code = "BOOKING_FULL"
+
+    def __init__(self) -> None:
+        super().__init__("Everyone this booking has room for has already joined.")
+
+
+class GuestNameRequiredError(DomainError):
+    code = "GUEST_NAME_REQUIRED"
+
+    def __init__(self) -> None:
+        super().__init__("Enter your name to join.")
+
+
+class PartyBelowParticipantsError(DomainError):
+    code = "PARTY_BELOW_PARTICIPANTS"
+
+    def __init__(self) -> None:
+        super().__init__("The party cannot be smaller than the people who have already joined.")

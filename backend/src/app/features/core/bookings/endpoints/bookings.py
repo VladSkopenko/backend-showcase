@@ -5,10 +5,12 @@ from typing import Annotated
 from fastapi import APIRouter, Query, status
 
 from app.common.error_responses import error_responses
-from app.features.core.auth.endpoints.dependencies import CurrentUserDep
+from app.features.core.auth.endpoints.dependencies import CurrentUserDep, OptionalUserDep
 from app.features.core.auth.services.exceptions import NotAuthenticatedError
 from app.features.core.bookings.endpoints.dependencies import (
     BookingServiceDep,
+    GuestTokenCookie,
+    ParticipantServiceDep,
     TableSearchServiceDep,
 )
 from app.features.core.bookings.endpoints.errors import DOCUMENTED_ERROR_STATUSES
@@ -30,6 +32,7 @@ from app.features.core.bookings.services.exceptions import (
     EditClosedError,
     EndsAfterClosingError,
     OverlappingBookingError,
+    PartyBelowParticipantsError,
     PartyTooLargeError,
     SlotInvalidError,
     SlotUnavailableError,
@@ -121,7 +124,8 @@ async def create_booking(
         NotAuthenticatedError, statuses=DOCUMENTED_ERROR_STATUSES, takes_input=True
     ),
     description=(
-        "Lists the signed-in user's bookings in every status, latest start first; not paginated."
+        "Lists the bookings the signed-in user owns or has joined, in every status, latest start "
+        "first, each with the caller's role and the participants; not paginated."
     ),
 )
 async def list_bookings(user: CurrentUserDep, bookings: BookingServiceDep) -> list[BookingResponse]:
@@ -143,8 +147,9 @@ async def list_bookings(user: CurrentUserDep, bookings: BookingServiceDep) -> li
         takes_input=True,
     ),
     description=(
-        "Cancels one of the signed-in user's confirmed bookings and frees its table. Closes "
-        "shortly before the start; another user's booking answers 404."
+        "Cancels one of the signed-in user's own confirmed bookings and frees its table. Closes "
+        "shortly before the start; a booking the user only joined or another user's booking "
+        "answers 404."
     ),
 )
 async def cancel_booking(
@@ -170,16 +175,18 @@ async def cancel_booking(
         EndsAfterClosingError,
         TableNotSuitableError,
         SlotUnavailableError,
+        PartyBelowParticipantsError,
         OverlappingBookingError,
         statuses=DOCUMENTED_ERROR_STATUSES,
         takes_input=True,
     ),
     description=(
-        "Replaces the start, party size and duration of one of the signed-in user's confirmed "
-        "bookings; the table and the day stay. The start must be on the day grid and the stay "
-        "must end by closing; durations run from the standard one to a maximum in grid steps. "
-        "Closes shortly before the current start; another user's booking answers 404. Refused "
-        "when the table or the user already has another booking at the new time."
+        "Replaces the start, party size and duration of one of the signed-in user's own "
+        "confirmed bookings; the table and the day stay. The start must be on the day grid and "
+        "the stay must end by closing; durations run from the standard one to a maximum in grid "
+        "steps. The party may not drop below the people who have joined. Closes shortly before "
+        "the current start; a booking the user only joined or another user's booking answers "
+        "404. Refused when the table or the user already has another booking at the new time."
     ),
 )
 async def edit_booking(
@@ -211,10 +218,11 @@ async def edit_booking(
         takes_input=True,
     ),
     description=(
-        "Lists the day grid of one of the signed-in user's confirmed bookings on its table for a "
-        "stay of `duration_minutes`, and whether the booking can move to each start: later than "
-        "now, ending by closing and free of other bookings on the table. The booking itself and "
-        "the user's other bookings are ignored. Closes shortly before the current start."
+        "Lists the day grid of one of the signed-in user's own confirmed bookings on its table "
+        "for a stay of `duration_minutes`, and whether the booking can move to each start: "
+        "later than now, ending by closing and free of other bookings on the table. The booking "
+        "itself and the user's other bookings are ignored. Closes shortly before the current "
+        "start; a booking the user only joined answers 404."
     ),
 )
 async def list_edit_slots(
@@ -229,3 +237,33 @@ async def list_edit_slots(
             user_id=user.id, booking_id=booking_id, duration_minutes=duration_minutes
         )
     ]
+
+
+@router.get(
+    "/{booking_id}",
+    response_model=BookingResponse,
+    responses=error_responses(
+        NotAuthenticatedError,
+        BookingNotFoundError,
+        statuses=DOCUMENTED_ERROR_STATUSES,
+        takes_input=True,
+    ),
+    description=(
+        "Shows one booking to any of its participants: the signed-in owner or joined user, or a "
+        "guest without an account identified by the `guest_token` cookie; the user wins when "
+        "both cookies arrive. Answers the caller's role and the participants. A booking the "
+        "caller has not joined answers 404."
+    ),
+)
+async def get_booking(
+    booking_id: uuid.UUID,
+    user: OptionalUserDep,
+    participants: ParticipantServiceDep,
+    guest_token: GuestTokenCookie = None,
+) -> BookingResponse:
+    booking = await participants.get_for_participant(
+        booking_id=booking_id,
+        user_id=None if user is None else user.id,
+        guest_token=guest_token,
+    )
+    return BookingResponse.model_validate(booking)

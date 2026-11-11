@@ -4,7 +4,7 @@ from typing import Annotated
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
-from app.features.core.bookings.enums import BookingStatus
+from app.features.core.bookings.enums import BookingStatus, ParticipantRole
 
 
 class BookingLocationResponse(BaseModel):
@@ -44,6 +44,14 @@ class TableCardPageResponse(BaseModel):
     offset: int
 
 
+class ParticipantResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    role: ParticipantRole
+
+
 class BookingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -54,6 +62,8 @@ class BookingResponse(BaseModel):
     ends_at: datetime
     table: BookingTableResponse
     location: BookingLocationResponse
+    role: ParticipantRole
+    participants: list[ParticipantResponse]
 
 
 class CreateBookingRequest(BaseModel):

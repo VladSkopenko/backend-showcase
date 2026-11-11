@@ -11,6 +11,7 @@ import pytest
 from fastapi import FastAPI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionmaker
+from support.http import set_cookies
 
 from app.common import clock
 from app.config.settings import Settings, get_settings
@@ -119,20 +120,6 @@ async def log_out(client: httpx2.AsyncClient, **headers: str) -> httpx2.Response
 
 async def me(client: httpx2.AsyncClient, **headers: str) -> httpx2.Response:
     return await client.get(f"{AUTH}/me", headers=headers)
-
-
-def set_cookies(response: httpx2.Response) -> dict[str, dict[str, str]]:
-    """Parses raw Set-Cookie headers: name -> {"value": ..., lowercased attribute -> value}."""
-    cookies: dict[str, dict[str, str]] = {}
-    for header in response.headers.get_list("set-cookie"):
-        pair, *attributes = (part.strip() for part in header.split(";"))
-        name, value = pair.split("=", 1)
-        parsed = {"value": value}
-        for attribute in attributes:
-            key, _, attribute_value = attribute.partition("=")
-            parsed[key.lower()] = attribute_value
-        cookies[name] = parsed
-    return cookies
 
 
 def assert_session_cookies_set(response: httpx2.Response) -> dict[str, dict[str, str]]:

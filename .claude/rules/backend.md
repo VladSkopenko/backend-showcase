@@ -91,3 +91,9 @@ paths:
 ## API checks
 - Collections and end-to-end checks cover happy paths and data-state errors only, not trivial
   401 or missing-field cases.
+
+## Tests
+- Test modules never import each other. Fixtures shared by several modules live in
+  `tests/support/` and are registered through `pytest_plugins` in `tests/conftest.py`; shared
+  helpers and constants are imported from `tests/support/`. `tests/test_suite_layout.py` fails on
+  any import of a `test_*` module or of `conftest`.
