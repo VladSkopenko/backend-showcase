@@ -8,6 +8,8 @@ Accepted. Amended 2026-11-01: the import rules were completed and are now enforc
 import-linter in CI.
 Amended 2026-11-10: menu and locations are core features, because cart, orders and later features
 build on them; the menu moved from `features/menu` to `features/core/menu`.
+Amended 2026-11-11: bookings are a core feature, because invites, cart, orders and reviews build on
+them; they live in `features/core/bookings`.
 
 ## Context
 
@@ -28,7 +30,7 @@ app/
 ├── config/settings.py   # pydantic Settings behind a cached get_settings()
 ├── common/              # shared code with no business logic
 ├── features/
-│   ├── core/<feature>/  # base domains others build on: users, auth, health, menu, locations
+│   ├── core/<feature>/  # base domains others build on: users, auth, health, menu, locations, bookings
 │   ├── <feature>/       # endpoints/, schemas/, services/, repositories/, models/
 │   └── application_services/  # orchestration across features
 └── infrastructure/      # background tasks, WebSocket

@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionm
 
 from app.common.database import get_session
 from app.features.core.auth.enums import OAuthProvider
-from app.model_registry import DiningTable, Location, OAuthAccount, User
+from app.features.core.bookings.enums import BookingStatus
+from app.model_registry import Booking, DiningTable, Location, OAuthAccount, User
 
 pytestmark = pytest.mark.anyio
 
@@ -371,4 +372,171 @@ async def test_dining_table_capacity_must_be_between_2_and_8(
         session.add(DiningTable(location_id=location.id, label="Table 1", capacity=capacity))
 
         with pytest.raises(IntegrityError, match="ck_dining_tables_capacity_between_2_and_8"):
+            await session.flush()
+
+
+async def test_migrated_bookings_table_has_the_expected_shape(connection: AsyncConnection) -> None:
+    def describe(sync_connection: Connection) -> dict[str, Any]:
+        inspector = inspect(sync_connection)
+        return {
+            "columns": inspector.get_columns("bookings"),
+            "foreign_keys": inspector.get_foreign_keys("bookings"),
+            "indexes": inspector.get_indexes("bookings"),
+            "checks": inspector.get_check_constraints("bookings"),
+        }
+
+    shape = await connection.run_sync(describe)
+
+    assert {column["name"]: column["nullable"] for column in shape["columns"]} == {
+        "id": False,
+        "user_id": False,
+        "table_id": False,
+        "party_size": False,
+        "starts_at": False,
+        "ends_at": False,
+        "status": False,
+        "created_at": False,
+        "updated_at": False,
+    }
+    assert sorted(
+        (fk["name"], fk["constrained_columns"], fk["referred_table"], fk["options"]["ondelete"])
+        for fk in shape["foreign_keys"]
+    ) == [
+        ("fk_bookings_table_id_dining_tables", ["table_id"], "dining_tables", "CASCADE"),
+        ("fk_bookings_user_id_users", ["user_id"], "users", "CASCADE"),
+    ]
+    indexes = [index for index in shape["indexes"] if not index.get("duplicates_constraint")]
+    assert [(index["name"], index["column_names"]) for index in indexes] == [
+        ("ix_bookings_user_id", ["user_id"])
+    ]
+    assert sorted((check["name"], check["sqltext"]) for check in shape["checks"]) == [
+        ("ck_bookings_ends_at_after_starts_at", "ends_at > starts_at"),
+        ("ck_bookings_party_size_between_1_and_8", "party_size >= 1 AND party_size <= 8"),
+    ]
+
+
+async def test_booking_status_enum_has_both_labels(connection: AsyncConnection) -> None:
+    labels = await connection.scalar(text("SELECT enum_range(NULL::booking_status)::text[]"))
+
+    assert labels == ["CONFIRMED", "CANCELLED"]
+
+
+async def test_bookings_status_defaults_to_confirmed(connection: AsyncConnection) -> None:
+    default = await connection.scalar(
+        text(
+            "SELECT column_default FROM information_schema.columns "
+            "WHERE table_name = 'bookings' AND column_name = 'status'"
+        )
+    )
+
+    assert default == "'CONFIRMED'::booking_status"
+
+
+async def test_bookings_exclusion_constraint_covers_confirmed_rows_per_table(
+    connection: AsyncConnection,
+) -> None:
+    # alembic check cannot reflect exclusion constraints, so this pins the definition.
+    definition = await connection.scalar(
+        text(
+            "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+            "WHERE conname = 'ex_bookings_table_id_period'"
+        )
+    )
+
+    assert definition == (
+        "EXCLUDE USING gist (table_id WITH =, tstzrange(starts_at, ends_at) WITH &&) "
+        "WHERE ((status = 'CONFIRMED'::booking_status))"
+    )
+
+
+BOOKING_START = datetime(2026, 11, 13, 8, 0, tzinfo=UTC)
+
+
+async def add_table_and_user(session: AsyncSession) -> tuple[DiningTable, User]:
+    location = Location(
+        slug="test-square",
+        address="Test Square",
+        description="About test-square",
+        image_key="locations/test-square.jpg",
+    )
+    user = User(first_name="Ada", last_name="Lovelace", email="ada@example.com")
+    session.add_all([location, user])
+    await session.flush()
+    table = DiningTable(location_id=location.id, label="Table 1", capacity=4)
+    session.add(table)
+    await session.flush()
+    return table, user
+
+
+def booking(
+    table: DiningTable, user: User, *, minutes: int, status: BookingStatus = BookingStatus.CONFIRMED
+) -> Booking:
+    starts_at = BOOKING_START + timedelta(minutes=minutes)
+    return Booking(
+        user_id=user.id,
+        table_id=table.id,
+        party_size=2,
+        starts_at=starts_at,
+        ends_at=starts_at + timedelta(minutes=90),
+        status=status,
+    )
+
+
+async def test_cancelled_overlaps_and_adjacent_bookings_fit_the_exclusion_constraint(
+    session_factory: async_sessionmaker[AsyncSession], connection: AsyncConnection
+) -> None:
+    async with session_factory() as session:
+        table, user = await add_table_and_user(session)
+        session.add(booking(table, user, minutes=0))
+        await session.flush()
+        session.add(booking(table, user, minutes=30, status=BookingStatus.CANCELLED))
+        await session.flush()
+        session.add(booking(table, user, minutes=90))
+        await session.flush()
+        session.add(booking(table, user, minutes=-90))
+        await session.commit()
+
+    assert await connection.scalar(select(func.count()).select_from(Booking)) == 4
+
+
+async def test_overlapping_confirmed_bookings_on_one_table_fail_the_exclusion_constraint(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        table, user = await add_table_and_user(session)
+        session.add(booking(table, user, minutes=0))
+        await session.flush()
+        session.add(booking(table, user, minutes=60))
+
+        with pytest.raises(IntegrityError, match="ex_bookings_table_id_period"):
+            await session.flush()
+
+
+@pytest.mark.parametrize(
+    ("party_size", "minutes", "constraint"),
+    [
+        (0, 90, "ck_bookings_party_size_between_1_and_8"),
+        (9, 90, "ck_bookings_party_size_between_1_and_8"),
+        (2, 0, "ck_bookings_ends_at_after_starts_at"),
+    ],
+)
+async def test_booking_checks(
+    session_factory: async_sessionmaker[AsyncSession],
+    party_size: int,
+    minutes: int,
+    constraint: str,
+) -> None:
+    async with session_factory() as session:
+        table, user = await add_table_and_user(session)
+        session.add(
+            Booking(
+                user_id=user.id,
+                table_id=table.id,
+                party_size=party_size,
+                starts_at=BOOKING_START,
+                ends_at=BOOKING_START + timedelta(minutes=minutes),
+            )
+        )
+
+        with pytest.raises(IntegrityError, match=constraint):
             await session.flush()

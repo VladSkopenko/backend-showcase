@@ -93,6 +93,12 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-locations.md`
   summary: Document the local picture seeds (`app.scripts.seed_menu`, `app.scripts.seed_location_photos`) and the per-environment bucket upload in README or CLAUDE.md Commands.
   evidence: Both commands live only in specs; every environment bucket needs the pictures before `image_url`s work.
+- source_spec: `_bmad_output/implementation-artifacts/spec-book-a-table.md`
+  summary: Test the user and table row locks in booking create with two concurrent connections, as for the auth user-row lock.
+  evidence: The shared-connection test harness cannot observe locks, so dropping either `for_update=True` passes every test.
+- source_spec: `_bmad_output/implementation-artifacts/spec-book-a-table.md`
+  summary: Test the `IntegrityError` on `ex_bookings_table_id_period` turning into `SLOT_UNAVAILABLE` in `BookingService.create`.
+  evidence: On one connection the locked overlap check catches every table overlap first, so the branch is unreachable; it needs two connections racing past the check.
 
 ## Deferred from: code review of spec-locations.md (2026-11-10)
 

@@ -27,7 +27,7 @@ REST API для мережі ресторанів. Проєкт показує �
 | Деплой | Merge у `main` розгортає dev без ручних кроків. CI дістається сервера лише через Tailscale, а forced-command entrypoint розгортає тільки коміти з гілки середовища ([ADR 2](docs/adr/0002-ci-access-through-tailscale.md), [ADR 3](docs/adr/0003-deploy-entrypoint-verifies-commit.md)) |
 | Інфраструктура | Terraform для VM в Oracle Cloud, мережі, диска з даними, бакета для медіа та його IAM; cloud-init для базової ОС; сервер замінюють, а не латають ([ADR 8](docs/adr/0008-terraform-and-immutable-server.md)) |
 | Платформа | Caddy з автоматичним HTTPS перед app-стеками; одна VM, platform-стек і окремий app-стек для кожного середовища ([ADR 7](docs/adr/0007-single-vm-platform-and-app-stacks.md)) |
-| API | Реєстрація з підтвердженням email, JWT-сесії з ротацією refresh-токенів, скидання пароля, вхід через Google, меню з фото в Object Storage, локації ресторанів зі столами |
+| API | Реєстрація з підтвердженням email, JWT-сесії з ротацією refresh-токенів, скидання пароля, вхід через Google, меню з фото в Object Storage, локації ресторанів зі столами, бронювання столів із сіткою слотів і захистом від подвійного бронювання |
 
 ## Архітектура
 
@@ -63,12 +63,12 @@ Staging і production отримуватимуть той самий образ 
 
 - Python 3.14, FastAPI, Pydantic v2, SQLAlchemy 2 async, Alembic, uv.
 - Feature-sliced структура ([ADR 11](docs/adr/0011-feature-sliced-backend-layout.md)). Core-фічі
-  (users, auth, health, menu, locations) спільні для всіх. Звичайні фічі ніколи не імпортують одна
+  (users, auth, health, menu, locations, bookings) спільні для всіх. Звичайні фічі ніколи не імпортують одна
   одну. Усередині фічі виклики йдуть `endpoints → services → repositories → models`. import-linter
   перевіряє ці правила в CI.
 - Довідкові дані, як-от меню й локації, постачаються міграціями, тож кожне середовище отримує їх без
   доступу до сервера.
-- Swagger групує маршрути за сценаріями користувача (Registration, Session, Menu, Locations), а не
+- Swagger групує маршрути за сценаріями користувача (Registration, Session, Menu, Locations, Booking), а не
   за модулями.
 
 ## Рішення

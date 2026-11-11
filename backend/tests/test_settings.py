@@ -1,3 +1,6 @@
+from datetime import time
+from zoneinfo import ZoneInfo
+
 import pytest
 from pydantic import ValidationError
 
@@ -237,3 +240,38 @@ def test_missing_media_public_base_url_fails(
 
     with pytest.raises(ValidationError, match="public_base_url"):
         MediaSettings()  # type: ignore[call-arg]
+
+
+def test_booking_defaults() -> None:
+    booking = Settings().booking
+
+    assert booking.timezone == ZoneInfo("Asia/Tbilisi")
+    assert booking.first_slot == time(10, 0)
+    assert booking.last_slot == time(21, 30)
+    assert booking.slot_minutes == 30
+    assert booking.duration_minutes == 90
+    assert booking.horizon_days == 30
+    assert booking.cancel_cutoff_minutes == 30
+    assert booking.max_online_party_size == 4
+
+
+def test_booking_env_vars_land_in_the_booking_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BOOKING_TIMEZONE", "Europe/Kyiv")
+    monkeypatch.setenv("BOOKING_FIRST_SLOT", "09:00")
+    monkeypatch.setenv("BOOKING_LAST_SLOT", "22:00")
+    monkeypatch.setenv("BOOKING_SLOT_MINUTES", "15")
+    monkeypatch.setenv("BOOKING_DURATION_MINUTES", "120")
+    monkeypatch.setenv("BOOKING_HORIZON_DAYS", "14")
+    monkeypatch.setenv("BOOKING_CANCEL_CUTOFF_MINUTES", "60")
+    monkeypatch.setenv("BOOKING_MAX_ONLINE_PARTY_SIZE", "6")
+
+    booking = Settings().booking
+
+    assert booking.timezone == ZoneInfo("Europe/Kyiv")
+    assert booking.first_slot == time(9, 0)
+    assert booking.last_slot == time(22, 0)
+    assert booking.slot_minutes == 15
+    assert booking.duration_minutes == 120
+    assert booking.horizon_days == 14
+    assert booking.cancel_cutoff_minutes == 60
+    assert booking.max_online_party_size == 6
