@@ -28,7 +28,7 @@ the first release.
 | Deploy | A merge to `main` deploys dev with no manual steps. CI reaches the server only through Tailscale, and a forced-command entrypoint deploys only commits from the environment's branch ([ADR 2](docs/adr/0002-ci-access-through-tailscale.md), [ADR 3](docs/adr/0003-deploy-entrypoint-verifies-commit.md)) |
 | Infrastructure | Terraform for the Oracle Cloud VM, network, data volume, media bucket and its IAM; cloud-init for the base OS; the server is replaced, not patched ([ADR 8](docs/adr/0008-terraform-and-immutable-server.md)) |
 | Platform | Caddy with automatic HTTPS in front of the app stacks; one VM, a platform stack and an app stack per environment ([ADR 7](docs/adr/0007-single-vm-platform-and-app-stacks.md)) |
-| API | Registration with email verification, JWT sessions with refresh rotation, password reset, Google sign-in, a menu with pictures in Object Storage, restaurant locations with their tables |
+| API | Registration with email verification, JWT sessions with refresh rotation, password reset, Google sign-in, a menu with pictures in Object Storage, restaurant locations with their tables, table booking with a slot grid and double-booking protection |
 
 ## Architecture
 
@@ -64,12 +64,12 @@ deploy jobs come with the first release.
 
 - Python 3.14, FastAPI, Pydantic v2, SQLAlchemy 2 async, Alembic, uv.
 - Feature-sliced layout ([ADR 11](docs/adr/0011-feature-sliced-backend-layout.md)). Core features
-  (users, auth, health, menu, locations) are shared. Regular features never import each other.
+  (users, auth, health, menu, locations, bookings) are shared. Regular features never import each other.
   Inside a feature, calls go `endpoints → services → repositories → models`. import-linter enforces
   these rules in CI.
 - Reference data such as the menu and the locations ships as migrations, so every environment gets
   it without access to the server.
-- Swagger groups routes by user flow (Registration, Session, Menu, Locations) rather than by module.
+- Swagger groups routes by user flow (Registration, Session, Menu, Locations, Booking) rather than by module.
 
 ## Decisions
 

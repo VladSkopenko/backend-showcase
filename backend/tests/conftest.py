@@ -46,7 +46,7 @@ for value in vars(settings_module).values():
 def isolated_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
     # DATABASE_ variables stay, so a test run can point at another server; the name is forced above.
     for name in list(os.environ):
-        if name.startswith(("APP_", "EMAIL_", "AUTH_", "GOOGLE_", "MEDIA_")):
+        if name.startswith(("APP_", "EMAIL_", "AUTH_", "GOOGLE_", "MEDIA_", "BOOKING_")):
             monkeypatch.delenv(name)
     # Required by the settings; the write keys stay unset, so nothing can reach a bucket.
     monkeypatch.setenv("MEDIA_PUBLIC_BASE_URL", TEST_MEDIA_PUBLIC_BASE_URL)

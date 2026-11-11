@@ -1,6 +1,8 @@
+from datetime import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
@@ -125,6 +127,20 @@ class MediaSettings(BaseSettings):
         )
 
 
+class BookingSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="BOOKING_", env_file=ENV_FILE, extra="ignore")
+
+    timezone: ZoneInfo = ZoneInfo("Asia/Tbilisi")
+    first_slot: time = time(10, 0)
+    last_slot: time = time(21, 30)
+    slot_minutes: int = 30
+    duration_minutes: int = 90
+    horizon_days: int = 30
+    cancel_cutoff_minutes: int = 30
+    # Caps both the party and the table capacity: larger tables are booked offline.
+    max_online_party_size: int = 4
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -136,6 +152,7 @@ class Settings(BaseSettings):
     # mypy sees the required secret_key argument; pydantic-settings fills it from the environment.
     token: TokenSettings = Field(default_factory=TokenSettings)  # type: ignore[arg-type]
     media: MediaSettings = Field(default_factory=MediaSettings)  # type: ignore[arg-type]
+    booking: BookingSettings = Field(default_factory=BookingSettings)
 
     @classmethod
     def settings_customise_sources(

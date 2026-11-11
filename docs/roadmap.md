@@ -23,20 +23,12 @@ live. The restaurant gets invoices, reviews, notifications and analytics.
 | Analytics | Grafana reads PostgreSQL directly: revenue, popular dishes, ratings, no-shows |
 | Frontend | menu and booking, order tracker, kitchen screen; a separate Next.js repository that reaches this API through its own server-side proxy |
 
-### n8n as the integration layer
+### n8n as the traffic simulator
 
-The backend owns business logic and data. It publishes domain events such as `booking.created`,
-`order.status_changed` and `review.created` through a transactional outbox to n8n webhooks, and n8n
-handles everything around them:
-
-- booking confirmations and reminders in Telegram;
-- a morning digest for the manager: revenue, bookings, top dishes;
-- review triage: an LLM sets sentiment and topic through the API, negative reviews alert the
-  manager, and a weekly summary lists the best and worst dishes;
-- a Telegram booking agent that understands "a table for four tomorrow at 19:00", with this REST API
-  as its tools.
-
-Workflows are exported to `n8n/workflows/` and versioned with the code.
+n8n plays the visitors, so every environment shows a live flow: it books random tables through the
+REST API and moves demo orders through the kitchen
+([ADR 9](adr/0009-alerting-from-outside-the-vm.md)). Workflows are exported to `n8n/workflows/` and
+versioned with the code.
 
 ### Out of scope
 
@@ -62,8 +54,7 @@ Workflows are exported to `n8n/workflows/` and versioned with the code.
 | Dashboards | Grafana provisioned from the repo: technical metrics plus business analytics from PostgreSQL |
 | Logs and traces | VictoriaLogs, lighter than Loki, decided in an ADR; OpenTelemetry traces in Tempo |
 | Alerts | Alertmanager to a Telegram bot, Watchdog to healthchecks.io as a dead-man switch |
-| Automation | n8n workflows fed by backend events through a transactional outbox |
-| AI | LLM review triage and a Telegram booking agent in n8n |
+| Automation | n8n workflows that simulate visitors: random table bookings through the REST API |
 | Private access | Tailscale for Prometheus, VictoriaLogs, n8n and CI deploys |
 | Infrastructure | Terraform for the Oracle Cloud VM, network, firewall and data volume; cloud-init for the base OS; Caddy with automatic HTTPS |
 | Frontend | Next.js in a separate repository, hosted on Vercel; see [ADR 10](adr/0010-frontend-in-a-separate-repository.md) |
@@ -142,13 +133,12 @@ Each feature starts from its own BMAD spec.
 - [ ] Payments in a provider sandbox with signed, idempotent webhooks
 - [ ] Invoice PDFs in a background job
 - [ ] Reviews on dishes, visits and bookings
-- [ ] Domain events through an outbox to n8n: confirmations, reminders, morning digest, review triage
-- [ ] Telegram booking agent in n8n on top of the REST API
+- [ ] n8n workflow that books random tables through the REST API, so every environment shows a live booking flow
 - [ ] Business dashboards in Grafana
 - [ ] Frontend in its own repository: menu and booking, order tracker, kitchen screen
 
 Done when: a guest books, orders, pays, follows the order live, gets an invoice and leaves a review,
-and the manager sees all of it in Grafana and Telegram.
+and the manager sees all of it in Grafana.
 
 ## What a reviewer should eventually see
 

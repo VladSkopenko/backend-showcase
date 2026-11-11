@@ -33,6 +33,12 @@ FLOWS = {
         ("get", "/api/v1/locations"),
         ("get", "/api/v1/locations/{location_id}"),
     ],
+    "Booking": [
+        ("get", "/api/v1/bookings/tables"),
+        ("post", "/api/v1/bookings"),
+        ("get", "/api/v1/bookings"),
+        ("post", "/api/v1/bookings/{booking_id}/cancel"),
+    ],
     "Health": [
         ("get", "/"),
         ("get", "/health"),
