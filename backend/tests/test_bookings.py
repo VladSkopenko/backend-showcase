@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -12,7 +12,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionmaker
 
 from app.common import clock
-from app.config.settings import Settings, get_settings
+from app.config.settings import BookingSettings, Settings, get_settings
 from app.features.core.auth.services.password_hasher import PasswordHasher
 from app.features.core.bookings.enums import BookingStatus
 from app.main import create_app
@@ -161,13 +161,14 @@ async def add_booking(
     table: DiningTable,
     starts_at: datetime,
     status: BookingStatus = BookingStatus.CONFIRMED,
+    duration: timedelta = DURATION,
 ) -> Booking:
     booking = Booking(
         user_id=user.id,
         table_id=table.id,
         party_size=2,
         starts_at=starts_at,
-        ends_at=starts_at + DURATION,
+        ends_at=starts_at + duration,
         status=status,
     )
     async with session_factory() as session:
@@ -191,6 +192,28 @@ async def book(
 
 async def cancel(client: httpx2.AsyncClient, booking_id: str | uuid.UUID) -> httpx2.Response:
     return await client.post(f"{BOOKINGS}/{booking_id}/cancel")
+
+
+async def edit(
+    client: httpx2.AsyncClient,
+    booking_id: str | uuid.UUID,
+    starts_at: datetime | str,
+    party_size: int = 2,
+    duration_minutes: int = 90,
+) -> httpx2.Response:
+    start = starts_at if isinstance(starts_at, str) else starts_at.isoformat()
+    return await client.put(
+        f"{BOOKINGS}/{booking_id}",
+        json={"starts_at": start, "party_size": party_size, "duration_minutes": duration_minutes},
+    )
+
+
+async def edit_slots(
+    client: httpx2.AsyncClient, booking_id: str | uuid.UUID, duration_minutes: int
+) -> httpx2.Response:
+    return await client.get(
+        f"{BOOKINGS}/{booking_id}/slots", params={"duration_minutes": duration_minutes}
+    )
 
 
 def card_ids(response: httpx2.Response) -> list[str]:
@@ -220,6 +243,19 @@ async def count_bookings(connection: AsyncConnection) -> int:
     count = await connection.scalar(select(func.count()).select_from(Booking))
     assert count is not None
     return count
+
+
+async def stored_period(
+    connection: AsyncConnection, booking_id: str | uuid.UUID
+) -> tuple[datetime, datetime, int]:
+    row = (
+        await connection.execute(
+            select(Booking.starts_at, Booking.ends_at, Booking.party_size).where(
+                Booking.id == uuid.UUID(str(booking_id))
+            )
+        )
+    ).one()
+    return row[0], row[1], row[2]
 
 
 async def stored_status(connection: AsyncConnection, booking_id: str | uuid.UUID) -> BookingStatus:
@@ -655,7 +691,13 @@ async def test_create_reports_the_first_failing_check(
 
 
 @pytest.mark.parametrize(
-    ("method", "path"), [("get", BOOKINGS), ("post", f"{BOOKINGS}/{uuid.uuid4()}/cancel")]
+    ("method", "path"),
+    [
+        ("get", BOOKINGS),
+        ("post", f"{BOOKINGS}/{uuid.uuid4()}/cancel"),
+        ("put", f"{BOOKINGS}/{uuid.uuid4()}"),
+        ("get", f"{BOOKINGS}/{uuid.uuid4()}/slots"),
+    ],
 )
 async def test_booking_routes_need_sign_in(
     client: httpx2.AsyncClient, method: str, path: str
@@ -786,3 +828,493 @@ async def test_cancel_reports_the_first_failing_check(
     assert_error(await cancel(client, cancelled_soon.id), 404, "BOOKING_NOT_FOUND")
     await sign_in(client, ADA)
     assert_error(await cancel(client, cancelled_soon.id), 409, "BOOKING_ALREADY_CANCELLED")
+
+
+async def test_edit_to_a_longer_stay_blocks_the_extra_starts_and_back_frees_them(
+    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User], connection: AsyncConnection
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+
+    longer = await edit(client, created["id"], at(TOMORROW, 12), duration_minutes=180)
+
+    assert longer.status_code == 200, longer.text
+    assert longer.json() == {**created, "ends_at": "2026-11-13T15:00:00+04:00"}
+    assert await stored_period(connection, created["id"]) == (
+        at(TOMORROW, 12),
+        at(TOMORROW, 15),
+        2,
+    )
+    after_hours = [at(TOMORROW, 13, 30), at(TOMORROW, 14), at(TOMORROW, 14, 30)]
+    extended = availability(await search(client), venue.four)
+    assert [extended[start] for start in after_hours] == [False, False, False]
+    assert extended[at(TOMORROW, 15)] is True
+    shorter = await edit(client, created["id"], at(TOMORROW, 12), duration_minutes=90)
+    assert shorter.status_code == 200, shorter.text
+    assert shorter.json() == created
+    restored = availability(await search(client), venue.four)
+    assert [restored[start] for start in after_hours] == [True, True, True]
+
+
+async def test_edit_moves_the_booking_and_frees_the_old_start(
+    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User]
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+
+    response = await edit(client, created["id"], at(TOMORROW, 14), party_size=2)
+
+    assert response.status_code == 200, response.text
+    moved = {
+        **created,
+        "starts_at": "2026-11-13T14:00:00+04:00",
+        "ends_at": "2026-11-13T15:30:00+04:00",
+    }
+    assert response.json() == moved
+    assert (await client.get(BOOKINGS)).json() == [moved]
+    found = availability(await search(client), venue.four)
+    assert found[at(TOMORROW, 12)] is True
+    assert found[at(TOMORROW, 13)] is False
+
+
+async def test_edit_may_end_exactly_at_closing(
+    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User]
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+
+    response = await edit(client, created["id"], at(TOMORROW, 21, 30), duration_minutes=90)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["ends_at"] == "2026-11-13T23:00:00+04:00"
+
+
+@pytest.mark.parametrize(("minutes", "status_code"), [(20, 200), (21, 409)])
+async def test_edit_closes_at_the_cancel_cutoff(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    fake_clock: FakeClock,
+    connection: AsyncConnection,
+    minutes: int,
+    status_code: int,
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TODAY, 14))).json()
+    fake_clock.advance(minutes=minutes)
+    await sign_in(client, ADA)
+
+    response = await edit(client, created["id"], at(TODAY, 14), duration_minutes=120)
+
+    assert response.status_code == status_code, response.text
+    if status_code == 200:
+        assert await stored_period(connection, created["id"]) == (
+            at(TODAY, 14),
+            at(TODAY, 16),
+            2,
+        )
+    else:
+        assert response.json()["code"] == "EDIT_CLOSED"
+        assert await stored_period(connection, created["id"]) == (
+            at(TODAY, 14),
+            at(TODAY, 15, 30),
+            2,
+        )
+
+
+async def test_edit_to_a_start_already_past_is_refused(
+    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User], connection: AsyncConnection
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TODAY, 15))).json()
+
+    response = await edit(client, created["id"], at(TODAY, 13))
+
+    assert_error(response, 409, "SLOT_UNAVAILABLE")
+    assert await stored_period(connection, created["id"]) == (
+        at(TODAY, 15),
+        at(TODAY, 16, 30),
+        2,
+    )
+
+
+async def test_edit_over_its_own_old_range_succeeds(
+    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User]
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+
+    response = await edit(client, created["id"], at(TOMORROW, 12, 30), duration_minutes=120)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["starts_at"] == "2026-11-13T12:30:00+04:00"
+    assert response.json()["ends_at"] == "2026-11-13T14:30:00+04:00"
+
+
+@pytest.mark.parametrize(("table", "status_code"), [("four", 200), ("small", 400)])
+async def test_edit_party_size_must_fit_the_table(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    connection: AsyncConnection,
+    table: str,
+    status_code: int,
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, getattr(venue, table).id, at(TOMORROW, 12))).json()
+
+    response = await edit(client, created["id"], at(TOMORROW, 12), party_size=4)
+
+    assert response.status_code == status_code, response.text
+    if status_code == 200:
+        assert response.json() == {**created, "party_size": 4}
+    else:
+        assert response.json()["code"] == "TABLE_NOT_SUITABLE"
+        assert await stored_period(connection, created["id"]) == (
+            at(TOMORROW, 12),
+            at(TOMORROW, 13, 30),
+            2,
+        )
+
+
+@pytest.mark.parametrize(
+    ("starts_at", "party_size", "duration_minutes", "code"),
+    [
+        (at(TOMORROW, 21), 2, 150, "ENDS_AFTER_CLOSING"),
+        (at(TOMORROW, 21, 30), 2, 120, "ENDS_AFTER_CLOSING"),
+        (at(TOMORROW, 12), 2, 100, "DURATION_INVALID"),
+        (at(TOMORROW, 12), 2, 210, "DURATION_INVALID"),
+        (at(TOMORROW, 12), 2, 60, "DURATION_INVALID"),
+        (at(TOMORROW + timedelta(days=1), 12), 2, 90, "DAY_CHANGE_NOT_ALLOWED"),
+        (at(TODAY, 15), 2, 90, "DAY_CHANGE_NOT_ALLOWED"),
+        (at(TOMORROW, 12, 15), 2, 90, "SLOT_INVALID"),
+        (at(TOMORROW, 9, 30), 2, 90, "SLOT_INVALID"),
+        (at(TOMORROW, 22), 2, 90, "SLOT_INVALID"),
+        (at(TOMORROW, 12), 5, 90, "PARTY_TOO_LARGE"),
+    ],
+)
+async def test_bad_edit_input_changes_nothing(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    connection: AsyncConnection,
+    starts_at: datetime,
+    party_size: int,
+    duration_minutes: int,
+    code: str,
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+
+    response = await edit(
+        client, created["id"], starts_at, party_size=party_size, duration_minutes=duration_minutes
+    )
+
+    assert_error(response, 400, code)
+    assert await stored_period(connection, created["id"]) == (
+        at(TOMORROW, 12),
+        at(TOMORROW, 13, 30),
+        2,
+    )
+
+
+async def test_edit_with_party_size_zero_is_a_validation_error(
+    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User]
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+
+    response = await edit(client, created["id"], at(TOMORROW, 12), party_size=0)
+
+    assert_error(response, 422, "VALIDATION_ERROR")
+
+
+async def test_edit_onto_a_range_taken_on_the_table_is_refused(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+    connection: AsyncConnection,
+) -> None:
+    await add_booking(
+        session_factory, user=users[GRACE], table=venue.four, starts_at=at(TOMORROW, 14, 30)
+    )
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+
+    longer = await edit(client, created["id"], at(TOMORROW, 12), duration_minutes=180)
+    moved = await edit(client, created["id"], at(TOMORROW, 14))
+
+    assert_error(longer, 409, "SLOT_UNAVAILABLE")
+    assert_error(moved, 409, "SLOT_UNAVAILABLE")
+    assert await stored_period(connection, created["id"]) == (
+        at(TOMORROW, 12),
+        at(TOMORROW, 13, 30),
+        2,
+    )
+
+
+async def test_edit_up_to_the_next_booking_on_the_table_succeeds(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await add_booking(
+        session_factory, user=users[GRACE], table=venue.four, starts_at=at(TOMORROW, 15)
+    )
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+
+    response = await edit(client, created["id"], at(TOMORROW, 12), duration_minutes=180)
+
+    assert response.status_code == 200, response.text
+
+
+async def test_edit_onto_a_cancelled_booking_range_succeeds(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await add_booking(
+        session_factory,
+        user=users[GRACE],
+        table=venue.four,
+        starts_at=at(TOMORROW, 14, 30),
+        status=BookingStatus.CANCELLED,
+    )
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+
+    response = await edit(client, created["id"], at(TOMORROW, 12), duration_minutes=180)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["ends_at"] == "2026-11-13T15:00:00+04:00"
+
+
+async def test_edit_overlapping_another_own_booking_is_refused(
+    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User], connection: AsyncConnection
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+    assert (await book(client, venue.other.id, at(TOMORROW, 14))).status_code == 201
+
+    response = await edit(client, created["id"], at(TOMORROW, 12), duration_minutes=180)
+
+    assert_error(response, 409, "OVERLAPPING_BOOKING")
+    assert await stored_period(connection, created["id"]) == (
+        at(TOMORROW, 12),
+        at(TOMORROW, 13, 30),
+        2,
+    )
+
+
+async def test_edit_of_an_unknown_or_foreign_booking_is_not_found(
+    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User], connection: AsyncConnection
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+    await sign_in(client, GRACE)
+
+    foreign = await edit(client, created["id"], at(TOMORROW, 14))
+    unknown = await edit(client, uuid.uuid4(), at(TOMORROW, 14))
+
+    assert_error(foreign, 404, "BOOKING_NOT_FOUND")
+    assert_error(unknown, 404, "BOOKING_NOT_FOUND")
+    assert await stored_period(connection, created["id"]) == (
+        at(TOMORROW, 12),
+        at(TOMORROW, 13, 30),
+        2,
+    )
+
+
+async def test_edit_of_a_cancelled_booking_is_refused(
+    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User], connection: AsyncConnection
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+    assert (await cancel(client, created["id"])).status_code == 200
+
+    response = await edit(client, created["id"], at(TOMORROW, 14))
+
+    assert_error(response, 409, "BOOKING_ALREADY_CANCELLED")
+    assert await stored_status(connection, created["id"]) == BookingStatus.CANCELLED
+    assert await stored_period(connection, created["id"]) == (
+        at(TOMORROW, 12),
+        at(TOMORROW, 13, 30),
+        2,
+    )
+
+
+async def test_edit_converts_a_start_sent_with_another_offset_to_the_local_day(
+    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User]
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+
+    response = await edit(client, created["id"], "2026-11-12T22:00:00-08:00")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["starts_at"] == "2026-11-13T10:00:00+04:00"
+    assert response.json()["ends_at"] == "2026-11-13T11:30:00+04:00"
+
+
+async def test_edit_to_an_offset_that_lands_on_the_next_local_day_is_refused(
+    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User]
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+
+    response = await edit(client, created["id"], "2026-11-13T22:00:00-08:00")
+
+    assert_error(response, 400, "DAY_CHANGE_NOT_ALLOWED")
+
+
+async def test_edit_reports_the_first_failing_check(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    cancelled_soon = await add_booking(
+        session_factory,
+        user=users[ADA],
+        table=venue.four,
+        starts_at=at(TODAY, 13, 30),
+        status=BookingStatus.CANCELLED,
+    )
+    closed = await add_booking(
+        session_factory, user=users[ADA], table=venue.four, starts_at=at(TODAY, 13, 30)
+    )
+    target = await add_booking(
+        session_factory, user=users[ADA], table=venue.small, starts_at=at(TODAY, 15)
+    )
+    await add_booking(
+        session_factory, user=users[GRACE], table=venue.small, starts_at=at(TODAY, 18)
+    )
+    await add_booking(
+        session_factory, user=users[ADA], table=venue.other, starts_at=at(TODAY, 17, 30)
+    )
+    next_day_off_grid = at(TOMORROW, 15, 15)
+
+    assert_error(await edit(client, target.id, next_day_off_grid, 5, 100), 401, "NOT_AUTHENTICATED")
+    await sign_in(client, GRACE)
+    assert_error(await edit(client, target.id, next_day_off_grid, 5, 100), 404, "BOOKING_NOT_FOUND")
+    await sign_in(client, ADA)
+    assert_error(
+        await edit(client, cancelled_soon.id, next_day_off_grid, 5, 100),
+        409,
+        "BOOKING_ALREADY_CANCELLED",
+    )
+    assert_error(await edit(client, closed.id, next_day_off_grid, 5, 100), 409, "EDIT_CLOSED")
+    assert_error(await edit(client, target.id, next_day_off_grid, 5, 100), 400, "PARTY_TOO_LARGE")
+    assert_error(
+        await edit(client, target.id, next_day_off_grid, 4, 100), 400, "DAY_CHANGE_NOT_ALLOWED"
+    )
+    assert_error(await edit(client, target.id, at(TODAY, 15, 15), 4, 100), 400, "SLOT_INVALID")
+    assert_error(await edit(client, target.id, at(TODAY, 21, 30), 4, 100), 400, "DURATION_INVALID")
+    assert_error(
+        await edit(client, target.id, at(TODAY, 21, 30), 4, 120), 400, "ENDS_AFTER_CLOSING"
+    )
+    assert_error(await edit(client, target.id, at(TODAY, 13), 4, 90), 400, "TABLE_NOT_SUITABLE")
+    assert_error(await edit(client, target.id, at(TODAY, 13), 2, 90), 409, "SLOT_UNAVAILABLE")
+    assert_error(await edit(client, target.id, at(TODAY, 18), 2, 90), 409, "SLOT_UNAVAILABLE")
+    assert_error(
+        await edit(client, target.id, at(TODAY, 16, 30), 2, 90), 409, "OVERLAPPING_BOOKING"
+    )
+
+
+async def test_slots_for_a_longer_stay_ignore_the_booking_itself_and_respect_closing(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await add_booking(
+        session_factory, user=users[GRACE], table=venue.four, starts_at=at(TOMORROW, 15)
+    )
+    await add_booking(
+        session_factory, user=users[GRACE], table=venue.small, starts_at=at(TOMORROW, 10)
+    )
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+    assert (await book(client, venue.other.id, at(TOMORROW, 17))).status_code == 201
+
+    response = await edit_slots(client, created["id"], 180)
+
+    assert response.status_code == 200, response.text
+    free = {at(TOMORROW, 10) + timedelta(minutes=30 * step) for step in range(5)}
+    free |= {at(TOMORROW, 16, 30) + timedelta(minutes=30 * step) for step in range(8)}
+    assert response.json() == [
+        {"starts_at": start.isoformat(), "available": start in free} for start in grid(TOMORROW)
+    ]
+
+
+async def test_slots_today_mark_starts_up_to_now_unavailable(
+    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User]
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TODAY, 15))).json()
+
+    response = await edit_slots(client, created["id"], 90)
+
+    assert response.status_code == 200, response.text
+    assert response.json() == [
+        {"starts_at": start.isoformat(), "available": start > at(TODAY, 13, 10)}
+        for start in grid(TODAY)
+    ]
+
+
+async def test_slots_of_an_unknown_or_foreign_booking_are_not_found(
+    client: httpx2.AsyncClient, venue: Venue, users: dict[str, User]
+) -> None:
+    await sign_in(client, ADA)
+    created = (await book(client, venue.four.id, at(TOMORROW, 12))).json()
+    await sign_in(client, GRACE)
+
+    assert_error(await edit_slots(client, created["id"], 90), 404, "BOOKING_NOT_FOUND")
+    assert_error(await edit_slots(client, uuid.uuid4(), 90), 404, "BOOKING_NOT_FOUND")
+
+
+async def test_slots_report_the_first_failing_check(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    cancelled_soon = await add_booking(
+        session_factory,
+        user=users[ADA],
+        table=venue.four,
+        starts_at=at(TODAY, 13, 30),
+        status=BookingStatus.CANCELLED,
+    )
+    closed = await add_booking(
+        session_factory, user=users[ADA], table=venue.four, starts_at=at(TODAY, 13, 30)
+    )
+    target = await add_booking(
+        session_factory, user=users[ADA], table=venue.small, starts_at=at(TOMORROW, 12)
+    )
+
+    assert_error(await edit_slots(client, target.id, 100), 401, "NOT_AUTHENTICATED")
+    await sign_in(client, GRACE)
+    assert_error(await edit_slots(client, target.id, 100), 404, "BOOKING_NOT_FOUND")
+    await sign_in(client, ADA)
+    assert_error(await edit_slots(client, cancelled_soon.id, 100), 409, "BOOKING_ALREADY_CANCELLED")
+    assert_error(await edit_slots(client, closed.id, 100), 409, "EDIT_CLOSED")
+    assert_error(await edit_slots(client, target.id, 100), 400, "DURATION_INVALID")
+    assert_error(await edit_slots(client, target.id, 210), 400, "DURATION_INVALID")
+
+
+async def test_search_marks_starts_that_would_end_after_closing_unavailable(
+    client: httpx2.AsyncClient, app: FastAPI, venue: Venue
+) -> None:
+    settings = Settings(booking=BookingSettings(closing_time=time(22, 30)))
+    app.dependency_overrides[get_settings] = lambda: settings
+
+    response = await search(client)
+
+    assert availability(response, venue.four) == {
+        start: start <= at(TOMORROW, 21) for start in grid(TOMORROW)
+    }

@@ -4,7 +4,9 @@ Date: 2026-11-11
 
 ## Status
 
-Accepted
+Accepted. Amended 2026-11-11: bookings can be edited (start, party size and a duration from a
+fixed set) with the lock order user, table, booking; edit and the day grids enforce a closing
+time.
 
 ## Context
 
@@ -38,6 +40,19 @@ a check in Python alone cannot see a row another transaction is about to insert.
 - The user-level overlap rule (`OVERLAPPING_BOOKING`) is held only by the service under the user
   row lock. It has no database backstop.
 - Cancelled bookings stay as rows with status `CANCELLED` and do not block their slot.
+- **Editing.** The owner of a `CONFIRMED` booking may replace its start, party size and duration
+  until the cancel cutoff. The table and the local day stay. Durations run from
+  `duration_minutes` to `max_duration_minutes` in steps of `slot_minutes`; creation still uses
+  `duration_minutes`. Edit locks the user row, then the table row, then the booking row, so it
+  takes the create locks in the same order and never waits crosswise with create or cancel. The
+  locked re-read of the booking uses `populate_existing`, and status and cutoff are checked again
+  under the lock. The overlap checks skip the edited booking itself; the exclusion constraint skips
+  the row's old version on `UPDATE`. Like search, the edit slots ignore the user's other
+  bookings, so a start shown available can still be refused by edit with `OVERLAPPING_BOOKING`.
+- **Closing time.** Edit and every day grid enforce `closing_time` on the start's local day: edit
+  refuses a later end (`ENDS_AFTER_CLOSING`), and search and the edit slots mark such starts
+  unavailable through one shared rule. Create does not check closing; it keeps it only through the
+  defaults, where a standard stay from the last slot ends exactly at closing.
 
 ## Alternatives considered
 
@@ -56,6 +71,6 @@ a check in Python alone cannot see a row another transaction is about to insert.
 
 - `alembic check` cannot reflect exclusion constraints, so drift between the model and the
   database is caught only by the `pg_get_constraintdef` test in `tests/test_database.py`.
-- The lock order (user, then table) is a rule for every future write path on bookings, such as
-  editing a booking; taking the locks in another order risks deadlocks.
+- The lock order (user, then table, then booking) is a rule for every write path on bookings;
+  taking the locks in another order risks deadlocks.
 - Per-location or per-weekday opening hours would replace the single grid in `BookingSettings`.

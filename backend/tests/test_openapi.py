@@ -38,6 +38,8 @@ FLOWS = {
         ("post", "/api/v1/bookings"),
         ("get", "/api/v1/bookings"),
         ("post", "/api/v1/bookings/{booking_id}/cancel"),
+        ("put", "/api/v1/bookings/{booking_id}"),
+        ("get", "/api/v1/bookings/{booking_id}/slots"),
     ],
     "Health": [
         ("get", "/"),

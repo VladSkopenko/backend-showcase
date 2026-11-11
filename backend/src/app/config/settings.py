@@ -139,6 +139,8 @@ class BookingSettings(BaseSettings):
     cancel_cutoff_minutes: int = 30
     # Caps both the party and the table capacity: larger tables are booked offline.
     max_online_party_size: int = 4
+    max_duration_minutes: int = 180
+    closing_time: time = time(23, 0)
 
 
 class Settings(BaseSettings):

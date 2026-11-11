@@ -60,3 +60,9 @@ class CreateBookingRequest(BaseModel):
     table_id: uuid.UUID
     starts_at: AwareDatetime
     party_size: Annotated[int, Field(ge=1)]
+
+
+class EditBookingRequest(BaseModel):
+    starts_at: AwareDatetime
+    party_size: Annotated[int, Field(ge=1)]
+    duration_minutes: int
