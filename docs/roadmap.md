@@ -102,6 +102,8 @@ Done when: a merge to `main` reaches dev without manual steps, and the same imag
 after two pull requests and one approval.
 
 ### Phase 4. Observability and platform
+Tracked step by step in [issue #26](https://github.com/VladSkopenko/backend-showcase/issues/26),
+following [ADR 15](adr/0015-platform-as-code.md).
 - [ ] `/metrics` with request rate, errors and latency per endpoint
 - [ ] Platform stack deployed separately from the app stacks
 - [ ] Prometheus scraping all three environments and the exporters
