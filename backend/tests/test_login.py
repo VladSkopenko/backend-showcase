@@ -267,8 +267,9 @@ async def test_fifth_wrong_password_locks_login_for_five_minutes(
     assert response.json() == {
         "code": "ACCOUNT_LOCKED",
         "message": "Too many failed attempts. Try again in 5 minutes.",
+        "retry_after": 300,
     }
-    assert "retry-after" not in response.headers
+    assert response.headers["retry-after"] == "300"
     user = await get_user(connection)
     assert user.login_locked_until == START + timedelta(minutes=5)
     assert user.failed_login_attempts == 0
@@ -287,6 +288,8 @@ async def test_locked_login_returns_423_for_any_password(
 
     assert response.status_code == 423
     assert response.json()["code"] == "ACCOUNT_LOCKED"
+    assert response.json()["retry_after"] == 1
+    assert response.headers["retry-after"] == "1"
     assert "set-cookie" not in response.headers
     user = await get_user(connection)
     assert user.failed_login_attempts == 0
