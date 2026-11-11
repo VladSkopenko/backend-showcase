@@ -253,6 +253,8 @@ def test_booking_defaults() -> None:
     assert booking.horizon_days == 30
     assert booking.cancel_cutoff_minutes == 30
     assert booking.max_online_party_size == 4
+    assert booking.max_duration_minutes == 180
+    assert booking.closing_time == time(23, 0)
 
 
 def test_booking_env_vars_land_in_the_booking_block(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -264,6 +266,8 @@ def test_booking_env_vars_land_in_the_booking_block(monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv("BOOKING_HORIZON_DAYS", "14")
     monkeypatch.setenv("BOOKING_CANCEL_CUTOFF_MINUTES", "60")
     monkeypatch.setenv("BOOKING_MAX_ONLINE_PARTY_SIZE", "6")
+    monkeypatch.setenv("BOOKING_MAX_DURATION_MINUTES", "240")
+    monkeypatch.setenv("BOOKING_CLOSING_TIME", "23:30")
 
     booking = Settings().booking
 
@@ -275,3 +279,5 @@ def test_booking_env_vars_land_in_the_booking_block(monkeypatch: pytest.MonkeyPa
     assert booking.horizon_days == 14
     assert booking.cancel_cutoff_minutes == 60
     assert booking.max_online_party_size == 6
+    assert booking.max_duration_minutes == 240
+    assert booking.closing_time == time(23, 30)

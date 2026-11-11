@@ -1,11 +1,11 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import BookingSettings
-from app.features.core.bookings.dto import BookedTableView, BookingView
+from app.features.core.bookings.dto import BookedTableView, BookingView, SlotView
 from app.features.core.bookings.enums import BookingStatus
 from app.features.core.bookings.models import Booking
 from app.features.core.bookings.repositories import BookableTableRepository, BookingRepository
@@ -100,6 +100,90 @@ class BookingService:
         await self._bookings.flush()
         location = await self._locations.get(location_id=table.location_id)
         return self._to_view(booking, table, location)
+
+    async def edit(
+        self,
+        *,
+        user_id: uuid.UUID,
+        booking_id: uuid.UUID,
+        starts_at: datetime,
+        party_size: int,
+        duration_minutes: int,
+    ) -> BookingView:
+        booking, table = await self._get_editable(user_id=user_id, booking_id=booking_id)
+        self._schedule.check_party_size(party_size=party_size)
+        start = self._schedule.to_local(starts_at)
+        self._schedule.check_same_day(start=start, current_start=booking.starts_at)
+        self._schedule.check_slot_time(slot_time=start.time())
+        self._schedule.check_duration(duration_minutes=duration_minutes)
+        end = start + timedelta(minutes=duration_minutes)
+        self._schedule.check_ends_by_closing(start=start, end=end)
+        if party_size > table.capacity:
+            raise TableNotSuitableError()
+        if start <= self._schedule.now():
+            raise SlotUnavailableError()
+        await self._users.get_by_id(user_id=user_id, for_update=True)
+        await self._tables.get(table_id=table.id, for_update=True)
+        booking, table = await self._get_editable(
+            user_id=user_id, booking_id=booking_id, for_update=True
+        )
+        if await self._bookings.table_has_confirmed_overlap(
+            table_id=table.id, starts_at=start, ends_at=end, excluding_booking_id=booking.id
+        ):
+            raise SlotUnavailableError()
+        if await self._bookings.user_has_confirmed_overlap(
+            user_id=user_id, starts_at=start, ends_at=end, excluding_booking_id=booking.id
+        ):
+            raise OverlappingBookingError()
+        booking.starts_at = start
+        booking.ends_at = end
+        booking.party_size = party_size
+        try:
+            await self._bookings.flush()
+        except IntegrityError as exc:
+            if self.EXCLUSION_CONSTRAINT in str(exc.orig):
+                raise SlotUnavailableError() from exc
+            raise
+        location = await self._locations.get(location_id=table.location_id)
+        return self._to_view(booking, table, location)
+
+    async def list_edit_slots(
+        self, *, user_id: uuid.UUID, booking_id: uuid.UUID, duration_minutes: int
+    ) -> list[SlotView]:
+        booking, table = await self._get_editable(user_id=user_id, booking_id=booking_id)
+        self._schedule.check_duration(duration_minutes=duration_minutes)
+        duration = timedelta(minutes=duration_minutes)
+        starts = self._schedule.starts_on(day=self._schedule.to_local(booking.starts_at).date())
+        bookings = await self._bookings.list_confirmed_overlapping(
+            table_ids=[table.id],
+            starts_at=starts[0],
+            ends_at=starts[-1] + duration,
+            excluding_booking_id=booking.id,
+        )
+        now = self._schedule.now()
+        return [
+            SlotView(
+                starts_at=start,
+                available=self._schedule.is_free(
+                    start=start, duration=duration, bookings=bookings, now=now
+                ),
+            )
+            for start in starts
+        ]
+
+    async def _get_editable(
+        self, *, user_id: uuid.UUID, booking_id: uuid.UUID, for_update: bool = False
+    ) -> tuple[Booking, DiningTable]:
+        row = await self._bookings.get_for_user(
+            booking_id=booking_id, user_id=user_id, for_update=for_update
+        )
+        if row is None:
+            raise BookingNotFoundError()
+        booking, table = row
+        if booking.status == BookingStatus.CANCELLED:
+            raise BookingAlreadyCancelledError()
+        self._schedule.check_editable(starts_at=booking.starts_at)
+        return booking, table
 
     def _to_view(self, booking: Booking, table: DiningTable, location: LocationView) -> BookingView:
         return BookingView(

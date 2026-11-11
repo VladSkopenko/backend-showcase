@@ -16,6 +16,8 @@ from app.features.core.bookings.endpoints.openapi_tags import BookingOpenApiTags
 from app.features.core.bookings.schemas import (
     BookingResponse,
     CreateBookingRequest,
+    EditBookingRequest,
+    SlotResponse,
     TableCardPageResponse,
 )
 from app.features.core.bookings.services.exceptions import (
@@ -23,6 +25,10 @@ from app.features.core.bookings.services.exceptions import (
     BookingNotFoundError,
     CancellationClosedError,
     DateOutOfRangeError,
+    DayChangeNotAllowedError,
+    DurationInvalidError,
+    EditClosedError,
+    EndsAfterClosingError,
     OverlappingBookingError,
     PartyTooLargeError,
     SlotInvalidError,
@@ -147,3 +153,79 @@ async def cancel_booking(
     return BookingResponse.model_validate(
         await bookings.cancel(user_id=user.id, booking_id=booking_id)
     )
+
+
+@router.put(
+    "/{booking_id}",
+    response_model=BookingResponse,
+    responses=error_responses(
+        NotAuthenticatedError,
+        BookingNotFoundError,
+        BookingAlreadyCancelledError,
+        EditClosedError,
+        PartyTooLargeError,
+        DayChangeNotAllowedError,
+        SlotInvalidError,
+        DurationInvalidError,
+        EndsAfterClosingError,
+        TableNotSuitableError,
+        SlotUnavailableError,
+        OverlappingBookingError,
+        statuses=DOCUMENTED_ERROR_STATUSES,
+        takes_input=True,
+    ),
+    description=(
+        "Replaces the start, party size and duration of one of the signed-in user's confirmed "
+        "bookings; the table and the day stay. The start must be on the day grid and the stay "
+        "must end by closing; durations run from the standard one to a maximum in grid steps. "
+        "Closes shortly before the current start; another user's booking answers 404. Refused "
+        "when the table or the user already has another booking at the new time."
+    ),
+)
+async def edit_booking(
+    booking_id: uuid.UUID,
+    body: EditBookingRequest,
+    user: CurrentUserDep,
+    bookings: BookingServiceDep,
+) -> BookingResponse:
+    booking = await bookings.edit(
+        user_id=user.id,
+        booking_id=booking_id,
+        starts_at=body.starts_at,
+        party_size=body.party_size,
+        duration_minutes=body.duration_minutes,
+    )
+    return BookingResponse.model_validate(booking)
+
+
+@router.get(
+    "/{booking_id}/slots",
+    response_model=list[SlotResponse],
+    responses=error_responses(
+        NotAuthenticatedError,
+        BookingNotFoundError,
+        BookingAlreadyCancelledError,
+        EditClosedError,
+        DurationInvalidError,
+        statuses=DOCUMENTED_ERROR_STATUSES,
+        takes_input=True,
+    ),
+    description=(
+        "Lists the day grid of one of the signed-in user's confirmed bookings on its table for a "
+        "stay of `duration_minutes`, and whether the booking can move to each start: later than "
+        "now, ending by closing and free of other bookings on the table. The booking itself and "
+        "the user's other bookings are ignored. Closes shortly before the current start."
+    ),
+)
+async def list_edit_slots(
+    booking_id: uuid.UUID,
+    duration_minutes: int,
+    user: CurrentUserDep,
+    bookings: BookingServiceDep,
+) -> list[SlotResponse]:
+    return [
+        SlotResponse.model_validate(slot)
+        for slot in await bookings.list_edit_slots(
+            user_id=user.id, booking_id=booking_id, duration_minutes=duration_minutes
+        )
+    ]

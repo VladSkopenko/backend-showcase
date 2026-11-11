@@ -69,3 +69,31 @@ class CancellationClosedError(DomainError):
 
     def __init__(self) -> None:
         super().__init__("This booking starts too soon to be cancelled online.")
+
+
+class EditClosedError(DomainError):
+    code = "EDIT_CLOSED"
+
+    def __init__(self) -> None:
+        super().__init__("This booking starts too soon to be changed online.")
+
+
+class DayChangeNotAllowedError(DomainError):
+    code = "DAY_CHANGE_NOT_ALLOWED"
+
+    def __init__(self) -> None:
+        super().__init__("A booking can be moved only within its day.")
+
+
+class DurationInvalidError(DomainError):
+    code = "DURATION_INVALID"
+
+    def __init__(self) -> None:
+        super().__init__("Choose one of the offered durations.")
+
+
+class EndsAfterClosingError(DomainError):
+    code = "ENDS_AFTER_CLOSING"
+
+    def __init__(self) -> None:
+        super().__init__("This stay would end after the restaurant closes.")

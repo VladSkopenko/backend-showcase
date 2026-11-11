@@ -1,10 +1,16 @@
+from collections.abc import Sequence
 from datetime import date, datetime, time, timedelta
 
 from app.common import clock
 from app.config.settings import BookingSettings
+from app.features.core.bookings.models import Booking
 from app.features.core.bookings.services.exceptions import (
     CancellationClosedError,
     DateOutOfRangeError,
+    DayChangeNotAllowedError,
+    DurationInvalidError,
+    EditClosedError,
+    EndsAfterClosingError,
     PartyTooLargeError,
     SlotInvalidError,
 )
@@ -21,6 +27,9 @@ class BookingSchedule:
             time(minutes // 60, minutes % 60)
             for minutes in range(first, last + 1, settings.slot_minutes)
         )
+        self._duration_minutes = range(
+            settings.duration_minutes, settings.max_duration_minutes + 1, settings.slot_minutes
+        )
 
     def now(self) -> datetime:
         return self.to_local(clock.now())
@@ -33,6 +42,16 @@ class BookingSchedule:
 
     def starts_on(self, *, day: date) -> list[datetime]:
         return [self.start_at(day=day, slot_time=slot_time) for slot_time in self._slot_times]
+
+    def is_free(
+        self, *, start: datetime, duration: timedelta, bookings: Sequence[Booking], now: datetime
+    ) -> bool:
+        end = start + duration
+        return (
+            start > now
+            and self._ends_by_closing(start=start, end=end)
+            and not any(booking.starts_at < end and booking.ends_at > start for booking in bookings)
+        )
 
     def check_party_size(self, *, party_size: int) -> None:
         if party_size > self.max_party_size:
@@ -47,6 +66,31 @@ class BookingSchedule:
         if slot_time not in self._slot_times:
             raise SlotInvalidError()
 
+    def check_same_day(self, *, start: datetime, current_start: datetime) -> None:
+        if self.to_local(start).date() != self.to_local(current_start).date():
+            raise DayChangeNotAllowedError()
+
+    def check_duration(self, *, duration_minutes: int) -> None:
+        if duration_minutes not in self._duration_minutes:
+            raise DurationInvalidError()
+
+    def check_ends_by_closing(self, *, start: datetime, end: datetime) -> None:
+        if not self._ends_by_closing(start=start, end=end):
+            raise EndsAfterClosingError()
+
     def check_cancellable(self, *, starts_at: datetime) -> None:
-        if starts_at - clock.now() < timedelta(minutes=self._settings.cancel_cutoff_minutes):
+        if self._cutoff_passed(starts_at=starts_at):
             raise CancellationClosedError()
+
+    def check_editable(self, *, starts_at: datetime) -> None:
+        if self._cutoff_passed(starts_at=starts_at):
+            raise EditClosedError()
+
+    def _cutoff_passed(self, *, starts_at: datetime) -> bool:
+        return starts_at - clock.now() < timedelta(minutes=self._settings.cancel_cutoff_minutes)
+
+    def _ends_by_closing(self, *, start: datetime, end: datetime) -> bool:
+        closing = datetime.combine(
+            self.to_local(start).date(), self._settings.closing_time, tzinfo=self._settings.timezone
+        )
+        return end <= closing

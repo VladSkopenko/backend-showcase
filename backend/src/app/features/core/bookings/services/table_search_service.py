@@ -85,15 +85,14 @@ class TableSearchService:
             capacity=table.capacity,
             location=location,
             slots=[
-                SlotView(starts_at=start, available=self._is_free(start, bookings, now))
+                SlotView(
+                    starts_at=start,
+                    available=self._schedule.is_free(
+                        start=start, duration=self._schedule.duration, bookings=bookings, now=now
+                    ),
+                )
                 for start in starts
             ],
-        )
-
-    def _is_free(self, start: datetime, bookings: Sequence[Booking], now: datetime) -> bool:
-        end = start + self._schedule.duration
-        return start > now and not any(
-            booking.starts_at < end and booking.ends_at > start for booking in bookings
         )
 
     @staticmethod

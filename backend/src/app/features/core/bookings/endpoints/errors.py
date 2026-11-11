@@ -8,6 +8,10 @@ from app.features.core.bookings.services.exceptions import (
     BookingNotFoundError,
     CancellationClosedError,
     DateOutOfRangeError,
+    DayChangeNotAllowedError,
+    DurationInvalidError,
+    EditClosedError,
+    EndsAfterClosingError,
     OverlappingBookingError,
     PartyTooLargeError,
     SlotInvalidError,
@@ -29,6 +33,10 @@ ERROR_STATUSES: dict[type[DomainError], int] = {
     BookingNotFoundError: status.HTTP_404_NOT_FOUND,
     BookingAlreadyCancelledError: status.HTTP_409_CONFLICT,
     CancellationClosedError: status.HTTP_409_CONFLICT,
+    EditClosedError: status.HTTP_409_CONFLICT,
+    DayChangeNotAllowedError: status.HTTP_400_BAD_REQUEST,
+    DurationInvalidError: status.HTTP_400_BAD_REQUEST,
+    EndsAfterClosingError: status.HTTP_400_BAD_REQUEST,
 }
 
 # The routes also document errors raised by the auth and locations features they build on.
