@@ -4,7 +4,8 @@ Date: 2026-10-28
 
 ## Status
 
-Accepted
+Accepted. Amended by [ADR 15](0015-platform-as-code.md): the `platform` target deploys from `main`
+instead of `prod`.
 
 ## Context
 

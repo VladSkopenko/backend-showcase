@@ -90,6 +90,7 @@ Staging і production отримуватимуть той самий образ 
 | [12](docs/adr/0012-unified-error-response.md) | Один формат відповіді з помилкою для всього API |
 | [13](docs/adr/0013-table-booking-slots-and-double-booking.md) | Фіксовані слоти бронювання; блокування рядків і exclusion constraint не дають забронювати столик двічі |
 | [14](docs/adr/0014-booking-simulator-on-dev.md) | n8n імітує відвідувачів лише на dev, боти з'являються з міграції, що залежить від середовища |
+| [15](docs/adr/0015-platform-as-code.md) | Платформа як код: merge у `main` розгортає всю платформу |
 
 ## Запуск локально
 
