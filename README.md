@@ -90,6 +90,7 @@ Each non-obvious choice has a short record in [docs/adr](docs/adr):
 | [12](docs/adr/0012-unified-error-response.md) | One error response format for the whole API |
 | [13](docs/adr/0013-table-booking-slots-and-double-booking.md) | Fixed booking slots; row locks and an exclusion constraint prevent double booking |
 | [14](docs/adr/0014-booking-simulator-on-dev.md) | n8n simulates visitors on dev only, with bots from an environment-gated migration |
+| [15](docs/adr/0015-platform-as-code.md) | Platform as code: a merge to `main` deploys the whole platform |
 
 ## Run it locally
 
