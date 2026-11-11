@@ -1,4 +1,4 @@
-# 15. Booking participants and guest identity
+# 16. Booking participants and guest identity
 
 Date: 2026-11-11
 

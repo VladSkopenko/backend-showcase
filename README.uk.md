@@ -91,6 +91,7 @@ Staging і production отримуватимуть той самий образ 
 | [13](docs/adr/0013-table-booking-slots-and-double-booking.md) | Фіксовані слоти бронювання; блокування рядків і exclusion constraint не дають забронювати столик двічі |
 | [14](docs/adr/0014-booking-simulator-on-dev.md) | n8n імітує відвідувачів лише на dev, боти з'являються з міграції, що залежить від середовища |
 | [15](docs/adr/0015-platform-as-code.md) | Платформа як код: merge у `main` розгортає всю платформу |
+| [16](docs/adr/0016-booking-participants-and-guest-identity.md) | Учасники бронювання в core, запрошення як regular-фіча, гості за cookie з хешованим токеном |
 
 ## Запуск локально
 

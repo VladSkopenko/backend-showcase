@@ -82,7 +82,7 @@ context:
 - [x] `backend/tests/test_database.py`, `test_openapi.py`, `test_settings.py` -- new tables, the exactly-one CHECK and the unique constraints; the routes under "Booking" and "Invites"; new settings with defaults and overrides.
 - [x] `backend/migrations/versions/0012_create_booking_participants.py` -- enum `participant_role`, `guests`, `booking_participants`, backfill one `OWNER` row per existing booking; `0013_create_booking_invites.py` -- `booking_invites`. Downgrades drop them.
 - [x] `backend/src/app/features/core/bookings/`, `backend/src/app/features/invites/`, `settings.py`, `.env.example`, `model_registry.py`, `main.py` -- as in the Code Map.
-- [x] `docs/adr/0015-booking-participants-and-guest-identity.md` -- participants in core, invites as the first regular feature, the guest cookie with a hashed token, the seat rule under the booking lock, and the join lock order (joiner's user, then booking) as an addition to ADR 13.
+- [x] `docs/adr/0016-booking-participants-and-guest-identity.md` -- participants in core, invites as the first regular feature, the guest cookie with a hashed token, the seat rule under the booking lock, and the join lock order (joiner's user, then booking) as an addition to ADR 13.
 - [x] `_bmad_output/implementation-artifacts/deferred-work.md` -- the join locks and the first-link race need two concurrent connections to test.
 
 **Acceptance Criteria:**
@@ -126,7 +126,7 @@ context:
 
 | # | Source | Finding | Verdict | Evidence / route |
 |---|--------|---------|---------|------------------|
-| 1 | spec review | Join deadlocks with create/edit: the participant FK takes `FOR KEY SHARE` on the joiner's user row, which conflicts with their `FOR UPDATE` | high | PostgreSQL row-lock conflict table; `booking_service.py` create and edit lock users. Patched: joiner's user row locked first; ADR 15 records it. |
+| 1 | spec review | Join deadlocks with create/edit: the participant FK takes `FOR KEY SHARE` on the joiner's user row, which conflicts with their `FOR UPDATE` | high | PostgreSQL row-lock conflict table; `booking_service.py` create and edit lock users. Patched: joiner's user row locked first; ADR 16 records it. |
 | 2 | spec review | `add_booking` inserts bookings without an owner participant | medium | `test_bookings.py:157-178`. Patched: Code Map. |
 | 3 | spec review | Participant order nondeterministic inside one test transaction | medium | `conftest.py` outer transaction. Patched: `clock.now()`, explicit order, one query. |
 | 4 | spec review | Blank name would be 422, the matrix says 400 | medium | Patched: schema rules, matrix rows, name ignored for users and cookie guests. |
@@ -151,7 +151,7 @@ context:
 | 23 | blind | Preview shows no free seats | low | Figma "You're Invited!" shows only the party size. Rejected. |
 | 24 | blind | Expired `guests` rows are never cleaned up and a cleanup would cascade into past participants | low | No cleanup exists; adding one is a separate decision. Rejected. |
 | 25 | blind | Guest TTL only covers the visit because 31 > horizon 30; no validator | low | Misconfiguration only; no validator by decision (book-a-table #10). Rejected. |
-| 26 | blind | Owner has two sources of truth and the ADR does not admit it | false | ADR 15 states that owner checks use `bookings.user_id` and that every insert path must add the owner participant. |
+| 26 | blind | Owner has two sources of truth and the ADR does not admit it | false | ADR 16 states that owner checks use `bookings.user_id` and that every insert path must add the owner participant. |
 | 27 | blind | Edit and cancel responses with joined participants untested | low | Patch: assert `participants` in the edit test and a cancel with a guest. |
 | 28 | blind | Participant view with an invalid access cookie and a valid guest cookie untested | low | Implementation answers 401 through `OptionalUserDep`. Patch: one test case. |
 | 29 | blind | Booking tag text still says everything needs sign-in | low | `openapi_tags.py`. Patch: the view is open to guests by the `guest_token` cookie. |
