@@ -29,6 +29,7 @@ for name in list(os.environ):
         del os.environ[name]
 os.environ["TOKEN_SECRET_KEY"] = "0123456789abcdef" * 4
 os.environ["DATABASE_NAME"] = TEST_DATABASE_NAME
+os.environ.pop("APP_ENVIRONMENT", None)
 TEST_MEDIA_PUBLIC_BASE_URL = "https://media.example.com/n/ns/b/media/o"
 for name in list(os.environ):
     if name.startswith("MEDIA_"):

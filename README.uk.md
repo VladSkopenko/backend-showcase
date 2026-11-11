@@ -87,6 +87,9 @@ Staging і production отримуватимуть той самий образ 
 | [9](docs/adr/0009-alerting-from-outside-the-vm.md) | Алерти мають працювати, навіть коли VM не працює |
 | [10](docs/adr/0010-frontend-in-a-separate-repository.md) | Фронтенд живе в окремому репозиторії |
 | [11](docs/adr/0011-feature-sliced-backend-layout.md) | Feature-sliced структура бекенду |
+| [12](docs/adr/0012-unified-error-response.md) | Один формат відповіді з помилкою для всього API |
+| [13](docs/adr/0013-table-booking-slots-and-double-booking.md) | Фіксовані слоти бронювання; блокування рядків і exclusion constraint не дають забронювати столик двічі |
+| [14](docs/adr/0014-booking-simulator-on-dev.md) | n8n імітує відвідувачів лише на dev, боти з'являються з міграції, що залежить від середовища |
 
 ## Запуск локально
 
