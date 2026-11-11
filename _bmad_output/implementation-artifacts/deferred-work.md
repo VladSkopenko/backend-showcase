@@ -104,3 +104,9 @@
 
 - Change the `uq` naming convention to `uq_%(table_name)s_%(column_0_N_name)s` so composite unique constraints get full names without explicit `name=`; existing single-column names stay the same.
 - Move the per-feature `SessionDep` and `SettingsDep` aliases (auth, menu, locations, health) to one shared place.
+- source_spec: `_bmad_output/implementation-artifacts/spec-n8n-booking-simulator.md`
+  summary: Test the dev branch of migration `0011` (four verified bots with the exact hash, downgrade removing them with their bookings, a taken email failing the upgrade) in CI.
+  evidence: The only test checks that `app_test`, migrated as `local`, has no bots; a typo in the environment guard or a dropped column passes it. Needs a second throwaway database and a `dev` settings override inside pytest; checked once by hand on a throwaway `postgres:18`.
+- source_spec: `_bmad_output/implementation-artifacts/spec-n8n-booking-simulator.md`
+  summary: End the bots' sessions: the simulator logs in on every run and never calls `/auth/logout`, so dev gains one `refresh_tokens` row per run (about 288 a day) with no cleanup.
+  evidence: `SessionService` inserts a `RefreshToken` on every login; nothing deletes expired rows. A logout must run on every branch, including the ones that stop early.

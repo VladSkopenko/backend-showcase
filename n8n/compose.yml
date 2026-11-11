@@ -1,0 +1,24 @@
+# Local n8n for building and tuning workflows against the API on the host.
+# Start: docker compose -f n8n/compose.yml up -d, then open http://localhost:5678.
+# This file is never deployed; n8n on the VM will get its own service in deploy/platform/compose.yml.
+name: backend-showcase-n8n
+
+services:
+  n8n:
+    # Pinned: latest stable on 2026-11-11 (docs.n8n.io lists stable and beta channels).
+    image: n8nio/n8n:2.47.4
+    ports:
+      # Loopback only: the editor has no reason to be reachable from the local network.
+      - "127.0.0.1:5678:5678"
+    environment:
+      # Schedule triggers fire in this zone, the same zone the booking grid uses.
+      GENERIC_TIMEZONE: Asia/Tbilisi
+      TZ: Asia/Tbilisi
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      # N8N_ENCRYPTION_KEY stays unset locally: n8n generates one into ./data on first start.
+      # Deleting ./data loses it, and saved credentials can no longer be decrypted.
+    volumes:
+      # SQLite database, encryption key and saved credentials; git-ignored.
+      - ./data:/home/node/.n8n
+      # Exchange folder for `n8n import:workflow` and `n8n export:workflow`.
+      - ./workflows:/home/node/workflows

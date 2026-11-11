@@ -25,10 +25,11 @@ live. The restaurant gets invoices, reviews, notifications and analytics.
 
 ### n8n as the traffic simulator
 
-n8n plays the visitors, so every environment shows a live flow: it books random tables through the
-REST API and moves demo orders through the kitchen
-([ADR 9](adr/0009-alerting-from-outside-the-vm.md)). Workflows are exported to `n8n/workflows/` and
-versioned with the code.
+n8n plays the visitors and the kitchen. On dev it books random tables through the REST API, so the
+booking grid shows a live flow; it never books on staging or prod, where it would take real guests'
+tables ([ADR 14](adr/0014-booking-simulator-on-dev.md)). It also moves demo orders through the
+kitchen ([ADR 9](adr/0009-alerting-from-outside-the-vm.md)). Workflows are exported to
+`n8n/workflows/` and versioned with the code.
 
 ### Out of scope
 
@@ -133,7 +134,7 @@ Each feature starts from its own BMAD spec.
 - [ ] Payments in a provider sandbox with signed, idempotent webhooks
 - [ ] Invoice PDFs in a background job
 - [ ] Reviews on dishes, visits and bookings
-- [ ] n8n workflow that books random tables through the REST API, so every environment shows a live booking flow
+- [ ] n8n workflow that books random tables through the REST API, so dev shows a live booking flow
 - [ ] Business dashboards in Grafana
 - [ ] Frontend in its own repository: menu and booking, order tracker, kitchen screen
 

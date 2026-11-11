@@ -87,6 +87,9 @@ Each non-obvious choice has a short record in [docs/adr](docs/adr):
 | [9](docs/adr/0009-alerting-from-outside-the-vm.md) | Alerting must work when the VM does not |
 | [10](docs/adr/0010-frontend-in-a-separate-repository.md) | The frontend lives in a separate repository |
 | [11](docs/adr/0011-feature-sliced-backend-layout.md) | Feature-sliced backend layout |
+| [12](docs/adr/0012-unified-error-response.md) | One error response format for the whole API |
+| [13](docs/adr/0013-table-booking-slots-and-double-booking.md) | Fixed booking slots; row locks and an exclusion constraint prevent double booking |
+| [14](docs/adr/0014-booking-simulator-on-dev.md) | n8n simulates visitors on dev only, with bots from an environment-gated migration |
 
 ## Run it locally
 
