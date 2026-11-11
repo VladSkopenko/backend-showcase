@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Cookie, Response, status
 from fastapi.responses import JSONResponse
 
-from app.common.error_responses import domain_error_response
+from app.common.error_responses import domain_error_response, error_responses
 from app.features.core.auth.dto import RegistrationCommand
 from app.features.core.auth.endpoints.cookies import SessionCookies
 from app.features.core.auth.endpoints.dependencies import (
@@ -31,6 +31,19 @@ from app.features.core.auth.schemas import (
     VerifyEmailRequest,
     VerifyEmailResponse,
 )
+from app.features.core.auth.services.exceptions import (
+    AccountLockedError,
+    AlreadyVerifiedError,
+    CodeExpiredError,
+    CodeInvalidError,
+    EmailNotVerifiedError,
+    EmailTakenError,
+    InvalidCredentialsError,
+    NotAuthenticatedError,
+    ResendTooSoonError,
+    SessionInvalidError,
+    UserNotFoundError,
+)
 
 RefreshTokenCookie = Annotated[str | None, Cookie(alias=SessionCookies.REFRESH_NAME)]
 
@@ -43,6 +56,12 @@ router = APIRouter(prefix="/auth")
     response_model=RegisterResponse,
     response_model_exclude_none=True,
     tags=[AuthOpenApiTags.REGISTRATION],
+    responses=error_responses(
+        EmailTakenError,
+        ResendTooSoonError,
+        statuses=ERROR_STATUSES,
+        takes_input=True,
+    ),
     description=(
         "Creates an unverified account and emails a 6-digit code that expires. Registering "
         "an unverified email again replaces that account. `debug_code` is returned only in "
@@ -72,6 +91,14 @@ async def register_user(
     "/verify-email",
     response_model=VerifyEmailResponse,
     tags=[AuthOpenApiTags.REGISTRATION],
+    responses=error_responses(
+        CodeInvalidError,
+        CodeExpiredError,
+        UserNotFoundError,
+        AlreadyVerifiedError,
+        statuses=ERROR_STATUSES,
+        takes_input=True,
+    ),
     description=(
         "Confirms the email with the code and signs the user in: sets the session cookies. "
         "Wrong codes count toward a limit of attempts."
@@ -99,6 +126,13 @@ async def verify_user_email(
     response_model=ResendCodeResponse,
     response_model_exclude_none=True,
     tags=[AuthOpenApiTags.REGISTRATION],
+    responses=error_responses(
+        UserNotFoundError,
+        AlreadyVerifiedError,
+        ResendTooSoonError,
+        statuses=ERROR_STATUSES,
+        takes_input=True,
+    ),
     description=(
         "Emails a new verification code to an unverified account; codes are rate-limited "
         "(cooldown, hourly cap)."
@@ -121,6 +155,12 @@ async def resend_verification_code(
     response_model=ResendCodeResponse,
     response_model_exclude_none=True,
     tags=[AuthOpenApiTags.PASSWORD_RESET],
+    responses=error_responses(
+        UserNotFoundError,
+        ResendTooSoonError,
+        statuses=ERROR_STATUSES,
+        takes_input=True,
+    ),
     description=(
         "Emails a password reset code that expires; calling it again resends. Codes are "
         "rate-limited (cooldown, hourly and daily caps)."
@@ -141,6 +181,13 @@ async def request_password_reset(
     "/password-reset/verify-code",
     status_code=status.HTTP_204_NO_CONTENT,
     tags=[AuthOpenApiTags.PASSWORD_RESET],
+    responses=error_responses(
+        CodeInvalidError,
+        CodeExpiredError,
+        UserNotFoundError,
+        statuses=ERROR_STATUSES,
+        takes_input=True,
+    ),
     description=(
         "Checks the reset code without using it up (the Confirm step). Wrong codes count "
         "toward a limit of attempts."
@@ -159,6 +206,13 @@ async def verify_password_reset_code(
     "/password-reset/confirm",
     status_code=status.HTTP_204_NO_CONTENT,
     tags=[AuthOpenApiTags.PASSWORD_RESET],
+    responses=error_responses(
+        CodeInvalidError,
+        CodeExpiredError,
+        UserNotFoundError,
+        statuses=ERROR_STATUSES,
+        takes_input=True,
+    ),
     description=(
         "Checks and uses up the code, sets the new password, verifies the email if it was "
         "not, clears the login lockout and ends every session. Does not sign in."
@@ -177,6 +231,13 @@ async def confirm_password_reset(
     "/login",
     response_model=UserResponse,
     tags=[AuthOpenApiTags.SESSION],
+    responses=error_responses(
+        InvalidCredentialsError,
+        EmailNotVerifiedError,
+        AccountLockedError,
+        statuses=ERROR_STATUSES,
+        takes_input=True,
+    ),
     description=(
         "Signs in with email and password and sets the session cookies. Repeated wrong "
         "passwords lock login for a while (423)."
@@ -198,6 +259,7 @@ async def log_in(
     "/refresh",
     status_code=status.HTTP_204_NO_CONTENT,
     tags=[AuthOpenApiTags.SESSION],
+    responses=error_responses(SessionInvalidError, statuses=ERROR_STATUSES, takes_input=True),
     description=(
         "Rotates the refresh cookie and sets a new pair. Presenting an already rotated token "
         "ends every session."
@@ -223,6 +285,7 @@ async def refresh_session(
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
     tags=[AuthOpenApiTags.SESSION],
+    responses=error_responses(takes_input=True),
     description="Ends the session of the refresh cookie and clears both cookies.",
 )
 async def log_out(
@@ -240,6 +303,7 @@ async def log_out(
     "/me",
     response_model=UserResponse,
     tags=[AuthOpenApiTags.SESSION],
+    responses=error_responses(NotAuthenticatedError, statuses=ERROR_STATUSES, takes_input=True),
     description="Returns the user signed in with the access cookie.",
 )
 async def read_current_user(user: CurrentUserDep) -> UserResponse:

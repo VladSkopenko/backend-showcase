@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request, Response, status
 from fastapi.responses import RedirectResponse
 
+from app.common.error_responses import ErrorCodes, error_responses
 from app.features.core.auth.endpoints.dependencies import (
     OAuthClientsDep,
     OAuthProviderDep,
@@ -17,6 +18,9 @@ router = APIRouter(prefix="/auth", tags=[AuthOpenApiTags.OAUTH])
 
 @router.get(
     "/{provider_slug}/login",
+    responses=error_responses(
+        http_errors={status.HTTP_404_NOT_FOUND: ErrorCodes.NOT_FOUND}, takes_input=True
+    ),
     status_code=status.HTTP_302_FOUND,
     response_class=RedirectResponse,
     description=(
@@ -50,6 +54,9 @@ async def start_oauth_sign_in(
 
 @router.get(
     "/{provider_slug}/callback",
+    responses=error_responses(
+        http_errors={status.HTTP_404_NOT_FOUND: ErrorCodes.NOT_FOUND}, takes_input=True
+    ),
     name=OAuthRedirects.CALLBACK_ROUTE,
     status_code=status.HTTP_302_FOUND,
     response_class=RedirectResponse,

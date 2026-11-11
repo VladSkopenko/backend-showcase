@@ -1,8 +1,15 @@
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.common.error_responses import domain_error_response
+from app.common.error_responses import (
+    domain_error_response,
+    http_error_response,
+    server_error_response,
+    validation_error_response,
+)
 from app.common.errors import DomainError
 from app.config.settings import get_settings
 from app.features.core.auth.endpoints import ERROR_STATUSES as AUTH_ERROR_STATUSES
@@ -52,6 +59,21 @@ def create_app() -> FastAPI:
     @app.exception_handler(DomainError)
     async def handle_domain_error(request: Request, exc: DomainError) -> JSONResponse:
         return domain_error_response(exc, ERROR_STATUSES)
+
+    @app.exception_handler(RequestValidationError)
+    async def handle_validation_error(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        return validation_error_response(exc)
+
+    @app.exception_handler(HTTPException)
+    async def handle_http_error(request: Request, exc: HTTPException) -> JSONResponse:
+        return http_error_response(exc)
+
+    # Starlette re-raises the exception after sending this response, and the server logs it.
+    @app.exception_handler(Exception)
+    async def handle_unhandled_error(request: Request, exc: Exception) -> JSONResponse:
+        return server_error_response()
 
     return app
 

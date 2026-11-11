@@ -3,10 +3,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
+from app.common.error_responses import error_responses
 from app.features.core.menu.endpoints.dependencies import DishCatalogServiceDep
+from app.features.core.menu.endpoints.errors import ERROR_STATUSES
 from app.features.core.menu.endpoints.openapi_tags import MenuOpenApiTags
 from app.features.core.menu.enums import DishCategory, DishSort
 from app.features.core.menu.schemas import DishPageResponse, DishResponse
+from app.features.core.menu.services.exceptions import DishNotFoundError
 
 router = APIRouter(prefix="/menu", tags=[MenuOpenApiTags.MENU])
 
@@ -14,6 +17,7 @@ router = APIRouter(prefix="/menu", tags=[MenuOpenApiTags.MENU])
 @router.get(
     "/dishes",
     response_model=DishPageResponse,
+    responses=error_responses(takes_input=True),
     description=(
         "Lists dishes as menu cards, sold-out ones included, optionally of one category. "
         "Sorted by popularity, newest, or price; ties break by id, so pages are stable. "
@@ -35,6 +39,7 @@ async def list_dishes(
 @router.get(
     "/dishes/{dish_id}",
     response_model=DishResponse,
+    responses=error_responses(DishNotFoundError, statuses=ERROR_STATUSES, takes_input=True),
     description="Returns one dish with its description and nutrition facts; 404 if unknown.",
 )
 async def get_dish(dish_id: uuid.UUID, catalog: DishCatalogServiceDep) -> DishResponse:

@@ -1,3 +1,4 @@
+import math
 from datetime import datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,7 +38,7 @@ class LoginService:
             raise InvalidCredentialsError()
         now = clock.now()
         if user.login_locked_until is not None and user.login_locked_until > now:
-            raise AccountLockedError(self._auth.login_lockout_minutes)
+            raise self._locked_error(locked_until=user.login_locked_until, now=now)
         if not await self._password_hasher.verify(
             password=password, password_hash=user.password_hash
         ):
@@ -55,4 +56,10 @@ class LoginService:
             return InvalidCredentialsError()
         user.failed_login_attempts = 0
         user.login_locked_until = now + timedelta(minutes=self._auth.login_lockout_minutes)
-        return AccountLockedError(self._auth.login_lockout_minutes)
+        return self._locked_error(locked_until=user.login_locked_until, now=now)
+
+    def _locked_error(self, *, locked_until: datetime, now: datetime) -> AccountLockedError:
+        return AccountLockedError(
+            retry_after=math.ceil((locked_until - now).total_seconds()),
+            lockout_minutes=self._auth.login_lockout_minutes,
+        )
