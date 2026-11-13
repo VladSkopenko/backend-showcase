@@ -122,3 +122,9 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-preorder-cart.md`
   summary: Expose whether pre-order is open (for example `preorder_open` or `preorder_closes_at`) in the booking object, so the cart and the "Create New Pre-Order" button can be disabled before a 409 `PREORDER_CLOSED`.
   evidence: Figma has a disabled and an enabled "Create New Pre-Order" variant; `ParticipantAccess.preorder_open` is already computed in core. The lock window and pre-order statuses are planned for PR 4.
+
+## Deferred from: code review of 1-large-party-booking-requests (2026-11-13)
+
+- source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/1-large-party-booking-requests.md`
+  summary: No pytest exercises migration downgrades; 0016's downgrade (PENDING to CANCELLED, rebuilt default and exclusion constraint) is covered only by CI's empty round trip and a manual check.
+  evidence: grep finds no downgrade in backend/tests; conftest upgrades app_test once per session, so a downgrade test needs its own database harness.

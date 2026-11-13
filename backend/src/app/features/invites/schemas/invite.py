@@ -3,6 +3,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
+from app.features.core.bookings.enums import BookingStatus
 from app.features.core.bookings.schemas import BookingLocationResponse, BookingTableResponse
 
 GuestName = Annotated[str, StringConstraints(strip_whitespace=True, max_length=50)]
@@ -18,6 +19,7 @@ class InvitePreviewResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     owner_first_name: str
+    status: BookingStatus
     starts_at: datetime
     ends_at: datetime
     party_size: int

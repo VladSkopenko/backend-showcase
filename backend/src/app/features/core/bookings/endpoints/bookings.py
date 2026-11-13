@@ -25,6 +25,7 @@ from app.features.core.bookings.schemas import (
 from app.features.core.bookings.services.exceptions import (
     BookingAlreadyCancelledError,
     BookingNotFoundError,
+    BookingPendingError,
     CancellationClosedError,
     DateOutOfRangeError,
     DayChangeNotAllowedError,
@@ -58,6 +59,9 @@ router = APIRouter(prefix="/bookings", tags=[BookingOpenApiTags.BOOKING])
     description=(
         "Lists the tables that can be booked online for the party on that date, optionally at "
         "one location, each with its full day grid of start times and whether each is free. "
+        "Small parties see the tables booked at once; parties above the instant limit, up to "
+        "the request limit, see the larger tables, which are booked by request. Pending "
+        "requests leave a start free. "
         "Without `time` a table is listed when any start is free; with `time`, only when that "
         "start is free. Dates run from today to the booking horizon. Ordered by location, then "
         "table number; `limit` is 20 by default and at most 50. No sign-in needed."
@@ -100,9 +104,12 @@ async def search_tables(
         takes_input=True,
     ),
     description=(
-        "Books a table for the signed-in user at one start of the day grid; the booking is "
-        "confirmed at once and holds the table for a fixed duration. `starts_at` may carry any "
-        "offset. Refused when the table or the user already has a booking at that time."
+        "Books a table for the signed-in user at one start of the day grid for a fixed duration. "
+        "A small party is confirmed at once and holds the table. A larger party up to a limit "
+        "sends a request with status `PENDING` that awaits staff confirmation, holds no table "
+        "and may compete with other requests for the same table and time. `starts_at` may carry "
+        "any offset. Refused when the table already has a confirmed booking at that time, or the "
+        "user already has a booking or request then."
     ),
 )
 async def create_booking(
@@ -147,9 +154,9 @@ async def list_bookings(user: CurrentUserDep, bookings: BookingServiceDep) -> li
         takes_input=True,
     ),
     description=(
-        "Cancels one of the signed-in user's own confirmed bookings and frees its table. Closes "
-        "shortly before the start; a booking the user only joined or another user's booking "
-        "answers 404."
+        "Cancels one of the signed-in user's own bookings: a confirmed booking frees its table, a "
+        "pending request is withdrawn. Closes shortly before the start; a booking the user only "
+        "joined or another user's booking answers 404."
     ),
 )
 async def cancel_booking(
@@ -167,6 +174,7 @@ async def cancel_booking(
         NotAuthenticatedError,
         BookingNotFoundError,
         BookingAlreadyCancelledError,
+        BookingPendingError,
         EditClosedError,
         PartyTooLargeError,
         DayChangeNotAllowedError,
@@ -182,11 +190,13 @@ async def cancel_booking(
     ),
     description=(
         "Replaces the start, party size and duration of one of the signed-in user's own "
-        "confirmed bookings; the table and the day stay. The start must be on the day grid and "
-        "the stay must end by closing; durations run from the standard one to a maximum in grid "
-        "steps. The party may not drop below the people who have joined. Closes shortly before "
-        "the current start; a booking the user only joined or another user's booking answers "
-        "404. Refused when the table or the user already has another booking at the new time."
+        "confirmed bookings; the table and the day stay, and a pending request cannot be "
+        "edited. The party stays within the limit for instant bookings. The start must be on "
+        "the day grid and the stay must end by closing; durations run from the standard one to "
+        "a maximum in grid steps. The party may not drop below the people who have joined. "
+        "Closes shortly before the current start; a booking the user only joined or another "
+        "user's booking answers 404. Refused when the table already has another confirmed "
+        "booking at the new time, or the user another booking or request then."
     ),
 )
 async def edit_booking(
@@ -212,6 +222,7 @@ async def edit_booking(
         NotAuthenticatedError,
         BookingNotFoundError,
         BookingAlreadyCancelledError,
+        BookingPendingError,
         EditClosedError,
         DurationInvalidError,
         statuses=DOCUMENTED_ERROR_STATUSES,
@@ -222,7 +233,8 @@ async def edit_booking(
         "for a stay of `duration_minutes`, and whether the booking can move to each start: "
         "later than now, ending by closing and free of other bookings on the table. The booking "
         "itself and the user's other bookings are ignored. Closes shortly before the current "
-        "start; a booking the user only joined answers 404."
+        "start; a booking the user only joined answers 404, and a pending request answers that "
+        "it awaits confirmation."
     ),
 )
 async def list_edit_slots(

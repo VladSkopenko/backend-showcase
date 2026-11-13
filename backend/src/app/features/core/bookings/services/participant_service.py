@@ -57,7 +57,7 @@ class ParticipantService:
         if row is None:
             raise BookingNotFoundError()
         booking, _, _ = row
-        if booking.status == BookingStatus.CANCELLED:
+        if not booking.status.is_active:
             raise BookingAlreadyCancelledError()
         return OwnedBooking(id=booking.id)
 
@@ -69,6 +69,7 @@ class ParticipantService:
             raise BookingNotFoundError()
         return InvitePreviewView(
             owner_first_name=owner.first_name,
+            status=booking.status,
             starts_at=self._schedule.to_local(booking.starts_at),
             ends_at=self._schedule.to_local(booking.ends_at),
             party_size=booking.party_size,
@@ -192,7 +193,7 @@ class ParticipantService:
         return row
 
     def _check_joinable(self, booking: Booking) -> None:
-        if booking.status == BookingStatus.CANCELLED:
+        if not booking.status.is_active:
             raise InviteClosedError()
         self._schedule.check_joinable(starts_at=booking.starts_at)
 

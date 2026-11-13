@@ -19,6 +19,7 @@ from app.features.core.bookings.services.booking_view_builder import BookingView
 from app.features.core.bookings.services.exceptions import (
     BookingAlreadyCancelledError,
     BookingNotFoundError,
+    BookingPendingError,
     OverlappingBookingError,
     PartyBelowParticipantsError,
     SlotUnavailableError,
@@ -46,14 +47,14 @@ class BookingService:
     async def create(
         self, *, user_id: uuid.UUID, table_id: uuid.UUID, starts_at: datetime, party_size: int
     ) -> BookingView:
-        self._schedule.check_party_size(party_size=party_size)
+        self._schedule.check_requestable_party_size(party_size=party_size)
         start = self._schedule.to_local(starts_at)
         self._schedule.check_date(day=start.date())
         self._schedule.check_slot_time(slot_time=start.time())
         table = await self._tables.get(table_id=table_id)
         if table is None:
             raise TableNotFoundError()
-        if not party_size <= table.capacity <= self._schedule.max_party_size:
+        if not party_size <= table.capacity <= self._schedule.max_capacity(party_size=party_size):
             raise TableNotSuitableError()
         if start <= self._schedule.now():
             raise SlotUnavailableError()
@@ -65,7 +66,7 @@ class BookingService:
             table_id=table_id, starts_at=start, ends_at=end
         ):
             raise SlotUnavailableError()
-        if await self._bookings.user_has_confirmed_overlap(
+        if await self._bookings.user_has_active_overlap(
             user_id=user_id, starts_at=start, ends_at=end
         ):
             raise OverlappingBookingError()
@@ -75,7 +76,7 @@ class BookingService:
             party_size=party_size,
             starts_at=start,
             ends_at=end,
-            status=BookingStatus.CONFIRMED,
+            status=self._schedule.initial_status(party_size=party_size),
         )
         try:
             await self._bookings.add(booking=booking)
@@ -104,7 +105,7 @@ class BookingService:
         if row is None:
             raise BookingNotFoundError()
         booking, table, owner_id = row
-        if booking.status == BookingStatus.CANCELLED:
+        if not booking.status.is_active:
             raise BookingAlreadyCancelledError()
         self._schedule.check_cancellable(starts_at=booking.starts_at)
         booking.status = BookingStatus.CANCELLED
@@ -145,7 +146,7 @@ class BookingService:
             table_id=table.id, starts_at=start, ends_at=end, excluding_booking_id=booking.id
         ):
             raise SlotUnavailableError()
-        if await self._bookings.user_has_confirmed_overlap(
+        if await self._bookings.user_has_active_overlap(
             user_id=user_id, starts_at=start, ends_at=end, excluding_booking_id=booking.id
         ):
             raise OverlappingBookingError()
@@ -195,7 +196,9 @@ class BookingService:
         if row is None:
             raise BookingNotFoundError()
         booking, _, _ = row
-        if booking.status == BookingStatus.CANCELLED:
+        if not booking.status.is_active:
             raise BookingAlreadyCancelledError()
+        if booking.status == BookingStatus.PENDING:
+            raise BookingPendingError()
         self._schedule.check_editable(starts_at=booking.starts_at)
         return row

@@ -262,7 +262,7 @@ async def test_search_pages_by_limit_and_offset(client: httpx2.AsyncClient, venu
 @pytest.mark.parametrize(
     ("params", "status_code", "code"),
     [
-        ({"party_size": 5}, 400, "PARTY_TOO_LARGE"),
+        ({"party_size": 9}, 400, "PARTY_TOO_LARGE"),
         ({"date": str(TODAY + timedelta(days=31))}, 400, "DATE_OUT_OF_RANGE"),
         ({"date": str(TODAY - timedelta(days=1))}, 400, "DATE_OUT_OF_RANGE"),
         ({"time": "12:15"}, 400, "SLOT_INVALID"),
@@ -289,7 +289,7 @@ async def test_bad_search_input_is_refused(
     [
         (
             {
-                "party_size": 5,
+                "party_size": 9,
                 "date": str(TODAY + timedelta(days=31)),
                 "time": "12:15",
                 "location_id": str(uuid.uuid4()),
@@ -381,7 +381,7 @@ async def test_create_converts_a_start_sent_with_another_offset_to_restaurant_ti
 @pytest.mark.parametrize(
     ("party_size", "starts_at", "code"),
     [
-        (5, at(TOMORROW, 12), "PARTY_TOO_LARGE"),
+        (9, at(TOMORROW, 12), "PARTY_TOO_LARGE"),
         (2, at(TOMORROW, 12, 15), "SLOT_INVALID"),
         (2, at(TOMORROW, 12) + timedelta(seconds=30), "SLOT_INVALID"),
         (2, at(TOMORROW, 9, 30), "SLOT_INVALID"),
@@ -523,9 +523,9 @@ async def test_create_reports_the_first_failing_check(
     unknown = uuid.uuid4()
     far_off_grid = at(TODAY + timedelta(days=31), 12, 15)
 
-    assert_error(await book(client, unknown, far_off_grid, party_size=5), 401, "NOT_AUTHENTICATED")
+    assert_error(await book(client, unknown, far_off_grid, party_size=9), 401, "NOT_AUTHENTICATED")
     await sign_in(client, ADA)
-    assert_error(await book(client, unknown, far_off_grid, party_size=5), 400, "PARTY_TOO_LARGE")
+    assert_error(await book(client, unknown, far_off_grid, party_size=9), 400, "PARTY_TOO_LARGE")
     assert_error(await book(client, unknown, far_off_grid), 400, "DATE_OUT_OF_RANGE")
     assert_error(await book(client, unknown, at(TOMORROW, 12, 15)), 400, "SLOT_INVALID")
     assert_error(await book(client, unknown, at(TODAY, 13)), 404, "TABLE_NOT_FOUND")

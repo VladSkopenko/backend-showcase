@@ -186,6 +186,7 @@ async def test_the_preview_shows_the_booking_to_anyone_with_the_code(
     assert response.status_code == 200, response.text
     assert response.json() == {
         "owner_first_name": "Ada",
+        "status": "CONFIRMED",
         "starts_at": "2026-11-13T12:00:00+04:00",
         "ends_at": "2026-11-13T13:30:00+04:00",
         "party_size": 2,

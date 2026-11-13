@@ -5,7 +5,7 @@ class PartyTooLargeError(DomainError):
     code = "PARTY_TOO_LARGE"
 
     def __init__(self) -> None:
-        super().__init__("Parties this large cannot be booked online. Please call the restaurant.")
+        super().__init__("This party is too large for this booking.")
 
 
 class DateOutOfRangeError(DomainError):
@@ -47,7 +47,7 @@ class OverlappingBookingError(DomainError):
     code = "OVERLAPPING_BOOKING"
 
     def __init__(self) -> None:
-        super().__init__("You already have a booking at this time.")
+        super().__init__("You already have a booking or request at this time.")
 
 
 class BookingNotFoundError(DomainError):
@@ -62,6 +62,13 @@ class BookingAlreadyCancelledError(DomainError):
 
     def __init__(self) -> None:
         super().__init__("This booking is already cancelled.")
+
+
+class BookingPendingError(DomainError):
+    code = "BOOKING_PENDING"
+
+    def __init__(self) -> None:
+        super().__init__("This booking request awaits confirmation and cannot be edited yet.")
 
 
 class CancellationClosedError(DomainError):

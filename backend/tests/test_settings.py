@@ -253,6 +253,7 @@ def test_booking_defaults() -> None:
     assert booking.horizon_days == 30
     assert booking.cancel_cutoff_minutes == 30
     assert booking.max_online_party_size == 4
+    assert booking.max_request_party_size == 8
     assert booking.max_duration_minutes == 180
     assert booking.closing_time == time(23, 0)
     assert booking.preorder_lock_minutes == 30
@@ -269,6 +270,7 @@ def test_booking_env_vars_land_in_the_booking_block(monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv("BOOKING_HORIZON_DAYS", "14")
     monkeypatch.setenv("BOOKING_CANCEL_CUTOFF_MINUTES", "60")
     monkeypatch.setenv("BOOKING_MAX_ONLINE_PARTY_SIZE", "6")
+    monkeypatch.setenv("BOOKING_MAX_REQUEST_PARTY_SIZE", "7")
     monkeypatch.setenv("BOOKING_MAX_DURATION_MINUTES", "240")
     monkeypatch.setenv("BOOKING_CLOSING_TIME", "23:30")
     monkeypatch.setenv("BOOKING_PREORDER_LOCK_MINUTES", "45")
@@ -285,11 +287,21 @@ def test_booking_env_vars_land_in_the_booking_block(monkeypatch: pytest.MonkeyPa
     assert booking.horizon_days == 14
     assert booking.cancel_cutoff_minutes == 60
     assert booking.max_online_party_size == 6
+    assert booking.max_request_party_size == 7
     assert booking.max_duration_minutes == 240
     assert booking.closing_time == time(23, 30)
     assert booking.preorder_lock_minutes == 45
     assert booking.guest_token_ttl_days == 7
     assert booking.guest_cookie_path == "/api/v1"
+
+
+def test_request_party_size_cannot_exceed_the_largest_storable_party(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("BOOKING_MAX_REQUEST_PARTY_SIZE", "9")
+
+    with pytest.raises(ValidationError, match="max_request_party_size"):
+        Settings()
 
 
 def test_preorder_defaults() -> None:

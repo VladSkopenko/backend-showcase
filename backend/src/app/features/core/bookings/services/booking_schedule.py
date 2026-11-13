@@ -3,6 +3,7 @@ from datetime import date, datetime, time, timedelta
 
 from app.common import clock
 from app.config.settings import BookingSettings
+from app.features.core.bookings.enums import BookingStatus
 from app.features.core.bookings.models import Booking
 from app.features.core.bookings.services.exceptions import (
     CancellationClosedError,
@@ -21,7 +22,8 @@ class BookingSchedule:
     def __init__(self, settings: BookingSettings) -> None:
         self._settings = settings
         self.duration = timedelta(minutes=settings.duration_minutes)
-        self.max_party_size = settings.max_online_party_size
+        self._max_party_size = settings.max_online_party_size
+        self._max_request_party_size = settings.max_request_party_size
         first = settings.first_slot.hour * 60 + settings.first_slot.minute
         last = settings.last_slot.hour * 60 + settings.last_slot.minute
         self._slot_times = tuple(
@@ -55,8 +57,22 @@ class BookingSchedule:
         )
 
     def check_party_size(self, *, party_size: int) -> None:
-        if party_size > self.max_party_size:
+        if party_size > self._max_party_size:
             raise PartyTooLargeError()
+
+    def check_requestable_party_size(self, *, party_size: int) -> None:
+        if party_size > self._max_request_party_size:
+            raise PartyTooLargeError()
+
+    def max_capacity(self, *, party_size: int) -> int:
+        if self._is_request(party_size=party_size):
+            return self._max_request_party_size
+        return self._max_party_size
+
+    def initial_status(self, *, party_size: int) -> BookingStatus:
+        if self._is_request(party_size=party_size):
+            return BookingStatus.PENDING
+        return BookingStatus.CONFIRMED
 
     def check_date(self, *, day: date) -> None:
         today = self.now().date()
@@ -93,6 +109,9 @@ class BookingSchedule:
 
     def preorder_open(self, *, starts_at: datetime) -> bool:
         return starts_at - clock.now() >= timedelta(minutes=self._settings.preorder_lock_minutes)
+
+    def _is_request(self, *, party_size: int) -> bool:
+        return party_size > self._max_party_size
 
     def _cutoff_passed(self, *, starts_at: datetime) -> bool:
         return starts_at - clock.now() < timedelta(minutes=self._settings.cancel_cutoff_minutes)

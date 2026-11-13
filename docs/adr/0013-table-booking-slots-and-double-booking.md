@@ -6,7 +6,8 @@ Date: 2026-11-11
 
 Accepted. Amended 2026-11-11: bookings can be edited (start, party size and a duration from a
 fixed set) with the lock order user, table, booking; edit and the day grids enforce a closing
-time.
+time. Amended 2026-11-13: parties above the instant limit send a pending request; the overlap
+rules depend on the status, and one "active" rule names the statuses that hold a guest's time.
 
 ## Context
 
@@ -40,6 +41,25 @@ a check in Python alone cannot see a row another transaction is about to insert.
 - The user-level overlap rule (`OVERLAPPING_BOOKING`) is held only by the service under the user
   row lock. It has no database backstop.
 - Cancelled bookings stay as rows with status `CANCELLED` and do not block their slot.
+- **Large-party requests.** A party from `max_online_party_size + 1` up to
+  `max_request_party_size` (8, bounded by the `party_size` CHECK) is stored with status `PENDING`
+  on a table of capacity from the party size up to `max_request_party_size`; staff decide later.
+  Instant bookings keep tables up to `max_online_party_size`, so tables above it are
+  request-only and never compete with instant bookings (with the defaults, tables of 5 to 8
+  seats). A request takes the same locks and the same date, slot and horizon checks as a
+  booking.
+- **Overlap per status.** The table checks, the exclusion constraint and the search and edit
+  grids count only `CONFIRMED`: a pending request holds no table, several requests may compete
+  for one table and time, and a request on a table with a confirmed overlap is refused with
+  `SLOT_UNAVAILABLE`. The user check counts `CONFIRMED` and `PENDING` on create and edit, so a
+  user cannot hold a booking and a request, or two requests, that overlap.
+- **The active rule.** `BookingStatus.active()` (`CONFIRMED`, `PENDING`) replaces the checks for
+  `CANCELLED` in cancel, edit, the invite link and joining. A later terminal status, such as a
+  staff rejection, falls on the inactive side without changing those status checks. The error
+  they report, `BOOKING_ALREADY_CANCELLED`, is cancellation-specific; story 2 generalises it
+  together with `REJECTED`. A pending request can be cancelled and joined like a
+  booking, cannot be edited (`BOOKING_PENDING`) and keeps the pre-order closed; edit keeps the
+  instant party limit, so it never turns a booking into a request.
 - **Editing.** The owner of a `CONFIRMED` booking may replace its start, party size and duration
   until the cancel cutoff. The table and the local day stay. Durations run from
   `duration_minutes` to `max_duration_minutes` in steps of `slot_minutes`; creation still uses

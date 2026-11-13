@@ -5,7 +5,9 @@ class PreorderClosedError(DomainError):
     code = "PREORDER_CLOSED"
 
     def __init__(self) -> None:
-        super().__init__("Pre-order is closed: the booking was cancelled or starts soon.")
+        super().__init__(
+            "Pre-order is closed: the booking awaits confirmation, was cancelled or starts soon."
+        )
 
 
 class QuantityTooLargeError(DomainError):

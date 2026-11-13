@@ -75,8 +75,8 @@ async def get_cart(
         "previous ones, and answers the cart. A participant is a signed-in user or a guest "
         "identified by the `guest_token` cookie. The quantity runs from one up to a limit; a "
         "blank note means none. A sold-out dish cannot be added or raised, but can be lowered "
-        "or have its note changed. Closed once the booking is cancelled or shortly before its "
-        "start."
+        "or have its note changed. Closed while the booking awaits confirmation, once it is "
+        "cancelled or shortly before its start."
     ),
 )
 async def set_cart_item(
@@ -112,7 +112,8 @@ async def set_cart_item(
     description=(
         "Removes one dish from the caller's draft cart and answers the cart; works for sold-out "
         "dishes too. A participant is a signed-in user or a guest identified by the "
-        "`guest_token` cookie. Closed once the booking is cancelled or shortly before its start."
+        "`guest_token` cookie. Closed while the booking awaits confirmation, once it is "
+        "cancelled or shortly before its start."
     ),
 )
 async def remove_cart_item(
@@ -148,7 +149,8 @@ async def remove_cart_item(
         "one new part and leaves an empty cart for a new draft. The part is final: its author "
         "cannot change or withdraw it. A participant is a signed-in user or a guest identified "
         "by the `guest_token` cookie. Refused for an empty cart or one with a sold-out dish, "
-        "then nothing moves. Closed once the booking is cancelled or shortly before its start."
+        "then nothing moves. Closed while the booking awaits confirmation, once it is cancelled "
+        "or shortly before its start."
     ),
 )
 async def submit_cart(

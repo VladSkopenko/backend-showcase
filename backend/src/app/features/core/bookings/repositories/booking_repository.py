@@ -1,5 +1,5 @@
 import uuid
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import datetime
 
 from sqlalchemy import ColumnElement, and_, exists, select
@@ -51,7 +51,7 @@ class BookingRepository:
             ),
         )
 
-    async def user_has_confirmed_overlap(
+    async def user_has_active_overlap(
         self,
         *,
         user_id: uuid.UUID,
@@ -61,8 +61,11 @@ class BookingRepository:
     ) -> bool:
         return await self._exists(
             Booking.user_id == user_id,
-            *self._confirmed_overlapping(
-                starts_at=starts_at, ends_at=ends_at, excluding_booking_id=excluding_booking_id
+            *self._overlapping(
+                statuses=BookingStatus.active(),
+                starts_at=starts_at,
+                ends_at=ends_at,
+                excluding_booking_id=excluding_booking_id,
             ),
         )
 
@@ -156,13 +159,28 @@ class BookingRepository:
     async def _exists(self, *conditions: ColumnElement[bool]) -> bool:
         return bool(await self._session.scalar(select(exists().where(*conditions))))
 
-    @staticmethod
+    @classmethod
     def _confirmed_overlapping(
-        *, starts_at: datetime, ends_at: datetime, excluding_booking_id: uuid.UUID | None
+        cls, *, starts_at: datetime, ends_at: datetime, excluding_booking_id: uuid.UUID | None
+    ) -> tuple[ColumnElement[bool], ...]:
+        return cls._overlapping(
+            statuses=(BookingStatus.CONFIRMED,),
+            starts_at=starts_at,
+            ends_at=ends_at,
+            excluding_booking_id=excluding_booking_id,
+        )
+
+    @staticmethod
+    def _overlapping(
+        *,
+        statuses: Collection[BookingStatus],
+        starts_at: datetime,
+        ends_at: datetime,
+        excluding_booking_id: uuid.UUID | None,
     ) -> tuple[ColumnElement[bool], ...]:
         excluded = () if excluding_booking_id is None else (Booking.id != excluding_booking_id,)
         return (
-            Booking.status == BookingStatus.CONFIRMED,
+            Booking.status.in_(statuses),
             Booking.starts_at < ends_at,
             Booking.ends_at > starts_at,
             *excluded,
