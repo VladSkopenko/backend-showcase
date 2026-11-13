@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Started by the deploy entrypoint from a verified commit on prod, inside the repo checkout (ADR 3).
+# Started by the deploy entrypoint from a verified commit on main, inside the repo checkout (ADR 3, ADR 15).
 # Secrets arrive on stdin and land in /srv/platform/.env.
 set -euo pipefail
 
