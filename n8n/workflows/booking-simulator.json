@@ -9,16 +9,19 @@
   "nodes": [
     {
       "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000001",
-      "name": "Every 5 minutes",
+      "name": "Every 2 minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 300],
+      "position": [
+        0,
+        300
+      ],
       "parameters": {
         "rule": {
           "interval": [
             {
               "field": "minutes",
-              "minutesInterval": 5
+              "minutesInterval": 2
             }
           ]
         }
@@ -29,9 +32,12 @@
       "name": "Plan the visit",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 300],
+      "position": [
+        220,
+        300
+      ],
       "parameters": {
-        "jsCode": "const apiBaseUrl = 'http://host.docker.internal:8000/api/v1';\nconst botCount = 4;\nconst daysAhead = 7;\nconst dayMs = 24 * 60 * 60 * 1000;\nconst pick = (count) => Math.floor(Math.random() * count);\nconst restaurantDate = (ms) =>\n  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tbilisi' }).format(new Date(ms));\n\nreturn [\n  {\n    json: {\n      apiBaseUrl,\n      email: `booking-bot-${pick(botCount) + 1}@example.com`,\n      date: restaurantDate(Date.now() + pick(daysAhead + 1) * dayMs),\n      partySize: pick(4) + 1,\n      action: Math.random() < 0.2 ? 'cancel' : 'book',\n    },\n  },\n];"
+        "jsCode": "// Every number that tunes the bots lives in CONFIG (starting weights from patterns.md). The plan\n// carries it as `config`, so the later nodes read their numbers from here too.\nconst CONFIG = {\n  // Only the public dev API (ADR 14): on staging or prod the bots would take real guests' tables.\n  apiBaseUrl: 'https://backend-showcase-dev.duckdns.org/api/v1',\n  timeZone: 'Asia/Tbilisi',\n  // Which bots play which visitor. Favourites come from a stable hash of the bot number.\n  personas: [\n    {\n      name: 'regular',\n      firstBot: 1,\n      lastBot: 10,\n      shareOfRuns: 0.5,\n      favouriteLocationShare: 0.8,\n      favouriteDishes: 2,\n    },\n    {\n      name: 'occasional',\n      firstBot: 11,\n      lastBot: 40,\n      shareOfRuns: 0.5,\n      favouriteLocationShare: 0,\n      favouriteDishes: 0,\n    },\n  ],\n  // Share of runs that cancel one of the bot's own bookings instead of booking.\n  cancelShare: 0.15,\n  // Chance that a run first pre-orders for one of the bot's approved large bookings.\n  approvedPreorderChance: 0.5,\n  // Days ahead of today in restaurant time. A group's share spreads evenly over its days, then\n  // every day is weighted by dayWeights, so Friday and Saturday fill up more.\n  leadTime: [\n    { firstDay: 0, lastDay: 0, share: 0.35 },\n    { firstDay: 1, lastDay: 1, share: 0.25 },\n    { firstDay: 2, lastDay: 3, share: 0.2 },\n    { firstDay: 4, lastDay: 14, share: 0.2 },\n  ],\n  dayWeights: { Mon: 1, Tue: 1, Wed: 1, Thu: 1, Fri: 1.5, Sat: 1.5, Sun: 1.2 },\n  // Weight of every start on the booking grid: lunch and dinner peaks, low hours around them.\n  startWeights: {\n    '10:00': 1,\n    '10:30': 1,\n    '11:00': 1,\n    '11:30': 1,\n    '12:00': 2,\n    '12:30': 4,\n    '13:00': 4,\n    '13:30': 4,\n    '14:00': 4,\n    '14:30': 4,\n    '15:00': 1,\n    '15:30': 1,\n    '16:00': 1,\n    '16:30': 1,\n    '17:00': 1,\n    '17:30': 1,\n    '18:00': 2,\n    '18:30': 5,\n    '19:00': 5,\n    '19:30': 5,\n    '20:00': 5,\n    '20:30': 5,\n    '21:00': 5,\n    '21:30': 1,\n  },\n  // Party size shares by the booking date: a holiday wins over the day of the week.\n  weekendDays: ['Fri', 'Sat', 'Sun'],\n  partySizes: {\n    weekday: { 1: 0.15, 2: 0.48, 3: 0.2, 4: 0.15, request: 0.02 },\n    weekend: { 1: 0.05, 2: 0.35, 3: 0.22, 4: 0.28, request: 0.1 },\n    holidays: {\n      '02-14': { 1: 0, 2: 0.9, 3: 0.04, 4: 0.04, request: 0.02 },\n      '03-08': { 1: 0.05, 2: 0.3, 3: 0.25, 4: 0.25, request: 0.15 },\n      '12-31': { 1: 0, 2: 0.1, 3: 0.1, 4: 0.3, request: 0.5 },\n    },\n  },\n  // How a large-party request splits into 5 to 8 people.\n  requestPartySizes: { 5: 0.3, 6: 0.3, 7: 0.2, 8: 0.2 },\n  // A party up to this size books at once; a larger one sends a request.\n  maxInstantPartySize: 4,\n  // An instant booking leaves real guests a choice: at least this many fitting tables free at\n  // one location and one start (ADR 14). Requests hold no table and skip the rule.\n  minFreeTables: 4,\n  // The API refuses requests that start within this lead (the auto-reject lead).\n  requestLeadMinutes: 120,\n  // The API closes cancelling and pre-ordering this close to the start.\n  cancelLeadMinutes: 30,\n  preorderLeadMinutes: 30,\n  preorder: {\n    // Chance per person to order one dish of the category; quantities add up per dish.\n    perPerson: { MAIN_COURSE: 0.9, APPETIZER: 0.5, DESSERT: 0.4 },\n    // Meals by start time, each overriding some of the chances above.\n    meals: [\n      { name: 'lunch', firstStart: '12:00', lastStart: '14:30', perPerson: { DESSERT: 0.25 } },\n      { name: 'dinner', firstStart: '18:00', lastStart: '21:30', perPerson: { APPETIZER: 0.6 } },\n    ],\n    // Dish weights: each location boosts its top dishes, each regular their favourites.\n    dishWeight: 1,\n    locationTopDishes: 3,\n    locationDishWeight: 3,\n    favouriteDishWeight: 3,\n  },\n};\n\nconst DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];\nconst DAY_MS = 24 * 60 * 60 * 1000;\nconst MINUTE_MS = 60 * 1000;\n\nconst pickWeighted = (entries) => {\n  const total = entries.reduce((sum, [, weight]) => sum + weight, 0);\n  let roll = Math.random() * total;\n  for (const [value, weight] of entries) {\n    roll -= weight;\n    if (roll < 0) {\n      return value;\n    }\n  }\n  return entries.findLast(([, weight]) => weight > 0)[0];\n};\nconst restaurantDate = (ms) =>\n  new Intl.DateTimeFormat('en-CA', { timeZone: CONFIG.timeZone }).format(new Date(ms));\nconst addDays = (date, days) =>\n  new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);\nconst dayName = (date) => DAY_NAMES[new Date(`${date}T00:00:00Z`).getUTCDay()];\nconst zoneClock = new Intl.DateTimeFormat('en-US', {\n  timeZone: CONFIG.timeZone,\n  hourCycle: 'h23',\n  year: 'numeric',\n  month: 'numeric',\n  day: 'numeric',\n  hour: 'numeric',\n  minute: 'numeric',\n  second: 'numeric',\n});\n// The instant of a wall-clock time on a date in the restaurant's zone.\nconst startInstant = (date, time) => {\n  const naive = Date.parse(`${date}T${time}:00Z`);\n  const parts = Object.fromEntries(\n    zoneClock.formatToParts(new Date(naive)).map(({ type, value }) => [type, Number(value)]),\n  );\n  const zoned = Date.UTC(\n    parts.year,\n    parts.month - 1,\n    parts.day,\n    parts.hour,\n    parts.minute,\n    parts.second,\n  );\n  return naive - (zoned - naive);\n};\nconst partyTable = (date) =>\n  CONFIG.partySizes.holidays[date.slice(5)] ??\n  (CONFIG.weekendDays.includes(dayName(date))\n    ? CONFIG.partySizes.weekend\n    : CONFIG.partySizes.weekday);\n\nconst now = Date.now();\nconst today = restaurantDate(now);\nconst persona = pickWeighted(CONFIG.personas.map((entry) => [entry, entry.shareOfRuns]));\nconst botNumber =\n  persona.firstBot + Math.floor(Math.random() * (persona.lastBot - persona.firstBot + 1));\nconst date = pickWeighted(\n  CONFIG.leadTime.flatMap(({ firstDay, lastDay, share }) => {\n    const dayCount = lastDay - firstDay + 1;\n    return Array.from({ length: dayCount }, (_, index) => {\n      const day = addDays(today, firstDay + index);\n      return [day, (share / dayCount) * CONFIG.dayWeights[dayName(day)]];\n    });\n  }),\n);\nconst sizeGroup = pickWeighted(Object.entries(partyTable(date)));\nconst partySize = Number(\n  sizeGroup === 'request'\n    ? pickWeighted(Object.entries(CONFIG.requestPartySizes))\n    : sizeGroup,\n);\nconst notBefore =\n  partySize > CONFIG.maxInstantPartySize ? now + CONFIG.requestLeadMinutes * MINUTE_MS : now;\n// One random key per start that is still possible, u^(1/weight): the free start with the highest\n// key is a weighted random pick among whichever starts turn out free.\nconst startKeys = Object.fromEntries(\n  Object.entries(CONFIG.startWeights)\n    .filter(([time, weight]) => weight > 0 && startInstant(date, time) > notBefore)\n    .map(([time, weight]) => [time, Math.random() ** (1 / weight)]),\n);\n\nreturn [\n  {\n    json: {\n      apiBaseUrl: CONFIG.apiBaseUrl,\n      botNumber,\n      email: `booking-bot-${botNumber}@example.com`,\n      persona,\n      action: Math.random() < CONFIG.cancelShare ? 'cancel' : 'book',\n      preorderApproved: Math.random() < CONFIG.approvedPreorderChance,\n      date,\n      partySize,\n      startKeys,\n      config: CONFIG,\n    },\n  },\n];"
       }
     },
     {
@@ -39,13 +45,10 @@
       "name": "Log in",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [440, 300],
-      "credentials": {
-        "httpCustomAuth": {
-          "id": "BookingBotPasswd",
-          "name": "Booking bot password"
-        }
-      },
+      "position": [
+        440,
+        300
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $json.apiBaseUrl }}/auth/login",
@@ -61,6 +64,12 @@
             }
           }
         }
+      },
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "BookingBotPasswd",
+          "name": "Booking bot password"
+        }
       }
     },
     {
@@ -68,27 +77,476 @@
       "name": "Keep the session",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [660, 300],
+      "position": [
+        660,
+        300
+      ],
       "parameters": {
         "jsCode": "const plan = $('Plan the visit').first().json;\nconst setCookie = [].concat($input.first().json.headers['set-cookie'] ?? []);\nconst cookie = setCookie.map((header) => header.split(';')[0]).join('; ');\n\nreturn [{ json: { ...plan, cookie } }];"
       }
     },
     {
       "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000005",
-      "name": "Book this time?",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [880, 200],
+      "name": "List my bookings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ],
       "parameters": {
-        "jsCode": "const visit = $input.first().json;\n\nreturn visit.action === 'book' ? [{ json: visit }] : [];"
+        "method": "GET",
+        "url": "={{ $json.apiBaseUrl }}/bookings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
       }
     },
     {
       "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000006",
+      "name": "Load the menu",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Keep the session').first().json.apiBaseUrl }}/menu/dishes",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000007",
+      "name": "Gather the visit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const session = $('Keep the session').first().json;\nconst menu = $input.first().json;\nif (menu.total > menu.items.length) {\n  throw new Error(\n    `The menu has ${menu.total} dishes but one page holds ${menu.items.length}: page through it`,\n  );\n}\n\nreturn [\n  {\n    json: { ...session, bookings: $('List my bookings').first().json.body, dishes: menu.items },\n  },\n];"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000008",
+      "name": "Find approved requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// With approvedPreorderChance, lists the bot's approved requests that are still open for a\n// pre-order: its own confirmed bookings above the instant party size, more than the pre-order\n// lead ahead. The next nodes keep the ones without a submitted part or a draft.\nconst visit = $input.first().json;\nconst { config } = visit;\nconst preorderOpenUntil = Date.now() + config.preorderLeadMinutes * 60 * 1000;\nconst candidates = visit.preorderApproved\n  ? visit.bookings\n      .filter(\n        (booking) =>\n          booking.role === 'OWNER' &&\n          booking.status === 'CONFIRMED' &&\n          booking.party_size > config.maxInstantPartySize &&\n          Date.parse(booking.starts_at) > preorderOpenUntil,\n      )\n      .map((booking) => ({\n        apiBaseUrl: visit.apiBaseUrl,\n        cookie: visit.cookie,\n        bookingId: booking.id,\n        partySize: booking.party_size,\n        startsAt: booking.starts_at,\n        locationId: booking.location.id,\n      }))\n  : [];\n\nreturn [{ json: { candidates } }];"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000009",
+      "name": "Check approved requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        200
+      ],
+      "parameters": {
+        "jsCode": "return $input.first().json.candidates.map((candidate) => ({ json: candidate }));"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000010",
+      "name": "No approved request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        420
+      ],
+      "parameters": {
+        "jsCode": "return $input.first().json.candidates.length === 0 ? [{ json: { next: 'action' } }] : [];"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000011",
+      "name": "Read my pre-orders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        200
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.apiBaseUrl }}/bookings/{{ $json.bookingId }}/my-pre-order",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000012",
+      "name": "Note the parts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        200
+      ],
+      "parameters": {
+        "jsCode": "// One answer per request, in the order the requests were read.\nconst requests = $('Check approved requests').all();\n\nreturn $input.all().map((answer, index) => ({\n  json: { ...requests[index].json, submittedParts: answer.json.parts.length },\n}));"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000013",
+      "name": "Read the carts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        200
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.apiBaseUrl }}/bookings/{{ $json.bookingId }}/cart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000014",
+      "name": "Pick an approved request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        200
+      ],
+      "parameters": {
+        "jsCode": "// Keeps the requests with no submitted part and an empty draft (a draft left by a broken run is\n// never mixed into a new pre-order) and picks one. Always one item, so the run goes on to the\n// action either way.\nconst requests = $('Note the parts').all();\nconst open = $input\n  .all()\n  .map((cart, index) => [cart.json, requests[index].json])\n  .filter(([cart, request]) => request.submittedParts === 0 && cart.items.length === 0)\n  .map(([, request]) => request);\nconst choice = open.length > 0 ? open[Math.floor(Math.random() * open.length)] : {};\n\nreturn [{ json: { ...choice, next: 'action' } }];"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000015",
+      "name": "Compose the pre-order",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        200
+      ],
+      "parameters": {
+        "jsCode": "// Orders for every person of the party by the chances of CONFIG.preorder, adjusted for lunch or\n// dinner by the start time. Dishes are weighted: the location's top dishes and a regular's\n// favourites come first, both ranked by a stable hash, so no state is kept between runs. Without\n// a booking to order for (no open approved request) the order is empty.\nconst target = $input.first().json;\nconst visit = $('Gather the visit').first().json;\nconst order = {\n  apiBaseUrl: target.apiBaseUrl,\n  cookie: target.cookie,\n  bookingId: target.bookingId,\n  next: target.next,\n};\nif (!target.bookingId) {\n  return [{ json: { ...order, lines: [] } }];\n}\nconst { preorder, timeZone } = visit.config;\nconst stableHash = (text) => {\n  let hash = 0x811c9dc5;\n  for (const char of text) {\n    hash = Math.imul(hash ^ char.codePointAt(0), 0x01000193) >>> 0;\n  }\n  return hash;\n};\nconst rankByHash = (seed, ids) =>\n  [...ids].sort((a, b) => stableHash(`${seed}|${a}`) - stableHash(`${seed}|${b}`));\nconst pickWeighted = (entries) => {\n  const total = entries.reduce((sum, [, weight]) => sum + weight, 0);\n  let roll = Math.random() * total;\n  for (const [value, weight] of entries) {\n    roll -= weight;\n    if (roll < 0) {\n      return value;\n    }\n  }\n  return entries.at(-1)[0];\n};\n\nconst startTime = new Intl.DateTimeFormat('en-GB', {\n  timeZone,\n  hourCycle: 'h23',\n  hour: '2-digit',\n  minute: '2-digit',\n}).format(new Date(target.startsAt));\nconst meal = preorder.meals.find(\n  ({ firstStart, lastStart }) => firstStart <= startTime && startTime <= lastStart,\n);\nconst perPerson = { ...preorder.perPerson, ...meal?.perPerson };\nconst dishIds = visit.dishes.map((dish) => dish.id);\nconst locationTop = new Set(\n  rankByHash(`location-${target.locationId}`, dishIds).slice(0, preorder.locationTopDishes),\n);\nconst favourites = new Set(\n  rankByHash(`bot-${visit.botNumber}`, dishIds).slice(0, visit.persona.favouriteDishes),\n);\nconst dishWeight = (dish) =>\n  preorder.dishWeight *\n  (locationTop.has(dish.id) ? preorder.locationDishWeight : 1) *\n  (favourites.has(dish.id) ? preorder.favouriteDishWeight : 1);\n\nconst quantities = new Map();\nfor (let person = 0; person < target.partySize; person += 1) {\n  for (const [category, chance] of Object.entries(perPerson)) {\n    const available = visit.dishes.filter(\n      (dish) => dish.category === category && dish.is_available,\n    );\n    if (available.length === 0 || Math.random() >= chance) {\n      continue;\n    }\n    const dish = pickWeighted(available.map((entry) => [entry, dishWeight(entry)]));\n    quantities.set(dish.id, (quantities.get(dish.id) ?? 0) + 1);\n  }\n}\n\nreturn [\n  {\n    json: {\n      ...order,\n      lines: [...quantities].map(([dishId, quantity]) => ({ dishId, quantity })),\n    },\n  },\n];"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000016",
+      "name": "Order the dishes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const order = $input.first().json;\n\nreturn order.lines.map(({ dishId, quantity }) => ({\n  json: {\n    apiBaseUrl: order.apiBaseUrl,\n    cookie: order.cookie,\n    bookingId: order.bookingId,\n    dishId,\n    quantity,\n  },\n}));"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000017",
+      "name": "Nothing to order",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const order = $input.first().json;\n\nreturn order.lines.length === 0 ? [{ json: { next: order.next } }] : [];"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000018",
+      "name": "Add the dishes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3300,
+        100
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $json.apiBaseUrl }}/bookings/{{ $json.bookingId }}/cart/items/{{ $json.dishId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ quantity: $json.quantity, note: null }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000019",
+      "name": "Check the dishes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        100
+      ],
+      "parameters": {
+        "jsCode": "// A 409 skips that dish (sold out meanwhile, or the pre-order closed); the rest still goes in.\nconst answers = $input.all().map((item) => item.json);\nconst unexpected = answers.find(({ statusCode }) => ![200, 409].includes(statusCode));\nif (unexpected) {\n  throw new Error(\n    `Adding a dish answered ${unexpected.statusCode}: ${JSON.stringify(unexpected.body)}`,\n  );\n}\nconst { apiBaseUrl, cookie, bookingId, next } = $('Compose the pre-order').first().json;\nconst added = answers.filter(({ statusCode }) => statusCode === 200).length;\n\nreturn [{ json: { apiBaseUrl, cookie, bookingId, next, added } }];"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000020",
+      "name": "Anything added?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3740,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\n\nreturn result.added > 0 ? [{ json: result }] : [];"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000021",
+      "name": "Nothing added",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3740,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\n\nreturn result.added === 0 ? [{ json: { next: result.next } }] : [];"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000022",
+      "name": "Submit the pre-order",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3960,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.apiBaseUrl }}/bookings/{{ $json.bookingId }}/cart/submit",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000023",
+      "name": "Check the submit answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4180,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// 409 ends the pre-order quietly: it closed meanwhile or a dish sold out.\nconst { statusCode, body } = $input.first().json;\nif (![200, 409].includes(statusCode)) {\n  throw new Error(`Submitting the pre-order answered ${statusCode}: ${JSON.stringify(body)}`);\n}\n\nreturn [{ json: { next: $('Check the dishes').first().json.next } }];"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000024",
+      "name": "After the pre-order",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// After the approved request's pre-order the run goes on to cancel or book; after a new\n// booking's pre-order it ends.\nreturn $input.first().json.next === 'action' ? [{ json: {} }] : [];"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000025",
+      "name": "Cancel this time?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4620,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const visit = $('Gather the visit').first().json;\nif (visit.action !== 'cancel') {\n  return [];\n}\nconst cancelOpenUntil = Date.now() + visit.config.cancelLeadMinutes * 60 * 1000;\nconst cancellable = visit.bookings.filter(\n  (booking) =>\n    booking.role === 'OWNER' &&\n    ['CONFIRMED', 'PENDING'].includes(booking.status) &&\n    Date.parse(booking.starts_at) > cancelOpenUntil,\n);\nif (cancellable.length === 0) {\n  return [];\n}\nconst choice = cancellable[Math.floor(Math.random() * cancellable.length)];\n\nreturn [{ json: { apiBaseUrl: visit.apiBaseUrl, cookie: visit.cookie, bookingId: choice.id } }];"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000026",
+      "name": "Cancel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4840,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.apiBaseUrl }}/bookings/{{ $json.bookingId }}/cancel",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000027",
+      "name": "Check the cancel answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5060,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// 409 is a lost race: the booking was cancelled or reached the cutoff meanwhile.\nconst { statusCode, body } = $input.first().json;\nif (![200, 409].includes(statusCode)) {\n  throw new Error(`Cancel answered ${statusCode}: ${JSON.stringify(body)}`);\n}\n\nreturn $input.all();"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000028",
+      "name": "Book this time?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4620,
+        540
+      ],
+      "parameters": {
+        "jsCode": "// No start left to try, e.g. today after the last start or within the request lead.\nconst visit = $('Gather the visit').first().json;\n\nreturn visit.action === 'book' && Object.keys(visit.startKeys).length > 0 ? [{ json: visit }] : [];"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000029",
+      "name": "List locations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4840,
+        540
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.apiBaseUrl }}/locations",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000030",
+      "name": "Choose the location",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5060,
+        540
+      ],
+      "parameters": {
+        "jsCode": "// A regular books at a favourite location most of the time and elsewhere otherwise; an occasional\n// visitor anywhere. The favourite is the location ranked first by a stable hash of the bot number.\nconst visit = $('Book this time?').first().json;\nconst stableHash = (text) => {\n  let hash = 0x811c9dc5;\n  for (const char of text) {\n    hash = Math.imul(hash ^ char.codePointAt(0), 0x01000193) >>> 0;\n  }\n  return hash;\n};\nconst rankByHash = (seed, ids) =>\n  [...ids].sort((a, b) => stableHash(`${seed}|${a}`) - stableHash(`${seed}|${b}`));\nconst pick = (list) => list[Math.floor(Math.random() * list.length)];\n\nconst locationIds = $input.first().json.body.map((location) => location.id);\nconst chooseLocation = () => {\n  const { favouriteLocationShare } = visit.persona;\n  if (favouriteLocationShare === 0) {\n    return pick(locationIds);\n  }\n  const [favourite, ...others] = rankByHash(`bot-${visit.botNumber}`, locationIds);\n  return others.length === 0 || Math.random() < favouriteLocationShare ? favourite : pick(others);\n};\n\nreturn [{ json: { ...visit, locationId: chooseLocation() } }];"
+      }
+    },
+    {
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000031",
       "name": "Search tables",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1100, 200],
+      "position": [
+        5280,
+        540
+      ],
       "parameters": {
         "method": "GET",
         "url": "={{ $json.apiBaseUrl }}/bookings/tables",
@@ -104,6 +562,10 @@
               "value": "={{ $json.partySize }}"
             },
             {
+              "name": "location_id",
+              "value": "={{ $json.locationId }}"
+            },
+            {
               "name": "limit",
               "value": "50"
             }
@@ -113,21 +575,27 @@
       }
     },
     {
-      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000007",
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000032",
       "name": "Pick a free slot",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1320, 200],
+      "position": [
+        5500,
+        540
+      ],
       "parameters": {
-        "jsCode": "// Leave real guests a choice: book only where at least this many fitting tables are free\n// at one location and one start time.\nconst minFreeTables = 4;\nconst visit = $('Book this time?').first().json;\nconst pick = (list) => list[Math.floor(Math.random() * list.length)];\n\nconst freeTablesByStart = new Map();\nfor (const table of $input.first().json.items) {\n  for (const slot of table.slots.filter((slot) => slot.available)) {\n    const key = `${table.location.id}|${slot.starts_at}`;\n    const entry = freeTablesByStart.get(key) ?? { startsAt: slot.starts_at, tableIds: [] };\n    entry.tableIds.push(table.id);\n    freeTablesByStart.set(key, entry);\n  }\n}\nconst roomy = [...freeTablesByStart.values()].filter(\n  (entry) => entry.tableIds.length >= minFreeTables,\n);\nif (roomy.length === 0) {\n  return [];\n}\nconst start = pick(roomy);\n\nreturn [{ json: { ...visit, tableId: pick(start.tableIds), startsAt: start.startsAt } }];"
+        "jsCode": "// Takes the free start with the highest plan key, a weighted pick by the start weights. An instant\n// booking needs at least minFreeTables fitting tables free at that start; a request one.\nconst visit = $('Choose the location').first().json;\nconst { config } = visit;\nconst minFreeTables = visit.partySize > config.maxInstantPartySize ? 1 : config.minFreeTables;\nconst startTime = new Intl.DateTimeFormat('en-GB', {\n  timeZone: config.timeZone,\n  hourCycle: 'h23',\n  hour: '2-digit',\n  minute: '2-digit',\n});\nconst pick = (list) => list[Math.floor(Math.random() * list.length)];\n\nconst freeTablesByStart = new Map();\nfor (const table of $input.first().json.items) {\n  for (const slot of table.slots.filter((slot) => slot.available)) {\n    const time = startTime.format(new Date(slot.starts_at));\n    if (!(time in visit.startKeys)) {\n      continue;\n    }\n    const entry = freeTablesByStart.get(time) ?? { time, startsAt: slot.starts_at, tableIds: [] };\n    entry.tableIds.push(table.id);\n    freeTablesByStart.set(time, entry);\n  }\n}\nconst candidates = [...freeTablesByStart.values()].filter(\n  (entry) => entry.tableIds.length >= minFreeTables,\n);\nif (candidates.length === 0) {\n  return [];\n}\nconst start = candidates.reduce((best, entry) =>\n  visit.startKeys[entry.time] > visit.startKeys[best.time] ? entry : best,\n);\n\nreturn [{ json: { ...visit, tableId: pick(start.tableIds), startsAt: start.startsAt } }];"
       }
     },
     {
-      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000008",
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000033",
       "name": "Book",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1540, 200],
+      "position": [
+        5720,
+        540
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $json.apiBaseUrl }}/bookings",
@@ -154,136 +622,402 @@
       }
     },
     {
-      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000009",
-      "name": "Cancel this time?",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [880, 420],
-      "parameters": {
-        "jsCode": "const visit = $input.first().json;\n\nreturn visit.action === 'cancel' ? [{ json: visit }] : [];"
-      }
-    },
-    {
-      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000010",
-      "name": "List my bookings",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1100, 420],
-      "parameters": {
-        "method": "GET",
-        "url": "={{ $json.apiBaseUrl }}/bookings",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Cookie",
-              "value": "={{ $json.cookie }}"
-            }
-          ]
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000011",
-      "name": "Pick a booking to cancel",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1320, 420],
-      "parameters": {
-        "jsCode": "const visit = $('Cancel this time?').first().json;\nconst cancelCutoffMs = 30 * 60 * 1000;\nconst cancellable = $input\n  .all()\n  .map((item) => item.json)\n  .filter(\n    (booking) =>\n      booking.status === 'CONFIRMED' && Date.parse(booking.starts_at) > Date.now() + cancelCutoffMs,\n  );\nif (cancellable.length === 0) {\n  return [];\n}\nconst choice = cancellable[Math.floor(Math.random() * cancellable.length)];\n\nreturn [{ json: { ...visit, bookingId: choice.id } }];"
-      }
-    },
-    {
-      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000012",
-      "name": "Cancel",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1540, 420],
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $json.apiBaseUrl }}/bookings/{{ $json.bookingId }}/cancel",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Cookie",
-              "value": "={{ $json.cookie }}"
-            }
-          ]
-        },
-        "options": {
-          "response": {
-            "response": {
-              "fullResponse": true,
-              "neverError": true
-            }
-          }
-        }
-      }
-    },
-    {
-      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000013",
+      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000034",
       "name": "Check the booking answer",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1760, 200],
+      "position": [
+        5940,
+        540
+      ],
       "parameters": {
-        "jsCode": "// 409 is a lost visit: the slot was taken meanwhile or the bot holds an overlapping booking.\nconst { statusCode, body } = $input.first().json;\nif (![201, 409].includes(statusCode)) {\n  throw new Error(`Booking answered ${statusCode}: ${JSON.stringify(body)}`);\n}\n\nreturn $input.all();"
-      }
-    },
-    {
-      "id": "8d2f6c1e-1a3b-4c5d-9e0f-000000000014",
-      "name": "Check the cancel answer",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1760, 420],
-      "parameters": {
-        "jsCode": "// 409 is a lost race: the booking was cancelled or reached the cutoff meanwhile.\nconst { statusCode, body } = $input.first().json;\nif (![200, 409].includes(statusCode)) {\n  throw new Error(`Cancel answered ${statusCode}: ${JSON.stringify(body)}`);\n}\n\nreturn $input.all();"
+        "jsCode": "// 409 ends the visit quietly: the slot was taken meanwhile, the bot already holds an overlapping\n// booking or request, or a request came too close to its start. A confirmed booking far enough\n// ahead goes on to the pre-order; a pending request waits for staff.\nconst visit = $('Pick a free slot').first().json;\nconst { statusCode, body } = $input.first().json;\nif (statusCode === 409) {\n  return [];\n}\nif (statusCode !== 201) {\n  throw new Error(`Booking answered ${statusCode}: ${JSON.stringify(body)}`);\n}\nconst preorderOpenUntil = Date.now() + visit.config.preorderLeadMinutes * 60 * 1000;\nif (body.status !== 'CONFIRMED' || Date.parse(body.starts_at) <= preorderOpenUntil) {\n  return [];\n}\n\nreturn [\n  {\n    json: {\n      apiBaseUrl: visit.apiBaseUrl,\n      cookie: visit.cookie,\n      bookingId: body.id,\n      partySize: body.party_size,\n      startsAt: body.starts_at,\n      locationId: body.location.id,\n      next: 'end',\n    },\n  },\n];"
       }
     }
   ],
   "connections": {
-    "Every 5 minutes": {
-      "main": [[{ "node": "Plan the visit", "type": "main", "index": 0 }]]
+    "Every 2 minutes": {
+      "main": [
+        [
+          {
+            "node": "Plan the visit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Plan the visit": {
-      "main": [[{ "node": "Log in", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Log in",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log in": {
-      "main": [[{ "node": "Keep the session", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Keep the session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Keep the session": {
       "main": [
         [
-          { "node": "Book this time?", "type": "main", "index": 0 },
-          { "node": "Cancel this time?", "type": "main", "index": 0 }
+          {
+            "node": "List my bookings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List my bookings": {
+      "main": [
+        [
+          {
+            "node": "Load the menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load the menu": {
+      "main": [
+        [
+          {
+            "node": "Gather the visit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gather the visit": {
+      "main": [
+        [
+          {
+            "node": "Find approved requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find approved requests": {
+      "main": [
+        [
+          {
+            "node": "Check approved requests",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "No approved request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check approved requests": {
+      "main": [
+        [
+          {
+            "node": "Read my pre-orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read my pre-orders": {
+      "main": [
+        [
+          {
+            "node": "Note the parts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Note the parts": {
+      "main": [
+        [
+          {
+            "node": "Read the carts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read the carts": {
+      "main": [
+        [
+          {
+            "node": "Pick an approved request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick an approved request": {
+      "main": [
+        [
+          {
+            "node": "Compose the pre-order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No approved request": {
+      "main": [
+        [
+          {
+            "node": "After the pre-order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose the pre-order": {
+      "main": [
+        [
+          {
+            "node": "Order the dishes",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Nothing to order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order the dishes": {
+      "main": [
+        [
+          {
+            "node": "Add the dishes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add the dishes": {
+      "main": [
+        [
+          {
+            "node": "Check the dishes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check the dishes": {
+      "main": [
+        [
+          {
+            "node": "Anything added?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Nothing added",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anything added?": {
+      "main": [
+        [
+          {
+            "node": "Submit the pre-order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submit the pre-order": {
+      "main": [
+        [
+          {
+            "node": "Check the submit answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check the submit answer": {
+      "main": [
+        [
+          {
+            "node": "After the pre-order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nothing to order": {
+      "main": [
+        [
+          {
+            "node": "After the pre-order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nothing added": {
+      "main": [
+        [
+          {
+            "node": "After the pre-order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "After the pre-order": {
+      "main": [
+        [
+          {
+            "node": "Cancel this time?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Book this time?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel this time?": {
+      "main": [
+        [
+          {
+            "node": "Cancel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel": {
+      "main": [
+        [
+          {
+            "node": "Check the cancel answer",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "Book this time?": {
-      "main": [[{ "node": "Search tables", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "List locations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List locations": {
+      "main": [
+        [
+          {
+            "node": "Choose the location",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Choose the location": {
+      "main": [
+        [
+          {
+            "node": "Search tables",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Search tables": {
-      "main": [[{ "node": "Pick a free slot", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Pick a free slot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Pick a free slot": {
-      "main": [[{ "node": "Book", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Book",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Book": {
-      "main": [[{ "node": "Check the booking answer", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Check the booking answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Cancel this time?": {
-      "main": [[{ "node": "List my bookings", "type": "main", "index": 0 }]]
-    },
-    "List my bookings": {
-      "main": [[{ "node": "Pick a booking to cancel", "type": "main", "index": 0 }]]
-    },
-    "Pick a booking to cancel": {
-      "main": [[{ "node": "Cancel", "type": "main", "index": 0 }]]
-    },
-    "Cancel": {
-      "main": [[{ "node": "Check the cancel answer", "type": "main", "index": 0 }]]
+    "Check the booking answer": {
+      "main": [
+        [
+          {
+            "node": "Compose the pre-order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   }
 }
