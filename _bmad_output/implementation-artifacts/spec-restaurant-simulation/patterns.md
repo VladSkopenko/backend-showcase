@@ -18,9 +18,12 @@ with varied first and last names and one staff bot.
 - Lead time: same day 35%, next day 25%, 2 to 3 days 20%, 4 to 14 days 20%.
 - Start hour weight (Asia/Tbilisi): 10:00 to 11:30 low, 12:30 to 14:30 lunch peak, 15:00 to 17:30 low,
   18:30 to 21:00 dinner peak.
-- Day of week: Friday and Saturday 1.5, Sunday 1.2, Monday to Thursday 1.
+- Day of week: Friday and Saturday 1.5, Sunday 1.2, Monday to Thursday 1. These weights scale dates across the lead-time groups, so the lead-time shares hold on average over a week, not on each day.
+- Start weights per slot: low hours 1, shoulders 12:00 and 18:00 2, lunch peak 4, dinner peak 5, 21:30 1.
 
 ## Party size (CAP-5, CAP-9)
+
+"Weekend" here is Friday to Sunday. A request of 5 to 8 splits 5 and 6 at 30% each, 7 and 8 at 20% each.
 
 | Day | 1 | 2 | 3 | 4 | 5 to 8 (request) |
 |---|---|---|---|---|---|
@@ -35,7 +38,8 @@ with varied first and last names and one staff bot.
 - Right after a confirmed booking (or an approval seen on a later run), only when the start is more
   than 30 minutes away.
 - Per person: one `MAIN_COURSE` (90%), an `APPETIZER` (50%), a `DESSERT` (40%); quantities add up per dish.
-- Lunch lowers desserts to 25%; dinner raises appetizers to 60%.
+- Lunch (starts 12:00 to 14:30) lowers desserts to 25%; dinner (starts 18:00 to 21:30) raises appetizers to 60%.
+- A run first pre-orders for one of the bot's approved large bookings without a submitted part with chance 0.5.
 - Each location boosts three dishes (weight 3); each regular boosts two favourite dishes (weight 3).
   Both come from a stable hash of the location id or bot number, so no state is kept between runs.
 

@@ -150,3 +150,12 @@
   summary: The app configures no logging level or format, so its INFO lines (e.g. the auto-reject run count) never show; set up structured logging together with VictoriaLogs and log shipping (issue #26 step "VictoriaLogs and log shipping"), as one task.
   evidence: grep finds no basicConfig, dictConfig or setLevel in backend/src/app; live check showed only WARNING lines.
   note: Vlad wants logs visible without the tailnet. Proposed: keep VictoriaLogs tailnet-only (its UI has no auth) and show logs publicly through Grafana (anonymous Viewer) with a VictoriaLogs data source; this needs a rule that logs never carry emails, tokens or other personal data, since a Viewer can query the data source.
+
+## Deferred from: review of 6-guest-simulator-v2 (2026-11-13)
+
+- source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/6-guest-simulator-v2.md`
+  summary: Session rows grow without cleanup; the simulator signs in every 2 minutes (about 720 rows a day on dev) and never logs out, and nothing deletes expired sessions.
+  evidence: SessionService stores a row per login with a 30-day expiry; no cleanup job exists. Fix with a periodic cleanup in the background task runner or a logout at the end of each run.
+- source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/6-guest-simulator-v2.md`
+  summary: The plan check runs only by hand; a CI job for `n8n/**` running `node n8n/check-simulator-plan.mjs` would catch drift between the workflow and patterns.md.
+  evidence: CI is Vlad's infrastructure.

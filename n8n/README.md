@@ -1,12 +1,15 @@
 # Booking simulator in a local n8n
 
-n8n plays visitors who book and cancel tables through the REST API, so the booking grid on dev
-shows a live flow ([ADR 14](../docs/adr/0014-booking-simulator-on-dev.md)). This folder runs n8n on
-the developer machine to build and tune the workflow against the local API. Running n8n in the
-platform stack on the VM is a later step.
+n8n plays the restaurant's guests through the REST API: they book tables, ask for large tables,
+pre-order food and cancel, with the time, day and party patterns of a real restaurant, so dev
+fills with data worth a dashboard ([ADR 14](../docs/adr/0014-booking-simulator-on-dev.md)). The
+workflow drives the public dev API only. This folder also runs n8n on the developer machine, to
+try the workflow before it goes to the n8n on the VM.
 
 - `compose.yml`: the local n8n, editor on `http://localhost:5678` (loopback only).
 - `workflows/booking-simulator.json`: the workflow, kept in git.
+- `check-simulator-plan.mjs`: checks the workflow's weights against the patterns without the API
+  ([The plan check](#the-plan-check)).
 - `data/`: n8n's SQLite database, encryption key and saved credentials. Git-ignored. Deleting it
   loses the owner account, the credential and the encryption key.
 
@@ -39,6 +42,17 @@ including any edits made in the editor and not exported yet. Import also leaves 
 inactive (`--activeState` defaults to `false`): turn it on in the editor when the bots should
 run on schedule.
 
+The n8n in the platform stack on the VM has no shell access, so the file goes in through the
+editor:
+
+1. Open `https://backend-showcase-platform.tail88eb36.ts.net:5678` (on the tailnet) and open the
+   `Booking simulator` workflow, or create a new workflow if it is not there yet.
+2. In the workflow menu choose **Import from File** and pick
+   `n8n/workflows/booking-simulator.json` from a checkout of the merged branch.
+3. Open the `Log in` node and check that it shows the `Booking bot password` credential; select it
+   if it does not.
+4. Save, then publish (activate) the workflow so the schedule runs.
+
 Write the editor's version back to git:
 
 ```bash
@@ -69,16 +83,17 @@ after an import, select `Booking bot password` there once.
 On dev 40 booking bots come from migrations, all verified and with the password from the
 credential: `0011` adds `booking-bot-1@example.com` to `booking-bot-4@example.com` (named
 `Booking Bot 1` to `Booking Bot 4`), and `0020` adds `booking-bot-5@example.com` to
-`booking-bot-40@example.com` with distinct human first and last names. The current workflow
-uses bots 1 to 4 only; bots 5 to 40 wait for the simulator story.
+`booking-bot-40@example.com` with distinct human first and last names. The workflow plays all
+40; which of them are regulars is its own choice (`CONFIG.personas`), nothing in the database
+marks it.
 
-The local database gets no booking bots from migrations, so it has only bots 1 to 4, registered
-by the script below through the API with the same password; locally `/auth/register` echoes the
-code as `debug_code`:
+The local database gets no booking bots from migrations. To try the workflow locally, register
+all 40 with the script below through the API, with the same password; locally `/auth/register`
+echoes the code as `debug_code`. They are named `Booking Bot 1` to `Booking Bot 40` there:
 
 ```bash
 read -rs -p 'Bot password: ' BOT_PASSWORD; echo
-for n in 1 2 3 4; do
+for n in $(seq 1 40); do
   code=$(curl -s -X POST http://localhost:8000/api/v1/auth/register \
     -H 'Content-Type: application/json' \
     -d "$(jq -n --arg n "$n" --arg p "$BOT_PASSWORD" '{first_name: "Booking",
@@ -94,31 +109,128 @@ done
 
 ## API base URL
 
-`Plan the visit` sets `apiBaseUrl`. The committed value, `http://host.docker.internal:8000/api/v1`,
-reaches the API running on the host from inside the container. Point it at the dev API to drive
-dev. Never point it at staging or prod: the bots would take real guests' tables.
+`CONFIG.apiBaseUrl` in `Plan the visit` is the public dev API,
+`https://backend-showcase-dev.duckdns.org/api/v1`. To try the workflow on the local n8n, change it
+in the editor to `http://host.docker.internal:8000/api/v1`, which reaches the API running on the
+host from inside the container, and never commit that value: an export writes it into the file.
+Never point it at staging or prod: the bots would take real guests' tables.
 
 ## What the workflow does
 
-Every run picks one bot and either books a table (about 80% of runs) or cancels one of its
-bookings (about 20%).
+Every 2 minutes one run plays one bot. Half of the runs go to the 10 regulars (bots 1 to 10), half
+to the 30 occasional guests (bots 11 to 40). A run may first pre-order for an approved large-party
+request, then cancels one of the bot's bookings (about 15% of runs) or books (the rest). The steps
+run in this order because each one is connected to the next: every fork ends in two gates of
+which exactly one passes, so the order does not depend on where the nodes sit on the canvas.
+
+- **Booking.** The date follows the lead-time shares, weighted by the day of the week; the party
+  size follows the table for that date (weekday, weekend from Friday to Sunday, or a holiday:
+  14 February, 8 March, 31 December). The start is a weighted pick by hour among the starts that
+  are free and still ahead. A run that draws today after the last start (21:30) books nothing. A
+  regular books at their favourite location 80% of the time, an occasional guest anywhere.
+- **Instant booking, 1 to 4 people.** Only where at least 4 fitting tables are free at that
+  location and start, so real guests always keep a choice (ADR 14). The answer is `CONFIRMED`.
+- **Large-party request, 5 to 8 people.** Only for starts more than 2 hours ahead, since the API
+  refuses closer ones; a run that draws today with no start that far ahead sends nothing. A
+  request holds no table, so one free fitting table is enough and the 4-free-tables rule does not
+  apply. The answer is `PENDING`; staff decide it later.
+- **Pre-order.** Right after a confirmed booking that starts more than 30 minutes ahead, and, with
+  a set chance per run, for one of the bot's approved requests (a confirmed booking above 4
+  people) that has no submitted part and an empty draft cart. A draft left by a broken run is
+  never mixed into a new pre-order: that request is skipped. Per person: a main course 90%, an
+  appetizer 50%, a dessert 40%; at lunch desserts drop to 25%, at dinner appetizers rise to 60%.
+  Only available dishes; each location prefers three dishes, each regular two favourites. Each
+  dish goes into the cart with its quantity; a dish answered with 409 (sold out meanwhile) is
+  skipped, and the cart is submitted when anything went in.
+- **Cancel.** One of the bot's own `CONFIRMED` or `PENDING` bookings that starts more than 30
+  minutes ahead (the cancel cutoff).
+
+Favourite locations and dishes come from a stable hash of the bot number or the location id, so
+the workflow keeps no state between runs.
+
+Expected refusals end a step quietly: a 409 when a guest took the slot, the bot already holds an
+overlapping booking, a request came too late, the pre-order closed or a dish sold out. Any other
+status fails the execution, so a broken simulator shows up in n8n. So does a menu longer than one
+page of 50 dishes, which the workflow would otherwise read only in part.
 
 | Node | What it does |
 |---|---|
-| Every 5 minutes | Schedule trigger, in `Asia/Tbilisi` like the booking grid. |
-| Plan the visit | Picks a random bot (1 to 4), a date from today to 7 days ahead in restaurant time, a party of 1 to 4 and the action, `book` or `cancel`. |
+| Every 2 minutes | Schedule trigger, in `Asia/Tbilisi` like the booking grid. |
+| Plan the visit | Holds `CONFIG`. Picks the persona and bot, the action, whether to look for an approved request, the date, the party size and a random key per possible start. |
 | Log in | `POST /auth/login` with the bot's email and the password from the credential; keeps the full response for its headers. |
 | Keep the session | Turns the `Set-Cookie` headers into one `Cookie` header for the next requests. |
-| Book this time? | Passes the visit on only when the action is `book`. |
-| Search tables | `GET /bookings/tables` for the date and party size, up to 50 tables, so every location comes in one page. |
-| Pick a free slot | Groups free tables by location and start time, keeps only the groups with at least 4 free tables, then picks a random start and a random table in it. Stops when no group qualifies. |
-| Book | `POST /bookings`, keeping any status for the next node. |
-| Check the booking answer | Lets 201 and 409 through: a 409, when a guest took the slot meanwhile or the bot already holds an overlapping booking, is just a lost visit. Any other status fails the run, so a broken simulator shows up as a failed execution. |
-| Cancel this time? | Passes the visit on only when the action is `cancel`. |
 | List my bookings | `GET /bookings` for the bot. |
-| Pick a booking to cancel | Keeps the bot's `CONFIRMED` bookings that start more than 30 minutes from now (the cancel cutoff) and picks one. Stops when there are none. |
+| Load the menu | `GET /menu/dishes`, up to 50 dishes, the whole menu in one page. |
+| Gather the visit | Puts the plan, the session, the bookings and the dishes into one item. Fails the run when the menu has more dishes than the page. |
+| Find approved requests | With `approvedPreorderChance`, lists the bot's own confirmed bookings above 4 people that start more than 30 minutes ahead. |
+| Check approved requests / No approved request | Gates: one item per request found, or straight on to the action when there is none. |
+| Read my pre-orders | `GET /bookings/{id}/my-pre-order` for each request. |
+| Note the parts | Notes how many parts each request has submitted. |
+| Read the carts | `GET /bookings/{id}/cart` for each request. |
+| Pick an approved request | Picks one with no submitted part and an empty cart; always one item, with or without a request, so the run goes on. |
+| Compose the pre-order | Draws the dishes for every person and adds up the quantities into one order; empty without a booking. Shared by both pre-order paths. |
+| Order the dishes / Nothing to order | Gates: one item per dish, or on to the next step when the order is empty. |
+| Add the dishes | `PUT /bookings/{id}/cart/items/{dish_id}` with the quantity, for each dish. |
+| Check the dishes | Counts the dishes added; a 409 skips its dish, any other status but 200 fails the run. |
+| Anything added? / Nothing added | Gates: submit when a dish went in, otherwise on to the next step. |
+| Submit the pre-order | `POST /bookings/{id}/cart/submit`. |
+| Check the submit answer | Lets 200 and 409 through and fails the run on any other status. |
+| After the pre-order | After an approved request's pre-order goes on to the action; after a new booking's pre-order ends the run. |
+| Cancel this time? | When the action is `cancel`, picks one of the bot's own `CONFIRMED` or `PENDING` bookings more than 30 minutes ahead. |
 | Cancel | `POST /bookings/{id}/cancel`, keeping any status for the next node. |
 | Check the cancel answer | Lets 200 and 409 through and fails the run on any other status. |
+| Book this time? | Passes the visit on when the action is `book` and some start is still possible. |
+| List locations | `GET /locations`. |
+| Choose the location | The regular's favourite (or another location), or any location for an occasional guest. |
+| Search tables | `GET /bookings/tables` for the date, party size and location, up to 50 tables. |
+| Pick a free slot | Keeps the starts with enough free fitting tables (4 for an instant booking, 1 for a request), takes the one with the highest plan key, and a random free table in it. Stops when none qualifies. |
+| Book | `POST /bookings`, keeping any status for the next node. |
+| Check the booking answer | 409 ends the run quietly, any status but 201 fails it. Passes a `CONFIRMED` booking more than 30 minutes ahead on to the pre-order. |
 
-The 4-free-tables rule leaves real guests a choice: the bots book only where at least 4 fitting
-tables are free at one location and one start time, so they never take the last tables of a slot.
+The plan key per start, `u^(1/weight)` with a random `u`, turns "the free start with the highest
+key" into a pick weighted by `startWeights` among whichever starts the search finds free.
+
+## CONFIG
+
+Every number that tunes the bots lives in the `CONFIG` object at the top of `Plan the visit`, with
+the starting weights of
+[patterns.md](../_bmad_output/implementation-artifacts/spec-restaurant-simulation/patterns.md);
+the later nodes read it from the plan.
+
+| Key | What it tunes |
+|---|---|
+| `apiBaseUrl`, `timeZone` | The API the bots use and the restaurant's time zone. |
+| `personas` | Bot ranges, share of runs, how often a regular books at the favourite location, how many favourite dishes. |
+| `cancelShare` | Share of runs that cancel instead of booking. |
+| `approvedPreorderChance` | Chance per run to look for an approved request to pre-order for. |
+| `leadTime`, `dayWeights` | How many days ahead a booking is made, and how much each day of the week weighs. |
+| `startWeights` | Weight of every start on the booking grid: lunch and dinner peaks. |
+| `weekendDays`, `partySizes` | Party size shares for weekdays, weekends and the holidays by `MM-DD`; `request` is the share of 5 to 8 people. |
+| `requestPartySizes` | How a request splits into 5, 6, 7 and 8 people. |
+| `maxInstantPartySize`, `minFreeTables` | The instant booking limit and the free tables rule. |
+| `requestLeadMinutes`, `cancelLeadMinutes`, `preorderLeadMinutes` | The API's own limits, so the bots do not send what it refuses. |
+| `preorder` | Chances per person and category, the lunch and dinner overrides, and the dish weights. |
+
+Changing an API limit in the backend means changing the matching key here.
+
+## The plan check
+
+```bash
+node n8n/check-simulator-plan.mjs
+```
+
+Runs the workflow's own Code nodes from the JSON on simulated clocks with stub inputs, without the
+API. Over 10 000 plans it checks that the persona split, cancel share, lead times, booking dates
+per weekday (by the day weights) and party sizes for weekdays, weekends and each holiday follow
+patterns.md, and that start hours, the request party split and the approved pre-order chance
+follow `CONFIG`, with every lunch and dinner peak start above every low-hour start. A share passes
+within 4 standard errors of its expected value. It also checks that `apiBaseUrl` is the dev API,
+that requests are sent exactly when a start beyond 2 hours exists and never closer, the
+4-free-tables rule, the favourite location share, the pre-order chances per person with the lunch
+and dinner overrides and the dish weights, the answer checks (409 quiet, other errors fail, no
+pre-order for a request or a start within 30 minutes), the approved-request filter and the menu
+page guard.
+
+Every run prints its seed; `SIMULATOR_SEED=<seed> node n8n/check-simulator-plan.mjs` repeats a run
+exactly. It exits non-zero on a failed check. After tuning `CONFIG`, update patterns.md and the
+`PATTERNS` table in the script together.
