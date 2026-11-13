@@ -129,6 +129,13 @@ source_modules = ["app.common", "app.features.core"]
 forbidden_modules = ["app.features.*"]
 
 [[tool.importlinter.contracts]]
+# Bookings imports notifications one way (ADR 18); the reverse would make a core cycle.
+name = "Notifications import nothing from bookings"
+type = "forbidden"
+source_modules = ["app.features.core.notifications"]
+forbidden_modules = ["app.features.core.bookings"]
+
+[[tool.importlinter.contracts]]
 name = "Only regular endpoints and background tasks call application services"
 type = "protected"
 protected_modules = ["app.features.application_services.**"]

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{{ subject }}</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f5f7;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f5f7;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px; background-color:#ffffff; border-radius:12px;">
+          <tr>
+            <td style="padding:40px 32px 8px 32px; font-family:Arial, Helvetica, sans-serif; color:#111827;">
+              <h1 style="margin:0 0 16px 0; font-size:22px; line-height:30px; font-weight:bold;">{{ subject }}</h1>
+              <p style="margin:0 0 24px 0; font-size:16px; line-height:24px; color:#374151;">
+                {% block intro %}{% endblock %}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 32px 24px 32px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f3f4f6; border-radius:8px; font-family:Arial, Helvetica, sans-serif; font-size:15px; line-height:22px; color:#111827;">
+                <tr>
+                  <td style="padding:12px 16px 4px 16px; color:#6b7280;">Date</td>
+                  <td style="padding:12px 16px 4px 16px;">{{ date }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 16px; color:#6b7280;">Time</td>
+                  <td style="padding:4px 16px;">{{ time }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 16px; color:#6b7280;">Location</td>
+                  <td style="padding:4px 16px;">{{ location }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 16px 12px 16px; color:#6b7280;">Party</td>
+                  <td style="padding:4px 16px 12px 16px;">{{ party_size }} people</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:0 32px 32px 32px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" bgcolor="#2563eb" style="border-radius:8px;">
+                    <a href="{{ action_url }}" target="_blank" style="display:inline-block; padding:14px 32px; font-family:Arial, Helvetica, sans-serif; font-size:16px; font-weight:bold; color:#ffffff; text-decoration:none; border-radius:8px;">View your reservations</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 32px 40px 32px; font-family:Arial, Helvetica, sans-serif; color:#6b7280; font-size:13px; line-height:20px;">
+              {% block footer %}{% endblock %}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

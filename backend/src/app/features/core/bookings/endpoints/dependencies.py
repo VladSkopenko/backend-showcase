@@ -11,6 +11,7 @@ from app.features.core.bookings.services.booking_service import BookingService
 from app.features.core.bookings.services.participant_service import ParticipantService
 from app.features.core.bookings.services.table_search_service import TableSearchService
 from app.features.core.locations.endpoints.dependencies import LocationCatalogServiceDep
+from app.features.core.notifications.endpoints.dependencies import BookingDecisionNotifierDep
 
 SessionDep = Annotated[AsyncSession, Depends(get_session, scope="function")]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -35,9 +36,12 @@ def get_participant_service(
 
 
 def get_booking_request_service(
-    session: SessionDep, locations: LocationCatalogServiceDep, settings: SettingsDep
+    session: SessionDep,
+    locations: LocationCatalogServiceDep,
+    notifier: BookingDecisionNotifierDep,
+    settings: SettingsDep,
 ) -> BookingRequestService:
-    return BookingRequestService(session, locations, settings.booking)
+    return BookingRequestService(session, locations, notifier, settings.booking)
 
 
 def get_guest_cookies(settings: SettingsDep) -> GuestCookies:

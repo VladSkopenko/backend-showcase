@@ -1,0 +1,12 @@
+Hi {{ first_name }},
+
+The restaurant approved the booking request. The table is reserved for you.
+
+Date: {{ date }}
+Time: {{ time }}
+Location: {{ location }}
+Party: {{ party_size }} people
+
+View your reservations: {{ action_url }}
+
+You get this email because you are part of this booking.

@@ -1,0 +1,12 @@
+Hi {{ first_name }},
+
+The table could not be confirmed for this booking request at this time.
+
+Date: {{ date }}
+Time: {{ time }}
+Location: {{ location }}
+Party: {{ party_size }} people
+
+View your reservations: {{ action_url }}
+
+The booking's owner may send a new request. You get this email because you are part of this booking.

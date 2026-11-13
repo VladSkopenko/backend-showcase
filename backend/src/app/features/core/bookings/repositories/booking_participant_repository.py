@@ -1,5 +1,5 @@
 import uuid
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,3 +53,29 @@ class BookingParticipantRepository:
             )
         )
         return [(participant, name) for participant, name in rows]
+
+    async def list_account_holders(
+        self, *, booking_ids: Collection[uuid.UUID]
+    ) -> Sequence[tuple[uuid.UUID, User]]:
+        rows = await self._session.execute(
+            select(BookingParticipant.booking_id, User)
+            .join(User, User.id == BookingParticipant.user_id)
+            .where(BookingParticipant.booking_id.in_(booking_ids))
+            .order_by(
+                case((BookingParticipant.role == ParticipantRole.OWNER, 0), else_=1),
+                BookingParticipant.created_at,
+                BookingParticipant.id,
+            )
+        )
+        return [(booking_id, user) for booking_id, user in rows]
+
+    async def lock_account_holders(self, *, booking_ids: Collection[uuid.UUID]) -> None:
+        holders = select(BookingParticipant.user_id).where(
+            BookingParticipant.booking_id.in_(booking_ids)
+        )
+        await self._session.execute(
+            select(User.id)
+            .where(User.id.in_(holders))
+            .order_by(User.id)
+            .with_for_update(read=True, key_share=True)
+        )

@@ -137,3 +137,9 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/2-staff-role-and-request-decisions.md`
   summary: Requests rejected because a competitor was approved carry the approver's decided_by_id and the approval time, indistinguishable from a deliberate rejection; the story 9 staff dashboard must tell them apart (or a decision reason column is added then).
   evidence: reject_pending_overlapping stamps the same decided_at and decided_by_id as the approval.
+
+## Deferred from: review of 3-request-decision-notifications (2026-11-13)
+
+- source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/3-request-decision-notifications.md`
+  summary: Two narrow deadlock windows remain after recipients are locked first: a user who joins a competing request between the unlocked read and the user lock, and the staff user's row key-shared through decided_by_id after the table lock.
+  evidence: both need a concurrent join or a staff member booking the same table during their own decision; Postgres aborts one transaction with a deadlock error (500).

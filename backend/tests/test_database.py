@@ -1000,3 +1000,43 @@ async def test_a_preorder_line_is_submitted_exactly_when_it_has_an_id_and_a_time
 
         with pytest.raises(IntegrityError, match="ck_preorder_items_submission_matches_state"):
             await session.flush()
+
+
+async def test_migrated_notifications_table_has_the_expected_shape(
+    connection: AsyncConnection,
+) -> None:
+    def describe(sync_connection: Connection) -> dict[str, Any]:
+        inspector = inspect(sync_connection)
+        return {
+            "columns": inspector.get_columns("notifications"),
+            "foreign_keys": inspector.get_foreign_keys("notifications"),
+            "indexes": inspector.get_indexes("notifications"),
+        }
+
+    shape = await connection.run_sync(describe)
+
+    assert {column["name"]: column["nullable"] for column in shape["columns"]} == {
+        "id": False,
+        "user_id": False,
+        "kind": False,
+        "booking_id": False,
+        "created_at": False,
+        "read_at": True,
+    }
+    assert sorted(
+        (fk["name"], fk["constrained_columns"], fk["referred_table"], fk["options"]["ondelete"])
+        for fk in shape["foreign_keys"]
+    ) == [
+        ("fk_notifications_booking_id_bookings", ["booking_id"], "bookings", "CASCADE"),
+        ("fk_notifications_user_id_users", ["user_id"], "users", "CASCADE"),
+    ]
+    assert sorted((index["name"], index["column_names"]) for index in shape["indexes"]) == [
+        ("ix_notifications_booking_id", ["booking_id"]),
+        ("ix_notifications_user_id_created_at_id", ["user_id", "created_at", "id"]),
+    ]
+
+
+async def test_notification_kind_enum_has_both_decisions(connection: AsyncConnection) -> None:
+    labels = await connection.scalar(text("SELECT enum_range(NULL::notification_kind)::text[]"))
+
+    assert labels == ["BOOKING_REQUEST_APPROVED", "BOOKING_REQUEST_REJECTED"]

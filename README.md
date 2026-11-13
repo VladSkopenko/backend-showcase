@@ -93,6 +93,7 @@ Each non-obvious choice has a short record in [docs/adr](docs/adr):
 | [15](docs/adr/0015-platform-as-code.md) | Platform as code: a merge to `main` deploys the whole platform |
 | [16](docs/adr/0016-booking-participants-and-guest-identity.md) | Booking participants in core, invites as a regular feature, guests known by a hashed-token cookie |
 | [17](docs/adr/0017-preorder-parts-per-participant.md) | Pre-order drafts per participant submitted into one group, live prices, the join window and the booking lock |
+| [18](docs/adr/0018-in-app-notifications.md) | In-app notifications written in the decision's transaction, emails after the commit, skipped domains |
 
 ## Run it locally
 

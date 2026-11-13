@@ -312,3 +312,15 @@ def test_preorder_env_vars_land_in_the_preorder_block(monkeypatch: pytest.Monkey
     monkeypatch.setenv("PREORDER_MAX_ITEM_QUANTITY", "9")
 
     assert Settings().preorder.max_item_quantity == 9
+
+
+def test_notification_defaults() -> None:
+    assert Settings().notifications.skip_email_domains == ["example.com"]
+
+
+def test_notification_env_vars_land_in_the_notifications_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("NOTIFICATIONS_SKIP_EMAIL_DOMAINS", '["example.com", "bots.test"]')
+
+    assert Settings().notifications.skip_email_domains == ["example.com", "bots.test"]
