@@ -60,17 +60,21 @@ workflow file. In n8n, create a credential of type **Custom Auth** named exactly
 {"body": {"password": "..."}}
 ```
 
-n8n merges the `body` into the login request, next to the `email` the workflow sends. All four bots
+n8n merges the `body` into the login request, next to the `email` the workflow sends. All bots
 share this one password. Keep it outside the repository. If the `Log in` node shows no credential
 after an import, select `Booking bot password` there once.
 
 ## Bots
 
-On dev the four bots come from migration `0011`: `booking-bot-1@example.com` to
-`booking-bot-4@example.com`, already verified, with the password from the credential.
+On dev 40 booking bots come from migrations, all verified and with the password from the
+credential: `0011` adds `booking-bot-1@example.com` to `booking-bot-4@example.com` (named
+`Booking Bot 1` to `Booking Bot 4`), and `0020` adds `booking-bot-5@example.com` to
+`booking-bot-40@example.com` with distinct human first and last names. The current workflow
+uses bots 1 to 4 only; bots 5 to 40 wait for the simulator story.
 
-The local database gets no bots from migrations. Register them through the API with the same
-password; locally `/auth/register` echoes the code as `debug_code`:
+The local database gets no booking bots from migrations, so it has only bots 1 to 4, registered
+by the script below through the API with the same password; locally `/auth/register` echoes the
+code as `debug_code`:
 
 ```bash
 read -rs -p 'Bot password: ' BOT_PASSWORD; echo

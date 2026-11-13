@@ -5,7 +5,8 @@ Date: 2026-11-11
 ## Status
 
 Accepted. Amended 2026-11-13: migration `0018` adds a staff bot on dev and local with the same
-bot password.
+bot password. Amended 2026-11-13: migration `0020` adds 36 named guest bots on dev, 40 booking
+bots in all.
 
 ## Context
 
@@ -30,6 +31,13 @@ simulator to dev.
   access to the server. Its downgrade deletes the four users, and their bookings go with them
   through the `ON DELETE CASCADE` on `bookings.user_id`. A plain insert: if one of the emails is
   already taken on dev, the migration fails loudly instead of adopting a foreign account.
+- **Forty named booking bots.** Visitor statistics need distinct people, so migration `0020` adds
+  `booking-bot-5@example.com` to `booking-bot-40@example.com` on dev only, under the same gate,
+  password hash and plain insert as `0011`. Each has a distinct first and last name, a fixed mix of
+  Georgian and international common names, not taken from any known person. Bots 1 to 4 keep
+  their `Booking Bot N` names. No column marks a bot or its persona: the simulator decides which
+  bots are regulars. The downgrade deletes exactly the 36 added emails, and their bookings,
+  booking participations and notifications go with them through `ON DELETE CASCADE`.
 - **A staff bot for staff decisions.** Migration `0018` inserts one verified staff user,
   `waiter-bot@example.com` (`is_staff` true), with the same password hash as the booking bots,
   when `APP_ENVIRONMENT` is `dev` or `local`; staging and prod never get it, and there its upgrade
@@ -56,11 +64,11 @@ simulator to dev.
 
 ## Consequences
 
-- Migration `0011` reads the settings, so its effect depends on the environment it runs in. A dev
-  database restored into another environment keeps the bots, and a database migrated before its
-  environment was set to `dev` has none until `0011` is re-run.
+- Migrations `0011` and `0020` read the settings, so their effect depends on the environment they
+  run in. A dev database restored into another environment keeps the bots, and a database
+  migrated before its environment was set to `dev` has none until `0011` and `0020` are re-run.
 - The bots' bookings are real rows on dev and count against the grid like any guest's.
-- Changing the bot password needs a new migration with a new hash and the same change in the n8n
-  credential.
+- Changing the bot password needs a new migration that sets a new hash on every bot added by
+  `0011`, `0018` and `0020`, and the same change in the n8n credential.
 - Locally the bots are registered by hand through `/auth/register`, which echoes the code there,
   and `/auth/verify-email` (`n8n/README.md`).
