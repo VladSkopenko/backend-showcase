@@ -60,6 +60,8 @@ class BookingService:
             raise TableNotSuitableError()
         if start <= self._schedule.now():
             raise SlotUnavailableError()
+        if self._schedule.initial_status(party_size=party_size) == BookingStatus.PENDING:
+            self._schedule.check_requestable_start(starts_at=start, now=clock.now())
         end = start + self._schedule.duration
         # Always the user first, then the table, so two creates never wait on each other crosswise.
         await self._users.get_by_id(user_id=user_id, for_update=True)

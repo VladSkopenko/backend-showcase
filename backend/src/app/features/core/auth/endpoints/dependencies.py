@@ -25,7 +25,7 @@ from app.features.core.auth.services.verification_email_renderer import (
     VerificationEmailRenderer,
 )
 from app.features.core.auth.services.verification_email_service import VerificationEmailService
-from app.infrastructure.email import EmailSender, LoggingEmailSender, SmtpEmailSender
+from app.infrastructure.email import EmailSender, create_email_sender
 from app.infrastructure.oauth import OAuthClients
 
 # scope="function": the commit finishes before the response is sent and the background email runs.
@@ -34,9 +34,7 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 def get_email_sender(settings: SettingsDep) -> EmailSender:
-    if settings.email.is_configured:
-        return SmtpEmailSender(settings.email)
-    return LoggingEmailSender(settings.app.environment)
+    return create_email_sender(settings=settings.email, environment=settings.app.environment)
 
 
 @lru_cache

@@ -229,6 +229,28 @@ class BookingRepository:
         )
         return list(rejected.all())
 
+    async def list_pending_starting_by(self, *, starts_by: datetime) -> list[uuid.UUID]:
+        booking_ids = await self._session.scalars(
+            select(Booking.id).where(*self._pending_starting_by(starts_by)).order_by(Booking.id)
+        )
+        return list(booking_ids.all())
+
+    async def reject_pending_starting_by(
+        self, *, booking_ids: Collection[uuid.UUID], starts_by: datetime, decided_at: datetime
+    ) -> list[uuid.UUID]:
+        unlocked = (
+            select(Booking.id)
+            .where(Booking.id.in_(booking_ids), *self._pending_starting_by(starts_by))
+            .with_for_update(skip_locked=True)
+        )
+        rejected = await self._session.scalars(
+            update(Booking)
+            .where(Booking.id.in_(unlocked))
+            .values(status=BookingStatus.REJECTED, decided_at=decided_at, decided_by_id=None)
+            .returning(Booking.id)
+        )
+        return list(rejected.all())
+
     async def list_with_tables(
         self, *, booking_ids: Collection[uuid.UUID]
     ) -> Sequence[tuple[Booking, DiningTable]]:
@@ -271,6 +293,10 @@ class BookingRepository:
     @staticmethod
     def _pending_after(starting_after: datetime) -> tuple[ColumnElement[bool], ...]:
         return (Booking.status == BookingStatus.PENDING, Booking.starts_at > starting_after)
+
+    @staticmethod
+    def _pending_starting_by(starts_by: datetime) -> tuple[ColumnElement[bool], ...]:
+        return (Booking.status == BookingStatus.PENDING, Booking.starts_at <= starts_by)
 
     @classmethod
     def _confirmed_overlapping(

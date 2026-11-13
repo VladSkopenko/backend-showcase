@@ -37,6 +37,7 @@ from app.features.core.bookings.services.exceptions import (
     OverlappingBookingError,
     PartyBelowParticipantsError,
     PartyTooLargeError,
+    RequestTooLateError,
     SlotInvalidError,
     SlotUnavailableError,
     TableNotFoundError,
@@ -102,6 +103,7 @@ async def search_tables(
         TableNotSuitableError,
         SlotUnavailableError,
         OverlappingBookingError,
+        RequestTooLateError,
         statuses=DOCUMENTED_ERROR_STATUSES,
         takes_input=True,
     ),
@@ -109,9 +111,10 @@ async def search_tables(
         "Books a table for the signed-in user at one start of the day grid for a fixed duration. "
         "A small party is confirmed at once and holds the table. A larger party up to a limit "
         "sends a request with status `PENDING` that awaits staff confirmation, holds no table "
-        "and may compete with other requests for the same table and time. `starts_at` may carry "
-        "any offset. Refused when the table already has a confirmed booking at that time, or the "
-        "user already has a booking or request then."
+        "and may compete with other requests for the same table and time; a request must start "
+        "more than the auto-reject lead away. `starts_at` may carry any offset. Refused when the "
+        "table already has a confirmed booking at that time, or the user already has a booking "
+        "or request then."
     ),
 )
 async def create_booking(

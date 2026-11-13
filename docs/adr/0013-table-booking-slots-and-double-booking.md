@@ -12,6 +12,8 @@ Amended 2026-11-13: staff approve or reject requests; approving locks the table,
 and rejects the overlapping pending requests on that table; `REJECTED` is a terminal status.
 Amended 2026-11-13: decisions first key-share lock the user rows of the participants they notify
 (ADR 18), keeping the order user, table, booking.
+Amended 2026-11-13: a request still pending `auto_reject_lead_minutes` before its start is
+rejected automatically by a periodic task in the API process, and approve refuses it from then on.
 
 ## Context
 
@@ -68,13 +70,29 @@ a check in Python alone cannot see a row another transaction is about to insert.
   migrations or by an operator in SQL, never through the API. The staff routes check it in the
   service and answer `STAFF_ONLY` otherwise. Approve locks the table row, then the request row,
   so it serialises with every create and edit on that table and with a competing approve. Only a
-  `PENDING` request whose start is still ahead is approved (`REQUEST_NOT_PENDING`,
-  `REQUEST_EXPIRED`); a confirmed overlap on the table refuses it with `SLOT_UNAVAILABLE` and
-  leaves it pending. Otherwise it becomes `CONFIRMED`, and every other `PENDING` request on that
+  `PENDING` request whose start is more than `auto_reject_lead_minutes` away is approved
+  (`REQUEST_NOT_PENDING`, `REQUEST_EXPIRED`), and the staff list shows only those; a confirmed
+  overlap on the table refuses it with `SLOT_UNAVAILABLE` and leaves it pending. Otherwise it becomes `CONFIRMED`, and every other `PENDING` request on that
   table whose period overlaps becomes `REJECTED` in the same transaction; the exclusion
   constraint stays the backstop. Reject locks the request and needs `PENDING`. Every
   decision, including the rejections caused by an approval, stores `decided_at` and
   `decided_by_id` (`ON DELETE SET NULL`), for the staff reaction-time dashboard.
+- **Automatic rejection.** A request still `PENDING` once its start is `auto_reject_lead_minutes`
+  (default 120) away or less is rejected without staff, so a guest never waits on an unanswered
+  request until it is too late. Approve uses the same window: from the moment the start is the
+  lead away, it answers `REQUEST_EXPIRED` (the code of a passed start), so staff and the
+  automatic rejection never race on one request; reject stays allowed. Creating a request that
+  starts inside the lead is refused with `REQUEST_TOO_LATE`, since it could never be approved
+  (instant bookings are not affected). An automatic decision
+  stores `decided_at` and leaves `decided_by_id` `NULL`, which marks it as automatic for the
+  staff dashboard. A periodic task inside the API process runs the sweep every
+  `auto_reject_interval_seconds` (default 60) from the app's lifespan, in one transaction per run
+  on its own session: it reads the expiring requests, key-share locks the user rows of their
+  participants with an account, then rejects the requests it can lock with
+  `FOR UPDATE SKIP LOCKED` and writes their notifications (ADR 18). A request locked by a
+  concurrent staff decision is skipped and picked up by the next run if it is still pending. A
+  failed run is rolled back and logged, and the loop goes on. One API process per environment
+  runs it; a second process would only find the rows already locked or decided.
 - **`REJECTED`.** A rejected request is inactive by the active rule, so it frees the owner's
   time and closes its invite link like a cancelled booking. The owner's cancel, edit, edit slots
   and invite link report the inactive status by name: `BOOKING_ALREADY_CANCELLED` for
@@ -122,5 +140,10 @@ a check in Python alone cannot see a row another transaction is about to insert.
   pending requests overlapping the request on its table and key-share locks the user rows of every
   participant with an account of the request and those competitors, in id order; reject does the
   same for its request before locking it. Then approve locks the table and the request; the
-  pending requests it rejects are locked last by the update.
+  pending requests it rejects are locked last by the update. The automatic rejection key-shares
+  the users first as well and then locks only requests, never tables.
+- `decided_by_id` is also `NULL` when the staff user who decided is deleted (`ON DELETE SET NULL`),
+  so `NULL` means "automatic" only while staff accounts are kept.
+- The first run after a deploy rejects every older pending request inside the lead, including
+  ones whose start passed long ago, and notifies their participants.
 - Per-location or per-weekday opening hours would replace the single grid in `BookingSettings`.
