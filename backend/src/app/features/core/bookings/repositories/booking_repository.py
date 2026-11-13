@@ -180,6 +180,27 @@ class BookingRepository:
         row = (await self._session.execute(statement)).first()
         return None if row is None else (row[0], row[1], row[2], row[3])
 
+    async def list_pending_overlapping_ids(
+        self,
+        *,
+        table_id: uuid.UUID,
+        starts_at: datetime,
+        ends_at: datetime,
+        excluding_booking_id: uuid.UUID,
+    ) -> list[uuid.UUID]:
+        booking_ids = await self._session.scalars(
+            select(Booking.id).where(
+                Booking.table_id == table_id,
+                *self._overlapping(
+                    statuses=(BookingStatus.PENDING,),
+                    starts_at=starts_at,
+                    ends_at=ends_at,
+                    excluding_booking_id=excluding_booking_id,
+                ),
+            )
+        )
+        return list(booking_ids.all())
+
     async def reject_pending_overlapping(
         self,
         *,
@@ -189,8 +210,8 @@ class BookingRepository:
         excluding_booking_id: uuid.UUID,
         decided_at: datetime,
         decided_by_id: uuid.UUID,
-    ) -> None:
-        await self._session.execute(
+    ) -> list[uuid.UUID]:
+        rejected = await self._session.scalars(
             update(Booking)
             .where(
                 Booking.table_id == table_id,
@@ -204,7 +225,20 @@ class BookingRepository:
             .values(
                 status=BookingStatus.REJECTED, decided_at=decided_at, decided_by_id=decided_by_id
             )
+            .returning(Booking.id)
         )
+        return list(rejected.all())
+
+    async def list_with_tables(
+        self, *, booking_ids: Collection[uuid.UUID]
+    ) -> Sequence[tuple[Booking, DiningTable]]:
+        rows = await self._session.execute(
+            select(Booking, DiningTable)
+            .join(DiningTable, DiningTable.id == Booking.table_id)
+            .where(Booking.id.in_(booking_ids))
+            .order_by(Booking.starts_at, Booking.created_at, Booking.id)
+        )
+        return [(booking, table) for booking, table in rows]
 
     async def flush(self) -> None:
         await self._session.flush()

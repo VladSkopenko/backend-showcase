@@ -10,6 +10,8 @@ time. Amended 2026-11-13: parties above the instant limit send a pending request
 rules depend on the status, and one "active" rule names the statuses that hold a guest's time.
 Amended 2026-11-13: staff approve or reject requests; approving locks the table, then the request,
 and rejects the overlapping pending requests on that table; `REJECTED` is a terminal status.
+Amended 2026-11-13: decisions first key-share lock the user rows of the participants they notify
+(ADR 18), keeping the order user, table, booking.
 
 ## Context
 
@@ -70,7 +72,7 @@ a check in Python alone cannot see a row another transaction is about to insert.
   `REQUEST_EXPIRED`); a confirmed overlap on the table refuses it with `SLOT_UNAVAILABLE` and
   leaves it pending. Otherwise it becomes `CONFIRMED`, and every other `PENDING` request on that
   table whose period overlaps becomes `REJECTED` in the same transaction; the exclusion
-  constraint stays the backstop. Reject locks only the request and needs `PENDING`. Every
+  constraint stays the backstop. Reject locks the request and needs `PENDING`. Every
   decision, including the rejections caused by an approval, stores `decided_at` and
   `decided_by_id` (`ON DELETE SET NULL`), for the staff reaction-time dashboard.
 - **`REJECTED`.** A rejected request is inactive by the active rule, so it frees the owner's
@@ -114,6 +116,11 @@ a check in Python alone cannot see a row another transaction is about to insert.
 - `alembic check` cannot reflect exclusion constraints, so drift between the model and the
   database is caught only by the `pg_get_constraintdef` test in `tests/test_database.py`.
 - The lock order (user, then table, then booking) is a rule for every write path on bookings;
-  taking the locks in another order risks deadlocks. Approve takes no user lock and keeps the
-  table-before-booking part; the pending requests it rejects are locked last by the update.
+  taking the locks in another order risks deadlocks. A decision writes notification rows whose
+  foreign key takes `FOR KEY SHARE` on each recipient's user row, which conflicts with the
+  `FOR UPDATE` that create and edit take on the user. So before any other lock, approve reads the
+  pending requests overlapping the request on its table and key-share locks the user rows of every
+  participant with an account of the request and those competitors, in id order; reject does the
+  same for its request before locking it. Then approve locks the table and the request; the
+  pending requests it rejects are locked last by the update.
 - Per-location or per-weekday opening hours would replace the single grid in `BookingSettings`.

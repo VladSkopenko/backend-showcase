@@ -2,6 +2,7 @@ from app.features.core.bookings.dto.booked_table_view import BookedTableView
 from app.features.core.bookings.dto.booking_request_page import BookingRequestPage
 from app.features.core.bookings.dto.booking_request_view import BookingRequestView
 from app.features.core.bookings.dto.booking_view import BookingView
+from app.features.core.bookings.dto.decision_outcome import DecisionOutcome
 from app.features.core.bookings.dto.invite_preview_view import InvitePreviewView
 from app.features.core.bookings.dto.join_outcome import JoinOutcome
 from app.features.core.bookings.dto.owned_booking import OwnedBooking
@@ -16,6 +17,7 @@ __all__ = [
     "BookingRequestPage",
     "BookingRequestView",
     "BookingView",
+    "DecisionOutcome",
     "InvitePreviewView",
     "JoinOutcome",
     "OwnedBooking",

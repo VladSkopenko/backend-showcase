@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, BackgroundTasks, Query
 
 from app.common.error_responses import error_responses
 from app.features.core.auth.endpoints.dependencies import CurrentUserDep
@@ -17,6 +17,7 @@ from app.features.core.bookings.services.exceptions import (
     SlotUnavailableError,
     StaffOnlyError,
 )
+from app.features.core.notifications.endpoints.dependencies import DecisionEmailServiceDep
 
 router = APIRouter(prefix="/staff/booking-requests", tags=[BookingOpenApiTags.STAFF])
 
@@ -62,15 +63,22 @@ async def list_booking_requests(
         "Approves a pending request whose start is still ahead: it becomes a confirmed booking "
         "that holds its table, and every other pending request overlapping it on that table is "
         "rejected. Refused, and the request stays pending, when the table already has a "
-        "confirmed booking at that time. Records when and by whom it was decided. Staff only."
+        "confirmed booking at that time. Records when and by whom it was decided. Every "
+        "participant with an account of the approved and the rejected requests gets an in-app "
+        "notification and an email, except addresses on skipped domains; without a configured "
+        "mail server the email is only logged. Staff only."
     ),
 )
 async def approve_booking_request(
-    booking_id: uuid.UUID, user: CurrentUserDep, requests: BookingRequestServiceDep
+    booking_id: uuid.UUID,
+    user: CurrentUserDep,
+    requests: BookingRequestServiceDep,
+    decision_emails: DecisionEmailServiceDep,
+    background_tasks: BackgroundTasks,
 ) -> BookingRequestResponse:
-    return BookingRequestResponse.model_validate(
-        await requests.approve(staff_id=user.id, booking_id=booking_id)
-    )
+    outcome = await requests.approve(staff_id=user.id, booking_id=booking_id)
+    background_tasks.add_task(decision_emails.send, notices=outcome.notices)
+    return BookingRequestResponse.model_validate(outcome.view)
 
 
 @router.post(
@@ -86,12 +94,18 @@ async def approve_booking_request(
     ),
     description=(
         "Rejects a pending request: it frees the owner's time, and the owner can no longer "
-        "cancel, edit or share it. Records when and by whom it was decided. Staff only."
+        "cancel, edit or share it. Records when and by whom it was decided. Every participant "
+        "with an account gets an in-app notification and an email, except addresses on skipped "
+        "domains; without a configured mail server the email is only logged. Staff only."
     ),
 )
 async def reject_booking_request(
-    booking_id: uuid.UUID, user: CurrentUserDep, requests: BookingRequestServiceDep
+    booking_id: uuid.UUID,
+    user: CurrentUserDep,
+    requests: BookingRequestServiceDep,
+    decision_emails: DecisionEmailServiceDep,
+    background_tasks: BackgroundTasks,
 ) -> BookingRequestResponse:
-    return BookingRequestResponse.model_validate(
-        await requests.reject(staff_id=user.id, booking_id=booking_id)
-    )
+    outcome = await requests.reject(staff_id=user.id, booking_id=booking_id)
+    background_tasks.add_task(decision_emails.send, notices=outcome.notices)
+    return BookingRequestResponse.model_validate(outcome.view)

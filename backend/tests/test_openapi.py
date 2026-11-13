@@ -59,6 +59,10 @@ FLOWS = {
         ("post", "/api/v1/staff/booking-requests/{booking_id}/approve"),
         ("post", "/api/v1/staff/booking-requests/{booking_id}/reject"),
     ],
+    "Notifications": [
+        ("get", "/api/v1/notifications"),
+        ("post", "/api/v1/notifications/{notification_id}/read"),
+    ],
     "Health": [
         ("get", "/"),
         ("get", "/health"),

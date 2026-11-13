@@ -155,6 +155,15 @@ class PreorderSettings(BaseSettings):
     max_item_quantity: int = 20
 
 
+class NotificationSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="NOTIFICATIONS_", env_file=ENV_FILE, extra="ignore"
+    )
+
+    # Bots and test accounts live there; their in-app notifications are still stored.
+    skip_email_domains: list[str] = ["example.com"]
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -168,6 +177,7 @@ class Settings(BaseSettings):
     media: MediaSettings = Field(default_factory=MediaSettings)  # type: ignore[arg-type]
     booking: BookingSettings = Field(default_factory=BookingSettings)
     preorder: PreorderSettings = Field(default_factory=PreorderSettings)
+    notifications: NotificationSettings = Field(default_factory=NotificationSettings)
 
     @classmethod
     def settings_customise_sources(

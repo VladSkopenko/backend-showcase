@@ -26,6 +26,11 @@ from app.features.core.locations.endpoints import router as locations_router
 from app.features.core.menu.endpoints import ERROR_STATUSES as MENU_ERROR_STATUSES
 from app.features.core.menu.endpoints import MenuOpenApiTags
 from app.features.core.menu.endpoints import router as menu_router
+from app.features.core.notifications.endpoints import (
+    ERROR_STATUSES as NOTIFICATIONS_ERROR_STATUSES,
+)
+from app.features.core.notifications.endpoints import NotificationsOpenApiTags
+from app.features.core.notifications.endpoints import router as notifications_router
 from app.features.invites.endpoints import ERROR_STATUSES as INVITES_ERROR_STATUSES
 from app.features.invites.endpoints import InvitesOpenApiTags
 from app.features.invites.endpoints import router as invites_router
@@ -39,6 +44,7 @@ ERROR_STATUSES = {
     **MENU_ERROR_STATUSES,
     **LOCATIONS_ERROR_STATUSES,
     **BOOKINGS_ERROR_STATUSES,
+    **NOTIFICATIONS_ERROR_STATUSES,
     **INVITES_ERROR_STATUSES,
     **PREORDER_ERROR_STATUSES,
 }
@@ -56,6 +62,7 @@ def create_app() -> FastAPI:
             *InvitesOpenApiTags.METADATA,
             *PreorderOpenApiTags.METADATA,
             *BookingOpenApiTags.STAFF_METADATA,
+            *NotificationsOpenApiTags.METADATA,
             *HealthOpenApiTags.METADATA,
         ],
     )
@@ -79,6 +86,7 @@ def create_app() -> FastAPI:
     app.include_router(invites_router, prefix="/api/v1")
     app.include_router(preorder_router, prefix="/api/v1")
     app.include_router(staff_router, prefix="/api/v1")
+    app.include_router(notifications_router, prefix="/api/v1")
 
     @app.exception_handler(DomainError)
     async def handle_domain_error(request: Request, exc: DomainError) -> JSONResponse:
