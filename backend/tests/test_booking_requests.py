@@ -115,6 +115,43 @@ async def test_the_smallest_party_above_the_instant_limit_sends_a_request(
     )
 
 
+@pytest.mark.parametrize(
+    ("table_name", "party_size", "hour", "minute", "expected"),
+    [
+        ("six", 6, 14, 0, "REQUEST_TOO_LATE"),
+        ("six", 6, 15, 0, "REQUEST_TOO_LATE"),
+        ("six", 6, 15, 30, "PENDING"),
+        ("four", 2, 14, 0, "CONFIRMED"),
+    ],
+)
+async def test_a_request_must_start_beyond_the_auto_reject_lead(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    fake_clock: FakeClock,
+    connection: AsyncConnection,
+    table_name: str,
+    party_size: int,
+    hour: int,
+    minute: int,
+    expected: str,
+) -> None:
+    # 15:00 is exactly the default lead of 120 minutes away.
+    fake_clock.current = at(TODAY, 13)
+    await sign_in(client, ADA)
+
+    response = await book(
+        client, getattr(venue, table_name).id, at(TODAY, hour, minute), party_size=party_size
+    )
+
+    if expected == "REQUEST_TOO_LATE":
+        assert_error(response, 409, "REQUEST_TOO_LATE")
+        assert await count_bookings(connection) == 0
+    else:
+        assert response.status_code == 201, response.text
+        assert response.json()["status"] == expected
+
+
 async def test_two_users_may_request_the_same_table_and_start(
     client: httpx2.AsyncClient, venue: Venue, users: dict[str, User], connection: AsyncConnection
 ) -> None:
@@ -306,8 +343,8 @@ async def test_a_pending_request_cannot_be_cancelled_after_the_cutoff(
     connection: AsyncConnection,
 ) -> None:
     await sign_in(client, ADA)
-    created = await request(client, venue.six.id, at(TODAY, 14))
-    fake_clock.advance(minutes=25)
+    created = await request(client, venue.six.id, at(TODAY, 16))
+    fake_clock.advance(hours=2, minutes=25)
     await sign_in(client, ADA)
 
     response = await cancel(client, created["id"])

@@ -1,9 +1,13 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
+from app.common.database import get_engine, get_sessionmaker
 from app.common.error_responses import (
     domain_error_response,
     http_error_response,
@@ -11,7 +15,7 @@ from app.common.error_responses import (
     validation_error_response,
 )
 from app.common.errors import DomainError
-from app.config.settings import get_settings
+from app.config.settings import Settings, get_settings
 from app.features.core.auth.endpoints import ERROR_STATUSES as AUTH_ERROR_STATUSES
 from app.features.core.auth.endpoints import AuthOpenApiTags, oauth_router
 from app.features.core.auth.endpoints import router as auth_router
@@ -37,6 +41,8 @@ from app.features.invites.endpoints import router as invites_router
 from app.features.preorder.endpoints import ERROR_STATUSES as PREORDER_ERROR_STATUSES
 from app.features.preorder.endpoints import PreorderOpenApiTags
 from app.features.preorder.endpoints import router as preorder_router
+from app.infrastructure.background_tasks import PeriodicTask, RequestExpiryJob
+from app.infrastructure.email import create_email_sender
 from app.infrastructure.oauth import OAuthClients
 
 ERROR_STATUSES = {
@@ -50,10 +56,33 @@ ERROR_STATUSES = {
 }
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings: Settings = app.state.settings
+    request_expiry = PeriodicTask(
+        name="request expiry",
+        interval_seconds=settings.booking.auto_reject_interval_seconds,
+        job=RequestExpiryJob(
+            get_sessionmaker(),
+            settings=settings,
+            email_sender=create_email_sender(
+                settings=settings.email, environment=settings.app.environment
+            ),
+        ).run,
+    )
+    request_expiry.start()
+    try:
+        yield
+    finally:
+        await request_expiry.stop()
+        await get_engine().dispose()
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
         title=settings.app.name,
+        lifespan=lifespan,
         openapi_tags=[
             *AuthOpenApiTags.METADATA,
             *MenuOpenApiTags.METADATA,
@@ -66,6 +95,7 @@ def create_app() -> FastAPI:
             *HealthOpenApiTags.METADATA,
         ],
     )
+    app.state.settings = settings
     app.state.oauth_clients = OAuthClients(google=settings.google)
     # Holds only the OAuth state, nonce and PKCE verifier between /login and /callback.
     app.add_middleware(

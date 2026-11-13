@@ -140,6 +140,16 @@ async def test_staff_list_future_pending_requests_by_start_then_creation(
         status=pending,
         party_size=8,
     )
+    # Inside the auto-reject lead and exactly at it: approve refuses both, so the list hides them.
+    for starts_at in (at(TODAY, 15), START + timedelta(minutes=120)):
+        await add_booking(
+            session_factory,
+            user=users[GRACE],
+            table=venue.eight,
+            starts_at=starts_at,
+            status=pending,
+            party_size=8,
+        )
     await add_booking(session_factory, user=users[ADA], table=venue.four, starts_at=EVENING)
     for status in (BookingStatus.CONFIRMED, BookingStatus.REJECTED, BookingStatus.CANCELLED):
         await add_booking(
@@ -363,6 +373,72 @@ async def test_a_request_whose_start_has_passed_cannot_be_approved(
 
     assert_error(response, 409, "REQUEST_EXPIRED")
     assert await stored_decision(connection, booking.id) == (BookingStatus.PENDING, None, None)
+
+
+@pytest.mark.parametrize(
+    ("minutes_ahead", "expected_status"),
+    [(90, 409), (120, 409), (121, 200)],
+)
+async def test_approval_closes_once_the_start_is_within_the_auto_reject_lead(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    staff: User,
+    session_factory: async_sessionmaker[AsyncSession],
+    connection: AsyncConnection,
+    minutes_ahead: int,
+    expected_status: int,
+) -> None:
+    booking = await add_booking(
+        session_factory,
+        user=users[ADA],
+        table=venue.six,
+        starts_at=START + timedelta(minutes=minutes_ahead),
+        status=BookingStatus.PENDING,
+        party_size=6,
+    )
+    await sign_in(client, STAFF)
+
+    response = await decide(client, booking.id, "approve")
+
+    if expected_status == 409:
+        assert_error(response, 409, "REQUEST_EXPIRED")
+        assert await stored_decision(connection, booking.id) == (
+            BookingStatus.PENDING,
+            None,
+            None,
+        )
+    else:
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "CONFIRMED"
+
+
+async def test_staff_reject_a_pending_request_inside_the_auto_reject_lead(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    staff: User,
+    session_factory: async_sessionmaker[AsyncSession],
+    connection: AsyncConnection,
+) -> None:
+    booking = await add_booking(
+        session_factory,
+        user=users[ADA],
+        table=venue.six,
+        starts_at=START + timedelta(minutes=90),
+        status=BookingStatus.PENDING,
+        party_size=6,
+    )
+    await sign_in(client, STAFF)
+
+    response = await decide(client, booking.id, "reject")
+
+    assert response.status_code == 200, response.text
+    assert await stored_decision(connection, booking.id) == (
+        BookingStatus.REJECTED,
+        START,
+        staff.id,
+    )
 
 
 async def test_staff_reject_a_pending_request(

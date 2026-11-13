@@ -4,7 +4,8 @@ Date: 2026-11-13
 
 ## Status
 
-Accepted
+Accepted. Amended 2026-11-13: the automatic rejection of stale requests (ADR 13) notifies like a
+staff rejection; notices are built in one place and the email sender is built without HTTP.
 
 ## Context
 
@@ -32,6 +33,14 @@ user reads in the app, plus an email.
   key-share lock the recipients' user rows through the foreign key, so a decision locks those
   rows first, in id order, to keep the ADR 13 order user, table, booking. The notifier takes only a session, so the automatic rejection of
   stale requests can call it without HTTP.
+- **Automatic rejections notify like staff rejections.** The periodic task that rejects requests
+  still pending inside the auto-reject lead (ADR 13) writes `BOOKING_REQUEST_REJECTED` rows in
+  its own transaction and sends the same emails after its commit, with the same skipped domains.
+  `DecisionNoticeBuilder` in bookings builds the notices (recipients, local start, location,
+  party size) for staff decisions and the task alike. Without a request there are no
+  `BackgroundTasks`: the task awaits `DecisionEmailService.send` itself after the commit, and
+  builds its sender with `create_email_sender` from `app.infrastructure.email`, the same factory
+  the request dependency uses.
 - **Emails after the commit, never failing the decision.** The staff routes schedule
   `DecisionEmailService.send` with FastAPI `BackgroundTasks`, as registration does. It sends one
   email per recipient through the existing `EmailSender` (SMTP, or the logging sender when email is
@@ -63,5 +72,6 @@ user reads in the app, plus an email.
 - An email lost between the commit and the send is not retried.
 - Rows accumulate: there is no cleanup yet, and the simulator bots on dev get a row for every
   decision on their requests.
-- Notifications depend on core auth for `RenderedEmail` and for the email sender dependency.
+- Notifications depend on core auth for `RenderedEmail` and for the email sender dependency; the
+  sender itself comes from `app.infrastructure.email`.
 - The rule that notifications import nothing from bookings is an import-linter contract.

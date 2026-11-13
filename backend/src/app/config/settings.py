@@ -147,6 +147,10 @@ class BookingSettings(BaseSettings):
     preorder_lock_minutes: int = 30
     guest_token_ttl_days: int = 31
     guest_cookie_path: str = "/"
+    # A request still pending this close to its start is rejected automatically; inside this lead
+    # a request can be neither created nor approved.
+    auto_reject_lead_minutes: int = Field(default=120, ge=0)
+    auto_reject_interval_seconds: int = Field(default=60, gt=0)
 
 
 class PreorderSettings(BaseSettings):

@@ -14,6 +14,8 @@ from app.features.core.bookings.services.exceptions import (
     EndsAfterClosingError,
     InviteClosedError,
     PartyTooLargeError,
+    RequestExpiredError,
+    RequestTooLateError,
     SlotInvalidError,
 )
 
@@ -22,6 +24,7 @@ class BookingSchedule:
     def __init__(self, settings: BookingSettings) -> None:
         self._settings = settings
         self.duration = timedelta(minutes=settings.duration_minutes)
+        self._auto_reject_lead = timedelta(minutes=settings.auto_reject_lead_minutes)
         self._max_party_size = settings.max_online_party_size
         self._max_request_party_size = settings.max_request_party_size
         first = settings.first_slot.hour * 60 + settings.first_slot.minute
@@ -109,6 +112,17 @@ class BookingSchedule:
     def check_joinable(self, *, starts_at: datetime) -> None:
         if not self.preorder_open(starts_at=starts_at):
             raise InviteClosedError()
+
+    def check_approvable(self, *, starts_at: datetime, now: datetime) -> None:
+        if starts_at <= self.auto_reject_starts_by(now=now):
+            raise RequestExpiredError()
+
+    def check_requestable_start(self, *, starts_at: datetime, now: datetime) -> None:
+        if starts_at <= self.auto_reject_starts_by(now=now):
+            raise RequestTooLateError()
+
+    def auto_reject_starts_by(self, *, now: datetime) -> datetime:
+        return now + self._auto_reject_lead
 
     def preorder_open(self, *, starts_at: datetime) -> bool:
         return starts_at - clock.now() >= timedelta(minutes=self._settings.preorder_lock_minutes)

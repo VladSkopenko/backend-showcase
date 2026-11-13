@@ -102,7 +102,7 @@ source_modules = [
     "app.features.core.*.dto",
     "app.features.core.*.enums",
     "app.features.application_services.**",
-    "app.infrastructure.background_tasks.**",
+    "app.infrastructure.background_tasks",
 ]
 forbidden_modules = ["fastapi", "starlette"]
 
@@ -139,7 +139,7 @@ forbidden_modules = ["app.features.core.bookings"]
 name = "Only regular endpoints and background tasks call application services"
 type = "protected"
 protected_modules = ["app.features.application_services.**"]
-allowed_importers = ["app.features.*.endpoints", "app.infrastructure.background_tasks.**"]
+allowed_importers = ["app.features.*.endpoints", "app.infrastructure.background_tasks"]
 
 [[tool.importlinter.contracts]]
 # Scripts run from a developer's machine with dev-only dependencies such as boto3; the runtime

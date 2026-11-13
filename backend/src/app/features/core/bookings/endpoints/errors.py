@@ -23,6 +23,7 @@ from app.features.core.bookings.services.exceptions import (
     PartyTooLargeError,
     RequestExpiredError,
     RequestNotPendingError,
+    RequestTooLateError,
     SlotInvalidError,
     SlotUnavailableError,
     StaffOnlyError,
@@ -57,6 +58,7 @@ ERROR_STATUSES: dict[type[DomainError], int] = {
     StaffOnlyError: status.HTTP_403_FORBIDDEN,
     RequestNotPendingError: status.HTTP_409_CONFLICT,
     RequestExpiredError: status.HTTP_409_CONFLICT,
+    RequestTooLateError: status.HTTP_409_CONFLICT,
 }
 
 # The routes also document errors raised by the auth and locations features they build on.

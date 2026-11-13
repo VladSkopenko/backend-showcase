@@ -50,7 +50,9 @@
   spec_checkpoint: false
   done_checkpoint: true
   invoke_dev_with: >-
-    Vlad imports the workflow file into n8n himself; give him the exact import steps.
+    Vlad imports the workflow file into n8n himself; give him the exact import steps. Once both
+    workflows run, add an n8n row to README.md and README.uk.md: the tailnet-only editor link,
+    links to both workflow JSON files, and editor screenshots that Vlad takes.
 - id: "8"
   title: Public Grafana on dev data
   description: >-

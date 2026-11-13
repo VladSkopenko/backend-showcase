@@ -29,10 +29,11 @@ router = APIRouter(prefix="/staff/booking-requests", tags=[BookingOpenApiTags.ST
         NotAuthenticatedError, StaffOnlyError, statuses=DOCUMENTED_ERROR_STATUSES, takes_input=True
     ),
     description=(
-        "Lists the pending large-party requests whose start is still ahead, earliest start "
-        "first, then oldest request first. Each shows the owner's first name, the party, the "
-        "time, the table, the location and how many other pending requests compete for that "
-        "table and time. `limit` is 20 by default and at most 50. Staff only."
+        "Lists the pending large-party requests that can still be approved, those starting "
+        "further ahead than the auto-reject lead, earliest start first, then oldest request "
+        "first. Each shows the owner's first name, the party, the time, the table, the location "
+        "and how many other pending requests compete for that table and time. `limit` is 20 by "
+        "default and at most 50. Staff only."
     ),
 )
 async def list_booking_requests(
@@ -60,13 +61,14 @@ async def list_booking_requests(
         takes_input=True,
     ),
     description=(
-        "Approves a pending request whose start is still ahead: it becomes a confirmed booking "
-        "that holds its table, and every other pending request overlapping it on that table is "
-        "rejected. Refused, and the request stays pending, when the table already has a "
-        "confirmed booking at that time. Records when and by whom it was decided. Every "
-        "participant with an account of the approved and the rejected requests gets an in-app "
-        "notification and an email, except addresses on skipped domains; without a configured "
-        "mail server the email is only logged. Staff only."
+        "Approves a pending request whose start is further ahead than the auto-reject lead: it "
+        "becomes a confirmed booking that holds its table, and every other pending request "
+        "overlapping it on that table is rejected. Inside the lead the request can only be "
+        "rejected; the API rejects it on its own shortly after. Refused, and the request stays "
+        "pending, when the table already has a confirmed booking at that time. Records when "
+        "and by whom it was decided. Every participant with an account of the approved and the "
+        "rejected requests gets an in-app notification and an email, except addresses on "
+        "skipped domains; without a configured mail server the email is only logged. Staff only."
     ),
 )
 async def approve_booking_request(

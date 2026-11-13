@@ -259,6 +259,8 @@ def test_booking_defaults() -> None:
     assert booking.preorder_lock_minutes == 30
     assert booking.guest_token_ttl_days == 31
     assert booking.guest_cookie_path == "/"
+    assert booking.auto_reject_lead_minutes == 120
+    assert booking.auto_reject_interval_seconds == 60
 
 
 def test_booking_env_vars_land_in_the_booking_block(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -276,6 +278,8 @@ def test_booking_env_vars_land_in_the_booking_block(monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv("BOOKING_PREORDER_LOCK_MINUTES", "45")
     monkeypatch.setenv("BOOKING_GUEST_TOKEN_TTL_DAYS", "7")
     monkeypatch.setenv("BOOKING_GUEST_COOKIE_PATH", "/api/v1")
+    monkeypatch.setenv("BOOKING_AUTO_REJECT_LEAD_MINUTES", "90")
+    monkeypatch.setenv("BOOKING_AUTO_REJECT_INTERVAL_SECONDS", "30")
 
     booking = Settings().booking
 
@@ -293,6 +297,8 @@ def test_booking_env_vars_land_in_the_booking_block(monkeypatch: pytest.MonkeyPa
     assert booking.preorder_lock_minutes == 45
     assert booking.guest_token_ttl_days == 7
     assert booking.guest_cookie_path == "/api/v1"
+    assert booking.auto_reject_lead_minutes == 90
+    assert booking.auto_reject_interval_seconds == 30
 
 
 def test_request_party_size_cannot_exceed_the_largest_storable_party(
@@ -302,6 +308,28 @@ def test_request_party_size_cannot_exceed_the_largest_storable_party(
 
     with pytest.raises(ValidationError, match="max_request_party_size"):
         Settings()
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "valid"),
+    [
+        ("BOOKING_AUTO_REJECT_LEAD_MINUTES", "-1", False),
+        ("BOOKING_AUTO_REJECT_LEAD_MINUTES", "0", True),
+        ("BOOKING_AUTO_REJECT_INTERVAL_SECONDS", "0", False),
+        ("BOOKING_AUTO_REJECT_INTERVAL_SECONDS", "1", True),
+    ],
+)
+def test_auto_reject_lead_is_never_negative_and_interval_always_positive(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str, valid: bool
+) -> None:
+    monkeypatch.setenv(name, value)
+    field = name.removeprefix("BOOKING_").lower()
+
+    if valid:
+        assert getattr(Settings().booking, field) == int(value)
+    else:
+        with pytest.raises(ValidationError, match=field):
+            Settings()
 
 
 def test_preorder_defaults() -> None:

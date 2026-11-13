@@ -166,8 +166,17 @@ class RequestNotPendingError(DomainError):
         super().__init__("This booking is not a request awaiting a decision.")
 
 
+class RequestTooLateError(DomainError):
+    code = "REQUEST_TOO_LATE"
+
+    def __init__(self) -> None:
+        super().__init__("This start is too soon for a large-party request; choose a later start.")
+
+
 class RequestExpiredError(DomainError):
     code = "REQUEST_EXPIRED"
 
     def __init__(self) -> None:
-        super().__init__("This request's start has passed, so it can no longer be approved.")
+        super().__init__(
+            "This request starts too soon or has started, so it can no longer be approved."
+        )
