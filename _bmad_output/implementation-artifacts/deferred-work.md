@@ -143,3 +143,10 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/3-request-decision-notifications.md`
   summary: Two narrow deadlock windows remain after recipients are locked first: a user who joins a competing request between the unlocked read and the user lock, and the staff user's row key-shared through decided_by_id after the table lock.
   evidence: both need a concurrent join or a staff member booking the same table during their own decision; Postgres aborts one transaction with a deadlock error (500).
+
+## Deferred: application logging (2026-11-13)
+
+- source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/4-auto-reject-pending-requests.md`
+  summary: The app configures no logging level or format, so its INFO lines (e.g. the auto-reject run count) never show; set up structured logging together with VictoriaLogs and log shipping (issue #26 step "VictoriaLogs and log shipping"), as one task.
+  evidence: grep finds no basicConfig, dictConfig or setLevel in backend/src/app; live check showed only WARNING lines.
+  note: Vlad wants logs visible without the tailnet. Proposed: keep VictoriaLogs tailnet-only (its UI has no auth) and show logs publicly through Grafana (anonymous Viewer) with a VictoriaLogs data source; this needs a rule that logs never carry emails, tokens or other personal data, since a Viewer can query the data source.
