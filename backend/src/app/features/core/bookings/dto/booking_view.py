@@ -18,4 +18,5 @@ class BookingView:
     table: BookedTableView
     location: LocationView
     role: ParticipantRole
+    participant_id: uuid.UUID
     participants: list[ParticipantView]

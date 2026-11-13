@@ -29,3 +29,16 @@ async def test_the_first_dish_of_the_file_is_the_newest(connection: AsyncConnect
     )
 
     assert newest == "pkhali-trio"
+
+
+async def test_every_dish_has_the_prep_time_of_its_category(connection: AsyncConnection) -> None:
+    rows = (
+        await connection.execute(
+            text(
+                "SELECT category::text, prep_minutes, count(*) FROM dishes "
+                "GROUP BY category, prep_minutes ORDER BY 1"
+            )
+        )
+    ).all()
+
+    assert rows == [("APPETIZER", 10, 10), ("DESSERT", 10, 10), ("MAIN_COURSE", 20, 10)]

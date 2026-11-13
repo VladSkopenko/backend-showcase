@@ -28,7 +28,7 @@ the first release.
 | Deploy | A merge to `main` deploys dev with no manual steps. CI reaches the server only through Tailscale, and a forced-command entrypoint deploys only commits from the environment's branch ([ADR 2](docs/adr/0002-ci-access-through-tailscale.md), [ADR 3](docs/adr/0003-deploy-entrypoint-verifies-commit.md)) |
 | Infrastructure | Terraform for the Oracle Cloud VM, network, data volume, media bucket and its IAM; cloud-init for the base OS; the server is replaced, not patched ([ADR 8](docs/adr/0008-terraform-and-immutable-server.md)) |
 | Platform | Caddy with automatic HTTPS in front of the app stacks; one VM, a platform stack and an app stack per environment ([ADR 7](docs/adr/0007-single-vm-platform-and-app-stacks.md)) |
-| API | Registration with email verification, JWT sessions with refresh rotation, password reset, Google sign-in, a menu with pictures in Object Storage, restaurant locations with their tables, table booking with a slot grid and double-booking protection, editing a booking (time, guests, stay length) |
+| API | Registration with email verification, JWT sessions with refresh rotation, password reset, Google sign-in, a menu with pictures in Object Storage, restaurant locations with their tables, table booking with a slot grid and double-booking protection, editing a booking (time, guests, stay length), invites by link for friends with or without an account, a pre-order cart for every participant |
 
 ## Architecture
 
@@ -69,7 +69,7 @@ deploy jobs come with the first release.
   these rules in CI.
 - Reference data such as the menu and the locations ships as migrations, so every environment gets
   it without access to the server.
-- Swagger groups routes by user flow (Registration, Session, Menu, Locations, Booking) rather than by module.
+- Swagger groups routes by user flow (Registration, Session, Menu, Locations, Booking, Invites, Pre-order) rather than by module.
 
 ## Decisions
 
@@ -92,6 +92,7 @@ Each non-obvious choice has a short record in [docs/adr](docs/adr):
 | [14](docs/adr/0014-booking-simulator-on-dev.md) | n8n simulates visitors on dev only, with bots from an environment-gated migration |
 | [15](docs/adr/0015-platform-as-code.md) | Platform as code: a merge to `main` deploys the whole platform |
 | [16](docs/adr/0016-booking-participants-and-guest-identity.md) | Booking participants in core, invites as a regular feature, guests known by a hashed-token cookie |
+| [17](docs/adr/0017-preorder-parts-per-participant.md) | Pre-order drafts per participant submitted into one group, live prices, the join window and the booking lock |
 
 ## Run it locally
 

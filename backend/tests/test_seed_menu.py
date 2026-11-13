@@ -127,6 +127,7 @@ def test_load_parses_entries_and_derives_keys_and_content_types(tmp_path: Path) 
         entry("bad", category="SOUP"),
         entry("bad", price_cents=0),
         entry("bad", weight_grams=-1),
+        entry("bad", prep_minutes=0),
         entry("bad", image="bad.gif"),
         entry("Bad Slug"),
         {key: value for key, value in entry("bad").items() if key != "name"},
@@ -193,6 +194,44 @@ async def test_save_inserts_new_dishes_with_created_at_by_file_position(
     assert dishes["first"].category is DishCategory.DESSERT
     assert dishes["first"].price_cents == 650
     assert dishes["first"].fats == "22-24g"
+
+
+@pytest.mark.usefixtures("empty_menu")
+async def test_save_takes_the_prep_time_of_the_entry_or_of_its_category(
+    tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    directory = write_seed(
+        tmp_path / "menu",
+        [
+            entry("soup", category="APPETIZER"),
+            entry("steak", category="MAIN_COURSE"),
+            entry("cake", category="DESSERT"),
+            entry("stew", category="MAIN_COURSE", prep_minutes=35),
+        ],
+    )
+
+    await save_seed(session_factory, storage, directory)
+
+    dishes = await load_dishes(session_factory)
+    assert {slug: dish.prep_minutes for slug, dish in dishes.items()} == {
+        "soup": 10,
+        "steak": 20,
+        "cake": 10,
+        "stew": 35,
+    }
+
+
+@pytest.mark.usefixtures("empty_menu")
+async def test_saving_again_updates_the_prep_time(
+    tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    directory = write_seed(tmp_path / "menu", [entry("cake")])
+    await save_seed(session_factory, storage, directory)
+
+    write_seed(directory, [entry("cake", prep_minutes=25)])
+    await save_seed(session_factory, storage, directory)
+
+    assert (await load_dishes(session_factory))["cake"].prep_minutes == 25
 
 
 @pytest.mark.usefixtures("empty_menu")

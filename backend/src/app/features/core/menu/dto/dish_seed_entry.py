@@ -35,6 +35,7 @@ class DishSeedEntry:
     image: Annotated[str, Field(pattern=r"^[A-Za-z0-9._-]+\.(webp|jpg|png)$")]
     is_available: bool = True
     popularity: Annotated[int, Field(ge=0)] = 0
+    prep_minutes: Annotated[int, Field(gt=0)] | None = None
 
     @property
     def content_type(self) -> str:

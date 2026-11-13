@@ -10,6 +10,7 @@ from app.features.core.locations.models import DiningTable, Location
 from app.features.core.menu.models import Dish
 from app.features.core.users.models import User
 from app.features.invites.models import BookingInvite
+from app.features.preorder.models import PreorderItem
 
 __all__ = [
     "Base",
@@ -21,6 +22,7 @@ __all__ = [
     "Guest",
     "Location",
     "OAuthAccount",
+    "PreorderItem",
     "RefreshToken",
     "User",
     "VerificationCode",

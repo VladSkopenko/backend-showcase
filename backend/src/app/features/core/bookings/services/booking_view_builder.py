@@ -23,24 +23,36 @@ class BookingViewBuilder:
         self._schedule = schedule
 
     async def one(
-        self, *, booking: Booking, table: DiningTable, role: ParticipantRole
+        self,
+        *,
+        booking: Booking,
+        table: DiningTable,
+        role: ParticipantRole,
+        participant_id: uuid.UUID,
     ) -> BookingView:
         location = await self._locations.get(location_id=table.location_id)
         participants = await self._participants_of(booking_ids=[booking.id])
-        return self._to_view(booking, table, location, role, participants[booking.id])
+        return self._to_view(
+            booking, table, location, role, participant_id, participants[booking.id]
+        )
 
     async def many(
-        self, *, rows: Sequence[tuple[Booking, DiningTable, ParticipantRole]]
+        self, *, rows: Sequence[tuple[Booking, DiningTable, ParticipantRole, uuid.UUID]]
     ) -> list[BookingView]:
         locations = {location.id: location for location in await self._locations.list_all()}
         participants = await self._participants_of(
-            booking_ids=[booking.id for booking, _, _ in rows]
+            booking_ids=[booking.id for booking, _, _, _ in rows]
         )
         return [
             self._to_view(
-                booking, table, locations[table.location_id], role, participants[booking.id]
+                booking,
+                table,
+                locations[table.location_id],
+                role,
+                participant_id,
+                participants[booking.id],
             )
-            for booking, table, role in rows
+            for booking, table, role, participant_id in rows
         ]
 
     async def _participants_of(
@@ -59,6 +71,7 @@ class BookingViewBuilder:
         table: DiningTable,
         location: LocationView,
         role: ParticipantRole,
+        participant_id: uuid.UUID,
         participants: list[ParticipantView],
     ) -> BookingView:
         return BookingView(
@@ -70,5 +83,6 @@ class BookingViewBuilder:
             table=BookedTableView(id=table.id, label=table.label, capacity=table.capacity),
             location=location,
             role=role,
+            participant_id=participant_id,
             participants=participants,
         )

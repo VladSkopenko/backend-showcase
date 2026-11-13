@@ -1,4 +1,3 @@
-import hashlib
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, time, timedelta
@@ -20,6 +19,8 @@ from support.bookings import (
     FakeClock,
     Venue,
     add_booking,
+    add_guest,
+    add_participant,
     as_guest,
     assert_error,
     at,
@@ -32,11 +33,10 @@ from support.bookings import (
     stored_participants,
 )
 
-from app.common import clock
 from app.config.settings import BookingSettings, Settings, get_settings
 from app.features.core.bookings.enums import BookingStatus, ParticipantRole
 from app.main import create_app
-from app.model_registry import Booking, BookingParticipant, DiningTable, Guest, User
+from app.model_registry import Booking, BookingParticipant, DiningTable, User
 
 pytestmark = [pytest.mark.anyio, pytest.mark.usefixtures("no_locations")]
 
@@ -56,42 +56,6 @@ async def client(
     transport = httpx2.ASGITransport(app=app)
     async with httpx2.AsyncClient(transport=transport, base_url="https://test") as client:
         yield client
-
-
-async def add_guest(
-    session_factory: async_sessionmaker[AsyncSession],
-    *,
-    name: str,
-    token: str,
-    expires_at: datetime = START + timedelta(days=31),
-) -> Guest:
-    guest = Guest(
-        name=name, token_hash=hashlib.sha256(token.encode()).hexdigest(), expires_at=expires_at
-    )
-    async with session_factory() as session:
-        session.add(guest)
-        await session.commit()
-    return guest
-
-
-async def add_participant(
-    session_factory: async_sessionmaker[AsyncSession],
-    *,
-    booking_id: str | uuid.UUID,
-    user: User | None = None,
-    guest: Guest | None = None,
-) -> BookingParticipant:
-    participant = BookingParticipant(
-        booking_id=uuid.UUID(str(booking_id)),
-        user_id=None if user is None else user.id,
-        guest_id=None if guest is None else guest.id,
-        role=ParticipantRole.GUEST,
-        created_at=clock.now(),
-    )
-    async with session_factory() as session:
-        session.add(participant)
-        await session.commit()
-    return participant
 
 
 async def search(client: httpx2.AsyncClient, **params: Any) -> httpx2.Response:
@@ -370,6 +334,7 @@ async def test_create_confirms_the_booking_and_blocks_the_overlapping_starts(
         "table": {"id": str(venue.four.id), "label": "Table 2", "capacity": 4},
         "location": location_body(venue.first),
         "role": "OWNER",
+        "participant_id": owner["id"],
         "participants": [{"id": owner["id"], "name": "Ada", "role": "OWNER"}],
     }
     assert await stored_participants(connection, body["id"]) == [
@@ -1230,7 +1195,9 @@ async def test_list_includes_joined_bookings_with_the_callers_role(
         ("Grace", "OWNER"),
         ("Ada", "GUEST"),
     ]
+    assert first["participant_id"] == first["participants"][1]["id"]
     assert second == owned
+    assert second["participant_id"] == second["participants"][0]["id"]
 
 
 async def test_participant_view_answers_every_participant_with_their_role(
@@ -1267,6 +1234,7 @@ async def test_participant_view_answers_every_participant_with_their_role(
         "table": {"id": str(venue.four.id), "label": "Table 2", "capacity": 4},
         "location": location_body(venue.first),
         "role": "OWNER",
+        "participant_id": body["participants"][0]["id"],
         "participants": body["participants"],
     }
     assert [(p["name"], p["role"]) for p in body["participants"]] == [
@@ -1274,9 +1242,17 @@ async def test_participant_view_answers_every_participant_with_their_role(
         ("Grace", "GUEST"),
         ("Alex", "GUEST"),
     ]
-    assert as_user.json() == {**body, "role": "GUEST"}
+    assert as_user.json() == {
+        **body,
+        "role": "GUEST",
+        "participant_id": body["participants"][1]["id"],
+    }
     assert as_guest_of_it.status_code == 200, as_guest_of_it.text
-    assert as_guest_of_it.json() == {**body, "role": "GUEST"}
+    assert as_guest_of_it.json() == {
+        **body,
+        "role": "GUEST",
+        "participant_id": body["participants"][2]["id"],
+    }
 
 
 @pytest.mark.parametrize("token", [None, "unknown-token", "expired-token"])
@@ -1391,6 +1367,7 @@ async def test_edit_refuses_a_party_below_the_participant_count(
         ("Grace", "GUEST"),
         ("Alex", "GUEST"),
     ]
+    assert same.json()["participant_id"] == same.json()["participants"][0]["id"]
 
 
 async def test_cancel_answers_the_booking_with_its_participants(
@@ -1404,6 +1381,26 @@ async def test_cancel_answers_the_booking_with_its_participants(
     )
     alex = await add_guest(session_factory, name="Alex", token="alex-token")
     await add_participant(session_factory, booking_id=booking.id, guest=alex)
+    async with session_factory() as session:
+        owner = await session.scalar(
+            select(BookingParticipant).where(
+                BookingParticipant.booking_id == booking.id,
+                BookingParticipant.role == ParticipantRole.OWNER,
+            )
+        )
+        assert owner is not None
+        await session.delete(owner)
+        await session.flush()
+        session.add(
+            BookingParticipant(
+                id=owner.id,
+                booking_id=owner.booking_id,
+                user_id=owner.user_id,
+                role=owner.role,
+                created_at=owner.created_at,
+            )
+        )
+        await session.commit()
     await sign_in(client, ADA)
 
     response = await cancel(client, booking.id)
@@ -1414,6 +1411,7 @@ async def test_cancel_answers_the_booking_with_its_participants(
         ("Ada", "OWNER"),
         ("Alex", "GUEST"),
     ]
+    assert response.json()["participant_id"] == response.json()["participants"][0]["id"]
 
 
 async def test_participant_view_with_an_invalid_access_cookie_is_not_authenticated(

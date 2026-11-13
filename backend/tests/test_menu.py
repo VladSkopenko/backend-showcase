@@ -27,6 +27,7 @@ CARD_KEYS = {
     "weight_grams",
     "is_available",
     "popularity",
+    "prep_minutes",
     "image_url",
 }
 DETAIL_KEYS = CARD_KEYS | {"description", "calories", "protein", "fats", "carbs", "vitamins"}
@@ -47,6 +48,7 @@ def make_dish(slug: str, **overrides: Any) -> Dish:
         "vitamins": "A, C",
         "is_available": True,
         "popularity": 0,
+        "prep_minutes": 20,
         "image_key": f"dishes/{slug}.webp",
         "created_at": START,
     }
@@ -116,7 +118,13 @@ async def test_list_item_is_the_card_with_popularity(
     client: httpx2.AsyncClient, add_dishes: Any
 ) -> None:
     [dish] = await add_dishes(
-        make_dish("tomato-soup", category=DishCategory.APPETIZER, price_cents=850, popularity=7)
+        make_dish(
+            "tomato-soup",
+            category=DishCategory.APPETIZER,
+            price_cents=850,
+            popularity=7,
+            prep_minutes=10,
+        )
     )
 
     [item] = (await list_dishes(client))["items"]
@@ -130,6 +138,7 @@ async def test_list_item_is_the_card_with_popularity(
         "weight_grams": 300,
         "is_available": True,
         "popularity": 7,
+        "prep_minutes": 10,
         "image_url": f"{MEDIA_BASE_URL}/dishes/tomato-soup.webp",
     }
 
@@ -255,6 +264,7 @@ async def test_item_returns_the_full_dish(client: httpx2.AsyncClient, add_dishes
         "weight_grams": 300,
         "is_available": True,
         "popularity": 0,
+        "prep_minutes": 20,
         "image_url": f"{MEDIA_BASE_URL}/dishes/lava-cake.webp",
         "description": "About lava-cake",
         "calories": 450,

@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Collection
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +31,10 @@ class DishCatalogService:
             raise DishNotFoundError()
         return self._to_view(dish)
 
+    async def get_many(self, *, dish_ids: Collection[uuid.UUID]) -> dict[uuid.UUID, DishView]:
+        dishes = await self._repository.list_by_ids(dish_ids=dish_ids)
+        return {dish.id: self._to_view(dish) for dish in dishes}
+
     def _to_view(self, dish: Dish) -> DishView:
         return DishView(
             id=dish.id,
@@ -39,6 +44,7 @@ class DishCatalogService:
             weight_grams=dish.weight_grams,
             is_available=dish.is_available,
             popularity=dish.popularity,
+            prep_minutes=dish.prep_minutes,
             image_url=f"{self._public_base_url}/{dish.image_key}",
             description=dish.description,
             calories=dish.calories,

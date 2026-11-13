@@ -290,3 +290,13 @@ def test_booking_env_vars_land_in_the_booking_block(monkeypatch: pytest.MonkeyPa
     assert booking.preorder_lock_minutes == 45
     assert booking.guest_token_ttl_days == 7
     assert booking.guest_cookie_path == "/api/v1"
+
+
+def test_preorder_defaults() -> None:
+    assert Settings().preorder.max_item_quantity == 20
+
+
+def test_preorder_env_vars_land_in_the_preorder_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PREORDER_MAX_ITEM_QUANTITY", "9")
+
+    assert Settings().preorder.max_item_quantity == 9

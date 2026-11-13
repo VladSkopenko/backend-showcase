@@ -1,3 +1,4 @@
+import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -11,14 +12,17 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionm
 from app.common.database import get_session
 from app.features.core.auth.enums import OAuthProvider
 from app.features.core.bookings.enums import BookingStatus, ParticipantRole
+from app.features.preorder.enums import PreorderItemState
 from app.model_registry import (
     Booking,
     BookingInvite,
     BookingParticipant,
     DiningTable,
+    Dish,
     Guest,
     Location,
     OAuthAccount,
+    PreorderItem,
     User,
 )
 
@@ -277,6 +281,7 @@ async def test_migrated_dishes_table_has_the_expected_shape(connection: AsyncCon
         "image_key": False,
         "created_at": False,
         "updated_at": False,
+        "prep_minutes": False,
     }
     assert [(c["name"], c["column_names"]) for c in shape["unique"]] == [
         ("uq_dishes_slug", ["slug"])
@@ -291,6 +296,7 @@ async def test_migrated_dishes_table_has_the_expected_shape(connection: AsyncCon
     assert sorted(check["name"] for check in shape["checks"]) == [
         "ck_dishes_calories_non_negative",
         "ck_dishes_popularity_non_negative",
+        "ck_dishes_prep_minutes_positive",
         "ck_dishes_price_cents_positive",
         "ck_dishes_weight_grams_positive",
     ]
@@ -796,4 +802,186 @@ async def test_invite_codes_are_unique(session_factory: async_sessionmaker[Async
         session.add(BookingInvite(booking_id=second.id, code="same-code", created_at=BOOKING_START))
 
         with pytest.raises(IntegrityError, match="uq_booking_invites_code"):
+            await session.flush()
+
+
+async def test_a_dish_needs_a_positive_prep_time(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        dish = await session.scalar(select(Dish).where(Dish.slug == "pkhali-trio"))
+        assert dish is not None
+        dish.prep_minutes = 0
+
+        with pytest.raises(IntegrityError, match="ck_dishes_prep_minutes_positive"):
+            await session.flush()
+
+
+async def test_migrated_preorder_items_table_has_the_expected_shape(
+    connection: AsyncConnection,
+) -> None:
+    def describe(sync_connection: Connection) -> dict[str, Any]:
+        inspector = inspect(sync_connection)
+        return {
+            "columns": inspector.get_columns("preorder_items"),
+            "foreign_keys": inspector.get_foreign_keys("preorder_items"),
+            "unique": inspector.get_unique_constraints("preorder_items"),
+            "indexes": inspector.get_indexes("preorder_items"),
+            "checks": inspector.get_check_constraints("preorder_items"),
+        }
+
+    shape = await connection.run_sync(describe)
+
+    assert {column["name"]: column["nullable"] for column in shape["columns"]} == {
+        "id": False,
+        "participant_id": False,
+        "dish_id": False,
+        "quantity": False,
+        "note": True,
+        "state": False,
+        "submission_id": True,
+        "submitted_at": True,
+        "created_at": False,
+        "updated_at": False,
+    }
+    [note] = [column for column in shape["columns"] if column["name"] == "note"]
+    assert note["type"].length == 200
+    assert sorted(
+        (fk["name"], fk["constrained_columns"], fk["referred_table"], fk["options"]["ondelete"])
+        for fk in shape["foreign_keys"]
+    ) == [
+        ("fk_preorder_items_dish_id_dishes", ["dish_id"], "dishes", "RESTRICT"),
+        (
+            "fk_preorder_items_participant_id_booking_participants",
+            ["participant_id"],
+            "booking_participants",
+            "CASCADE",
+        ),
+    ]
+    assert shape["unique"] == []
+    assert sorted(
+        (index["name"], index["column_names"], index["unique"]) for index in shape["indexes"]
+    ) == [
+        ("ix_preorder_items_participant_id", ["participant_id"], False),
+        ("ix_preorder_items_participant_id_dish_id_draft", ["participant_id", "dish_id"], True),
+    ]
+    [draft_index] = [index for index in shape["indexes"] if index["unique"]]
+    assert draft_index["dialect_options"]["postgresql_where"] == (
+        "(state = 'DRAFT'::preorder_item_state)"
+    )
+    assert sorted(check["name"] for check in shape["checks"]) == [
+        "ck_preorder_items_quantity_positive",
+        "ck_preorder_items_submission_matches_state",
+    ]
+
+
+async def test_preorder_item_state_enum_has_both_labels(connection: AsyncConnection) -> None:
+    labels = await connection.scalar(text("SELECT enum_range(NULL::preorder_item_state)::text[]"))
+
+    assert labels == ["DRAFT", "SUBMITTED"]
+
+
+async def add_owner_participant_and_dish(session: AsyncSession) -> tuple[uuid.UUID, uuid.UUID]:
+    owned, _ = await add_booking_with_owner(session)
+    participant_id = await session.scalar(
+        select(BookingParticipant.id).where(BookingParticipant.booking_id == owned.id)
+    )
+    dish_id = await session.scalar(select(Dish.id).where(Dish.slug == "pkhali-trio"))
+    assert participant_id is not None
+    assert dish_id is not None
+    return participant_id, dish_id
+
+
+def preorder_item(
+    participant_id: uuid.UUID,
+    dish_id: uuid.UUID,
+    *,
+    quantity: int = 1,
+    state: PreorderItemState = PreorderItemState.DRAFT,
+) -> PreorderItem:
+    done = state == PreorderItemState.SUBMITTED
+    return PreorderItem(
+        participant_id=participant_id,
+        dish_id=dish_id,
+        quantity=quantity,
+        state=state,
+        submission_id=uuid.uuid4() if done else None,
+        submitted_at=BOOKING_START if done else None,
+        created_at=BOOKING_START,
+        updated_at=BOOKING_START,
+    )
+
+
+async def test_a_preorder_line_needs_a_positive_quantity(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        participant_id, dish_id = await add_owner_participant_and_dish(session)
+        session.add(preorder_item(participant_id, dish_id, quantity=0))
+
+        with pytest.raises(IntegrityError, match="ck_preorder_items_quantity_positive"):
+            await session.flush()
+
+
+async def test_a_draft_holds_one_line_per_dish(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        participant_id, dish_id = await add_owner_participant_and_dish(session)
+        session.add(preorder_item(participant_id, dish_id))
+        await session.flush()
+        session.add(preorder_item(participant_id, dish_id))
+
+        with pytest.raises(IntegrityError, match="ix_preorder_items_participant_id_dish_id_draft"):
+            await session.flush()
+
+
+async def test_submitted_lines_and_a_draft_line_may_share_a_dish(
+    session_factory: async_sessionmaker[AsyncSession], connection: AsyncConnection
+) -> None:
+    async with session_factory() as session:
+        participant_id, dish_id = await add_owner_participant_and_dish(session)
+        session.add_all(
+            [
+                preorder_item(participant_id, dish_id, state=PreorderItemState.SUBMITTED),
+                preorder_item(participant_id, dish_id, state=PreorderItemState.SUBMITTED),
+                preorder_item(participant_id, dish_id),
+            ]
+        )
+        await session.commit()
+
+    assert await connection.scalar(select(func.count()).select_from(PreorderItem)) == 3
+
+
+@pytest.mark.parametrize(
+    ("state", "has_id", "has_time"),
+    [
+        (PreorderItemState.DRAFT, True, False),
+        (PreorderItemState.DRAFT, False, True),
+        (PreorderItemState.SUBMITTED, False, True),
+        (PreorderItemState.SUBMITTED, True, False),
+    ],
+)
+async def test_a_preorder_line_is_submitted_exactly_when_it_has_an_id_and_a_time(
+    session_factory: async_sessionmaker[AsyncSession],
+    state: PreorderItemState,
+    has_id: bool,
+    has_time: bool,
+) -> None:
+    async with session_factory() as session:
+        participant_id, dish_id = await add_owner_participant_and_dish(session)
+        session.add(
+            PreorderItem(
+                participant_id=participant_id,
+                dish_id=dish_id,
+                quantity=1,
+                state=state,
+                submission_id=uuid.uuid4() if has_id else None,
+                submitted_at=BOOKING_START if has_time else None,
+                created_at=BOOKING_START,
+                updated_at=BOOKING_START,
+            )
+        )
+
+        with pytest.raises(IntegrityError, match="ck_preorder_items_submission_matches_state"):
             await session.flush()

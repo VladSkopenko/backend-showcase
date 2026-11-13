@@ -1,5 +1,5 @@
 import uuid
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -24,6 +24,7 @@ class DishRepository:
         "carbs",
         "vitamins",
         "is_available",
+        "prep_minutes",
         "image_key",
     )
     ORDERINGS: dict[DishSort, tuple[UnaryExpression[Any], ...]] = {
@@ -38,6 +39,12 @@ class DishRepository:
 
     async def get(self, *, dish_id: uuid.UUID) -> Dish | None:
         return await self._session.get(Dish, dish_id)
+
+    async def list_by_ids(self, *, dish_ids: Collection[uuid.UUID]) -> Sequence[Dish]:
+        if not dish_ids:
+            return []
+        dishes = await self._session.scalars(select(Dish).where(Dish.id.in_(dish_ids)))
+        return dishes.all()
 
     async def get_page(
         self, *, category: DishCategory | None, sort: DishSort, limit: int, offset: int

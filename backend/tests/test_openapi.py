@@ -47,6 +47,13 @@ FLOWS = {
         ("get", "/api/v1/invites/{code}"),
         ("post", "/api/v1/invites/{code}/join"),
     ],
+    "Pre-order": [
+        ("get", "/api/v1/bookings/{booking_id}/cart"),
+        ("put", "/api/v1/bookings/{booking_id}/cart/items/{dish_id}"),
+        ("delete", "/api/v1/bookings/{booking_id}/cart/items/{dish_id}"),
+        ("post", "/api/v1/bookings/{booking_id}/cart/submit"),
+        ("get", "/api/v1/bookings/{booking_id}/my-pre-order"),
+    ],
     "Health": [
         ("get", "/"),
         ("get", "/health"),
@@ -103,7 +110,11 @@ def test_provider_slug_lists_the_known_providers(schema: dict[str, Any]) -> None
 
 @pytest.mark.parametrize(
     ("method", "path"),
-    [("get", "/api/v1/bookings/{booking_id}"), ("post", "/api/v1/invites/{code}/join")],
+    [
+        ("get", "/api/v1/bookings/{booking_id}"),
+        ("post", "/api/v1/invites/{code}/join"),
+        *FLOWS["Pre-order"],
+    ],
 )
 def test_guest_routes_mention_the_guest_cookie(
     schema: dict[str, Any], method: str, path: str
