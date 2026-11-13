@@ -1,0 +1,69 @@
+- id: "1"
+  title: Large-party booking requests
+  description: >-
+    Guests request bookings for 5 to 8 people; requests stay pending, do not hold the table and may
+    compete (CAP-1). Instant bookings stay 1 to 4.
+  spec_checkpoint: true
+  done_checkpoint: true
+- id: "2"
+  title: Staff role and request decisions
+  description: >-
+    A STAFF flag on users and protected routes to list, approve and reject pending requests;
+    approving rejects overlapping requests and fails if the table was taken (CAP-2).
+  spec_checkpoint: true
+  done_checkpoint: true
+- id: "3"
+  title: In-app notifications and decision emails
+  description: >-
+    A notifications list with mark-as-read, and an email per decision except to example.com
+    addresses (CAP-3).
+  spec_checkpoint: true
+  done_checkpoint: true
+- id: "4"
+  title: Auto-reject requests 2 hours before start
+  description: >-
+    A periodic task in the API process rejects requests still pending 2 hours before start and
+    notifies like a staff rejection (CAP-4).
+  spec_checkpoint: true
+  done_checkpoint: true
+- id: "5"
+  title: Dev bots and the staff bot
+  description: >-
+    A dev-gated migration adds guest bots 5 to 40 with names and one staff bot, reusing the bot
+    password hash (CAP-6).
+  spec_checkpoint: false
+  done_checkpoint: true
+- id: "6"
+  title: Guest simulator v2
+  description: >-
+    The guest workflow books, requests, pre-orders and cancels by the weights in patterns.md, kept
+    in git with the dev API URL (CAP-5, CAP-7, CAP-8, CAP-9).
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Vlad imports the workflow file into n8n himself; give him the exact import steps.
+- id: "7"
+  title: Waiter bot workflow
+  description: >-
+    A second n8n workflow signs in as the staff bot and decides pending requests by the waiter
+    weights in patterns.md (CAP-10).
+  spec_checkpoint: false
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Vlad imports the workflow file into n8n himself; give him the exact import steps.
+- id: "8"
+  title: Public Grafana on dev data
+  description: >-
+    Grafana in the platform stack, public through Caddy with anonymous Viewer, reading dev through
+    a role without personal data; ADR for the AD-13 deviation (CAP-11).
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Infrastructure: follow deploy/platform/README.md "Adding a service" and write files one at a
+    time with Vlad, explaining every key.
+- id: "9"
+  title: Dashboards
+  description: >-
+    The five dashboards from dashboards.md, provisioned from files in the repository (CAP-12).
+  spec_checkpoint: true
+  done_checkpoint: true
