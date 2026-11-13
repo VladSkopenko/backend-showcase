@@ -26,12 +26,14 @@ from app.features.core.bookings.services.exceptions import (
     BookingAlreadyCancelledError,
     BookingNotFoundError,
     BookingPendingError,
+    BookingRejectedError,
     CancellationClosedError,
     DateOutOfRangeError,
     DayChangeNotAllowedError,
     DurationInvalidError,
     EditClosedError,
     EndsAfterClosingError,
+    LargeBookingNotEditableError,
     OverlappingBookingError,
     PartyBelowParticipantsError,
     PartyTooLargeError,
@@ -149,6 +151,7 @@ async def list_bookings(user: CurrentUserDep, bookings: BookingServiceDep) -> li
         NotAuthenticatedError,
         BookingNotFoundError,
         BookingAlreadyCancelledError,
+        BookingRejectedError,
         CancellationClosedError,
         statuses=DOCUMENTED_ERROR_STATUSES,
         takes_input=True,
@@ -156,7 +159,8 @@ async def list_bookings(user: CurrentUserDep, bookings: BookingServiceDep) -> li
     description=(
         "Cancels one of the signed-in user's own bookings: a confirmed booking frees its table, a "
         "pending request is withdrawn. Closes shortly before the start; a booking the user only "
-        "joined or another user's booking answers 404."
+        "joined or another user's booking answers 404, and a request staff rejected answers "
+        "that it was rejected."
     ),
 )
 async def cancel_booking(
@@ -174,7 +178,9 @@ async def cancel_booking(
         NotAuthenticatedError,
         BookingNotFoundError,
         BookingAlreadyCancelledError,
+        BookingRejectedError,
         BookingPendingError,
+        LargeBookingNotEditableError,
         EditClosedError,
         PartyTooLargeError,
         DayChangeNotAllowedError,
@@ -190,10 +196,12 @@ async def cancel_booking(
     ),
     description=(
         "Replaces the start, party size and duration of one of the signed-in user's own "
-        "confirmed bookings; the table and the day stay, and a pending request cannot be "
-        "edited. The party stays within the limit for instant bookings. The start must be on "
-        "the day grid and the stay must end by closing; durations run from the standard one to "
-        "a maximum in grid steps. The party may not drop below the people who have joined. "
+        "confirmed bookings; the table and the day stay. A pending request and a confirmed "
+        "large-party booking cannot be edited; the latter can only be cancelled. A request "
+        "staff rejected answers that it was rejected. The party stays within the limit for "
+        "instant bookings. The start must be on the day grid and the stay must end by "
+        "closing; durations run from the standard one to a maximum in grid steps. The party "
+        "may not drop below the people who have joined. "
         "Closes shortly before the current start; a booking the user only joined or another "
         "user's booking answers 404. Refused when the table already has another confirmed "
         "booking at the new time, or the user another booking or request then."
@@ -222,7 +230,9 @@ async def edit_booking(
         NotAuthenticatedError,
         BookingNotFoundError,
         BookingAlreadyCancelledError,
+        BookingRejectedError,
         BookingPendingError,
+        LargeBookingNotEditableError,
         EditClosedError,
         DurationInvalidError,
         statuses=DOCUMENTED_ERROR_STATUSES,
@@ -233,8 +243,8 @@ async def edit_booking(
         "for a stay of `duration_minutes`, and whether the booking can move to each start: "
         "later than now, ending by closing and free of other bookings on the table. The booking "
         "itself and the user's other bookings are ignored. Closes shortly before the current "
-        "start; a booking the user only joined answers 404, and a pending request answers that "
-        "it awaits confirmation."
+        "start; a booking the user only joined answers 404, a pending request answers that "
+        "it awaits confirmation, and a confirmed large-party booking that it cannot be changed."
     ),
 )
 async def list_edit_slots(

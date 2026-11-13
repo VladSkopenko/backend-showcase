@@ -128,3 +128,12 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/1-large-party-booking-requests.md`
   summary: No pytest exercises migration downgrades; 0016's downgrade (PENDING to CANCELLED, rebuilt default and exclusion constraint) is covered only by CI's empty round trip and a manual check.
   evidence: grep finds no downgrade in backend/tests; conftest upgrades app_test once per session, so a downgrade test needs its own database harness.
+
+## Deferred from: review of 2-staff-role-and-request-decisions (2026-11-13)
+
+- source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/2-staff-role-and-request-decisions.md`
+  summary: No pytest exercises the 0017 downgrade with a REJECTED row; covered only by CI's empty round trip and a manual check.
+  evidence: same missing downgrade-with-data harness as for 0016.
+- source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/2-staff-role-and-request-decisions.md`
+  summary: Requests rejected because a competitor was approved carry the approver's decided_by_id and the approval time, indistinguishable from a deliberate rejection; the story 9 staff dashboard must tell them apart (or a decision reason column is added then).
+  evidence: reject_pending_overlapping stamps the same decided_at and decided_by_id as the approval.

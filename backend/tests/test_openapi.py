@@ -54,6 +54,11 @@ FLOWS = {
         ("post", "/api/v1/bookings/{booking_id}/cart/submit"),
         ("get", "/api/v1/bookings/{booking_id}/my-pre-order"),
     ],
+    "Staff": [
+        ("get", "/api/v1/staff/booking-requests"),
+        ("post", "/api/v1/staff/booking-requests/{booking_id}/approve"),
+        ("post", "/api/v1/staff/booking-requests/{booking_id}/reject"),
+    ],
     "Health": [
         ("get", "/"),
         ("get", "/health"),

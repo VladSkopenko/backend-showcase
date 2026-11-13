@@ -27,10 +27,10 @@
   spec_checkpoint: true
   done_checkpoint: true
 - id: "5"
-  title: Dev bots and the staff bot
+  title: Dev guest bots
   description: >-
-    A dev-gated migration adds guest bots 5 to 40 with names and one staff bot, reusing the bot
-    password hash (CAP-6).
+    A dev-gated migration adds guest bots 5 to 40 with names, reusing the bot password hash
+    (CAP-6). The staff bot already comes from story 2 (migration 0018).
   spec_checkpoint: false
   done_checkpoint: true
 - id: "6"

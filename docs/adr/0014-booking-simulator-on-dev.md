@@ -4,7 +4,8 @@ Date: 2026-11-11
 
 ## Status
 
-Accepted
+Accepted. Amended 2026-11-13: migration `0018` adds a staff bot on dev and local with the same
+bot password.
 
 ## Context
 
@@ -29,6 +30,12 @@ simulator to dev.
   access to the server. Its downgrade deletes the four users, and their bookings go with them
   through the `ON DELETE CASCADE` on `bookings.user_id`. A plain insert: if one of the emails is
   already taken on dev, the migration fails loudly instead of adopting a foreign account.
+- **A staff bot for staff decisions.** Migration `0018` inserts one verified staff user,
+  `waiter-bot@example.com` (`is_staff` true), with the same password hash as the booking bots,
+  when `APP_ENVIRONMENT` is `dev` or `local`; staging and prod never get it, and there its upgrade
+  and downgrade do nothing. Local is included so the staff routes can be tried on a developer
+  machine without flagging a user by hand; the test database, migrated as `local`, has it too.
+  Its downgrade deletes the user, and a plain insert fails loudly on a taken email.
 - **The password lives only in n8n.** The migration stores an Argon2id hash. The plaintext is kept
   by the owner and entered into the n8n Custom Auth credential `Booking bot password`, which n8n
   keeps encrypted in its own database. No file in the repository holds it. The hash itself is

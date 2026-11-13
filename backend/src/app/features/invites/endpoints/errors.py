@@ -8,6 +8,7 @@ from app.features.core.bookings.services.exceptions import (
     BookingAlreadyCancelledError,
     BookingFullError,
     BookingNotFoundError,
+    BookingRejectedError,
     GuestNameRequiredError,
     InviteClosedError,
 )
@@ -22,6 +23,7 @@ DOCUMENTED_ERROR_STATUSES: dict[type[DomainError], int] = {
     NotAuthenticatedError: AUTH_ERROR_STATUSES[NotAuthenticatedError],
     BookingNotFoundError: BOOKINGS_ERROR_STATUSES[BookingNotFoundError],
     BookingAlreadyCancelledError: BOOKINGS_ERROR_STATUSES[BookingAlreadyCancelledError],
+    BookingRejectedError: BOOKINGS_ERROR_STATUSES[BookingRejectedError],
     InviteClosedError: BOOKINGS_ERROR_STATUSES[InviteClosedError],
     BookingFullError: BOOKINGS_ERROR_STATUSES[BookingFullError],
     GuestNameRequiredError: BOOKINGS_ERROR_STATUSES[GuestNameRequiredError],

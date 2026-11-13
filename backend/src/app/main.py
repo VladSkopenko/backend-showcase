@@ -16,7 +16,7 @@ from app.features.core.auth.endpoints import ERROR_STATUSES as AUTH_ERROR_STATUS
 from app.features.core.auth.endpoints import AuthOpenApiTags, oauth_router
 from app.features.core.auth.endpoints import router as auth_router
 from app.features.core.bookings.endpoints import ERROR_STATUSES as BOOKINGS_ERROR_STATUSES
-from app.features.core.bookings.endpoints import BookingOpenApiTags
+from app.features.core.bookings.endpoints import BookingOpenApiTags, staff_router
 from app.features.core.bookings.endpoints import router as bookings_router
 from app.features.core.health.endpoints import HealthOpenApiTags
 from app.features.core.health.endpoints import router as health_router
@@ -55,6 +55,7 @@ def create_app() -> FastAPI:
             *BookingOpenApiTags.METADATA,
             *InvitesOpenApiTags.METADATA,
             *PreorderOpenApiTags.METADATA,
+            *BookingOpenApiTags.STAFF_METADATA,
             *HealthOpenApiTags.METADATA,
         ],
     )
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(bookings_router, prefix="/api/v1")
     app.include_router(invites_router, prefix="/api/v1")
     app.include_router(preorder_router, prefix="/api/v1")
+    app.include_router(staff_router, prefix="/api/v1")
 
     @app.exception_handler(DomainError)
     async def handle_domain_error(request: Request, exc: DomainError) -> JSONResponse:

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionm
 from app.common import clock
 from app.features.core.auth.services.password_hasher import PasswordHasher
 from app.model_registry import DiningTable, Location, User
-from support.bookings import ADA, GRACE, PASSWORD, START, FakeClock, Venue
+from support.bookings import ADA, GRACE, PASSWORD, STAFF, START, FakeClock, Venue
 
 
 @pytest.fixture
@@ -72,3 +72,19 @@ async def users(session_factory: async_sessionmaker[AsyncSession]) -> dict[str, 
         session.add_all(created.values())
         await session.commit()
     return created
+
+
+@pytest.fixture
+async def staff(session_factory: async_sessionmaker[AsyncSession]) -> User:
+    user = User(
+        first_name="Sam",
+        last_name="Staff",
+        email=STAFF,
+        password_hash=await PasswordHasher().hash(password=PASSWORD),
+        email_verified_at=START - timedelta(days=1),
+        is_staff=True,
+    )
+    async with session_factory() as session:
+        session.add(user)
+        await session.commit()
+    return user

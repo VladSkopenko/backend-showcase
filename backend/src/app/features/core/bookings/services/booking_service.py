@@ -17,15 +17,16 @@ from app.features.core.bookings.repositories import (
 from app.features.core.bookings.services.booking_schedule import BookingSchedule
 from app.features.core.bookings.services.booking_view_builder import BookingViewBuilder
 from app.features.core.bookings.services.exceptions import (
-    BookingAlreadyCancelledError,
     BookingNotFoundError,
     BookingPendingError,
+    LargeBookingNotEditableError,
     OverlappingBookingError,
     PartyBelowParticipantsError,
     SlotUnavailableError,
     TableNotFoundError,
     TableNotSuitableError,
 )
+from app.features.core.bookings.services.inactive_booking_guard import InactiveBookingGuard
 from app.features.core.locations.models import DiningTable
 from app.features.core.locations.services.location_catalog_service import LocationCatalogService
 from app.features.core.users.repositories import UserRepository
@@ -43,6 +44,7 @@ class BookingService:
         self._users = UserRepository(session)
         self._schedule = BookingSchedule(settings)
         self._views = BookingViewBuilder(session, locations, self._schedule)
+        self._inactive = InactiveBookingGuard()
 
     async def create(
         self, *, user_id: uuid.UUID, table_id: uuid.UUID, starts_at: datetime, party_size: int
@@ -105,8 +107,7 @@ class BookingService:
         if row is None:
             raise BookingNotFoundError()
         booking, table, owner_id = row
-        if not booking.status.is_active:
-            raise BookingAlreadyCancelledError()
+        self._inactive.check_active(status=booking.status)
         self._schedule.check_cancellable(starts_at=booking.starts_at)
         booking.status = BookingStatus.CANCELLED
         await self._bookings.flush()
@@ -195,10 +196,11 @@ class BookingService:
         )
         if row is None:
             raise BookingNotFoundError()
-        booking, _, _ = row
-        if not booking.status.is_active:
-            raise BookingAlreadyCancelledError()
+        booking, table, _ = row
+        self._inactive.check_active(status=booking.status)
         if booking.status == BookingStatus.PENDING:
             raise BookingPendingError()
+        if self._schedule.is_request_table(capacity=table.capacity):
+            raise LargeBookingNotEditableError()
         self._schedule.check_editable(starts_at=booking.starts_at)
         return row

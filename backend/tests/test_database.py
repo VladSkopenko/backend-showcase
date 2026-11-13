@@ -91,6 +91,7 @@ async def test_migrated_users_table_has_the_expected_columns(
         "login_locked_until": True,
         "created_at": False,
         "updated_at": False,
+        "is_staff": False,
     }
 
 
@@ -103,6 +104,16 @@ async def test_new_users_start_with_no_failed_login_attempts(
     user = (await connection.execute(select(User).where(User.email == "ada@example.com"))).one()
     assert user.failed_login_attempts == 0
     assert user.login_locked_until is None
+
+
+async def test_new_users_are_not_staff(
+    session_factory: async_sessionmaker[AsyncSession], connection: AsyncConnection
+) -> None:
+    async with session_scope() as session:
+        session.add(User(first_name="Ada", last_name="Lovelace", email="ada@example.com"))
+
+    is_staff = await connection.scalar(select(User.is_staff).where(User.email == "ada@example.com"))
+    assert is_staff is False
 
 
 async def test_migrated_refresh_tokens_table_has_the_expected_shape(
@@ -412,17 +423,21 @@ async def test_migrated_bookings_table_has_the_expected_shape(connection: AsyncC
         "status": False,
         "created_at": False,
         "updated_at": False,
+        "decided_at": True,
+        "decided_by_id": True,
     }
     assert sorted(
         (fk["name"], fk["constrained_columns"], fk["referred_table"], fk["options"]["ondelete"])
         for fk in shape["foreign_keys"]
     ) == [
+        ("fk_bookings_decided_by_id_users", ["decided_by_id"], "users", "SET NULL"),
         ("fk_bookings_table_id_dining_tables", ["table_id"], "dining_tables", "CASCADE"),
         ("fk_bookings_user_id_users", ["user_id"], "users", "CASCADE"),
     ]
     indexes = [index for index in shape["indexes"] if not index.get("duplicates_constraint")]
-    assert [(index["name"], index["column_names"]) for index in indexes] == [
-        ("ix_bookings_user_id", ["user_id"])
+    assert sorted((index["name"], index["column_names"]) for index in indexes) == [
+        ("ix_bookings_decided_by_id", ["decided_by_id"]),
+        ("ix_bookings_user_id", ["user_id"]),
     ]
     assert sorted((check["name"], check["sqltext"]) for check in shape["checks"]) == [
         ("ck_bookings_ends_at_after_starts_at", "ends_at > starts_at"),
@@ -433,7 +448,7 @@ async def test_migrated_bookings_table_has_the_expected_shape(connection: AsyncC
 async def test_booking_status_enum_has_every_label(connection: AsyncConnection) -> None:
     labels = await connection.scalar(text("SELECT enum_range(NULL::booking_status)::text[]"))
 
-    assert labels == ["CONFIRMED", "CANCELLED", "PENDING"]
+    assert labels == ["CONFIRMED", "CANCELLED", "PENDING", "REJECTED"]
 
 
 async def test_bookings_status_defaults_to_confirmed(connection: AsyncConnection) -> None:

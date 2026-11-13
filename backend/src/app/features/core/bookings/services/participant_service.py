@@ -26,12 +26,12 @@ from app.features.core.bookings.repositories import (
 from app.features.core.bookings.services.booking_schedule import BookingSchedule
 from app.features.core.bookings.services.booking_view_builder import BookingViewBuilder
 from app.features.core.bookings.services.exceptions import (
-    BookingAlreadyCancelledError,
     BookingFullError,
     BookingNotFoundError,
     GuestNameRequiredError,
     InviteClosedError,
 )
+from app.features.core.bookings.services.inactive_booking_guard import InactiveBookingGuard
 from app.features.core.locations.models import DiningTable
 from app.features.core.locations.services.location_catalog_service import LocationCatalogService
 from app.features.core.users.repositories import UserRepository
@@ -48,6 +48,7 @@ class ParticipantService:
         self._locations = locations
         self._schedule = BookingSchedule(settings)
         self._views = BookingViewBuilder(session, locations, self._schedule)
+        self._inactive = InactiveBookingGuard()
         self._guest_ttl = timedelta(days=settings.guest_token_ttl_days)
 
     async def lock_owned(self, *, user_id: uuid.UUID, booking_id: uuid.UUID) -> OwnedBooking:
@@ -57,8 +58,7 @@ class ParticipantService:
         if row is None:
             raise BookingNotFoundError()
         booking, _, _ = row
-        if not booking.status.is_active:
-            raise BookingAlreadyCancelledError()
+        self._inactive.check_active(status=booking.status)
         return OwnedBooking(id=booking.id)
 
     async def preview(self, *, booking_id: uuid.UUID) -> InvitePreviewView:

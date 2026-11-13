@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionmaker
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, Response
+from support.bookings import WAITER_BOT
 from support.http import set_cookies
 
 from app.common import clock
@@ -199,6 +200,15 @@ async def count(connection: AsyncConnection, model: type[Any]) -> int:
     return value
 
 
+async def count_users(connection: AsyncConnection) -> int:
+    # The local migrations seed the staff bot; every other user comes from the test itself.
+    value = await connection.scalar(
+        select(func.count()).select_from(User).where(User.email != WAITER_BOT)
+    )
+    assert value is not None
+    return value
+
+
 async def test_login_redirects_to_google_with_the_frontend_callback_and_a_state_cookie(
     client: httpx2.AsyncClient, oauth_clients: FakeOAuthClients
 ) -> None:
@@ -262,7 +272,7 @@ async def test_linked_user_signs_in_by_subject_ignoring_the_lockout(
     assert stored.failed_login_attempts == 3
     assert stored.login_locked_until == locked_until
     assert await count(connection, RefreshToken) == 1
-    assert await count(connection, User) == 1
+    assert await count_users(connection) == 1
     assert (await client.get(f"{AUTH}/me")).json()["email"] == EMAIL
 
 
@@ -376,7 +386,7 @@ async def test_unverified_google_email_without_a_link_is_refused(
     assert_error_redirect(response, "OAUTH_EMAIL_UNVERIFIED")
     assert_state_cookie_deleted(response)
     assert await get_links(connection) == []
-    assert await count(connection, User) == 1
+    assert await count_users(connection) == 1
     assert (await get_user(connection)).password_hash == "stored-hash"
 
 
@@ -402,7 +412,7 @@ async def test_failed_exchange_redirects_with_oauth_failed(
 
     assert_error_redirect(response, "OAUTH_FAILED")
     assert_state_cookie_deleted(response)
-    assert await count(connection, User) == 0
+    assert await count_users(connection) == 0
     assert await get_links(connection) == []
 
 
@@ -414,7 +424,7 @@ async def test_claims_without_sub_redirect_with_oauth_failed(
     response = await sign_in(client)
 
     assert_error_redirect(response, "OAUTH_FAILED")
-    assert await count(connection, User) == 0
+    assert await count_users(connection) == 0
 
 
 async def test_user_created_by_google_cannot_log_in_with_a_password(

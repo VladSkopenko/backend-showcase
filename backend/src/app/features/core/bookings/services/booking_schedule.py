@@ -69,6 +69,9 @@ class BookingSchedule:
             return self._max_request_party_size
         return self._max_party_size
 
+    def is_request_table(self, *, capacity: int) -> bool:
+        return capacity > self._max_party_size
+
     def initial_status(self, *, party_size: int) -> BookingStatus:
         if self._is_request(party_size=party_size):
             return BookingStatus.PENDING
