@@ -146,6 +146,12 @@ class BookingSettings(BaseSettings):
     guest_cookie_path: str = "/"
 
 
+class PreorderSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="PREORDER_", env_file=ENV_FILE, extra="ignore")
+
+    max_item_quantity: int = 20
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -158,6 +164,7 @@ class Settings(BaseSettings):
     token: TokenSettings = Field(default_factory=TokenSettings)  # type: ignore[arg-type]
     media: MediaSettings = Field(default_factory=MediaSettings)  # type: ignore[arg-type]
     booking: BookingSettings = Field(default_factory=BookingSettings)
+    preorder: PreorderSettings = Field(default_factory=PreorderSettings)
 
     @classmethod
     def settings_customise_sources(

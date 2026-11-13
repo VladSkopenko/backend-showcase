@@ -244,6 +244,7 @@ async def test_a_guest_joins_by_name_and_reads_the_booking_with_the_cookie(
     assert body == {
         **created,
         "role": "GUEST",
+        "participant_id": guest["id"],
         "participants": [owner, {"id": guest["id"], "name": "Alex", "role": "GUEST"}],
     }
     assert owner == created["participants"][0]
@@ -258,7 +259,9 @@ async def test_a_guest_joins_by_name_and_reads_the_booking_with_the_cookie(
     assert read.status_code == 200, read.text
     assert read.json() == body
     await sign_in(client, ADA)
-    assert (await client.get(BOOKINGS)).json() == [{**body, "role": "OWNER"}]
+    assert (await client.get(BOOKINGS)).json() == [
+        {**body, "role": "OWNER", "participant_id": owner["id"]}
+    ]
 
 
 @pytest.mark.parametrize("body", [None, {}, {"name": None}, {"name": ""}, {"name": "   "}])
@@ -310,6 +313,7 @@ async def test_a_signed_in_user_joins_with_the_profile_name_and_no_guest_cookie(
     assert response.status_code == 200, response.text
     assert response.json()["role"] == "GUEST"
     assert names(response) == [("Ada", "OWNER"), ("Grace", "GUEST")]
+    assert response.json()["participant_id"] == response.json()["participants"][1]["id"]
     assert "guest_token" not in set_cookies(response)
     assert await count_rows(connection, Guest) == 0
     assert await stored_participants(connection, created["id"]) == [
@@ -374,6 +378,8 @@ async def test_joining_again_changes_nothing(
     assert response.status_code == 200, response.text
     assert response.json()["role"] == ("OWNER" if joiner == "owner" else "GUEST")
     assert names(response) == [("Ada", "OWNER"), ("Alex", "GUEST"), ("Grace", "GUEST")]
+    position = {"owner": 0, "guest": 1, "user": 2}[joiner]
+    assert response.json()["participant_id"] == response.json()["participants"][position]["id"]
     assert "set-cookie" not in response.headers
     assert await stored_participants(connection, created["id"]) == before
     assert await stored_guest(connection, token) == ("Alex", START + GUEST_TTL)

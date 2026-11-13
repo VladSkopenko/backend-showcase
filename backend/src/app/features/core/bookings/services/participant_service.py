@@ -14,6 +14,7 @@ from app.features.core.bookings.dto import (
     InvitePreviewView,
     JoinOutcome,
     OwnedBooking,
+    ParticipantAccess,
 )
 from app.features.core.bookings.enums import BookingStatus, ParticipantRole
 from app.features.core.bookings.models import Booking, BookingParticipant, Guest
@@ -55,7 +56,7 @@ class ParticipantService:
         )
         if row is None:
             raise BookingNotFoundError()
-        booking, _ = row
+        booking, _, _ = row
         if booking.status == BookingStatus.CANCELLED:
             raise BookingAlreadyCancelledError()
         return OwnedBooking(id=booking.id)
@@ -97,7 +98,9 @@ class ParticipantService:
                 guest_id=None if guest is None else guest.id,
             )
             if existing is not None:
-                view = await self._views.one(booking=booking, table=table, role=existing.role)
+                view = await self._views.one(
+                    booking=booking, table=table, role=existing.role, participant_id=existing.id
+                )
                 return JoinOutcome(booking=view, guest_token=None)
         if user_id is None and guest is None and not name:
             raise GuestNameRequiredError()
@@ -108,34 +111,77 @@ class ParticipantService:
             guest, token = await self._create_or_renew_guest(
                 guest=guest, guest_token=guest_token, name=name
             )
-        await self._participants.add(
-            participant=BookingParticipant(
-                booking_id=booking.id,
-                user_id=user_id,
-                guest_id=None if guest is None else guest.id,
-                role=ParticipantRole.GUEST,
-                created_at=clock.now(),
-            )
+        participant = BookingParticipant(
+            booking_id=booking.id,
+            user_id=user_id,
+            guest_id=None if guest is None else guest.id,
+            role=ParticipantRole.GUEST,
+            created_at=clock.now(),
         )
-        view = await self._views.one(booking=booking, table=table, role=ParticipantRole.GUEST)
+        await self._participants.add(participant=participant)
+        view = await self._views.one(
+            booking=booking, table=table, role=ParticipantRole.GUEST, participant_id=participant.id
+        )
         return JoinOutcome(booking=view, guest_token=token)
 
     async def get_for_participant(
         self, *, booking_id: uuid.UUID, user_id: uuid.UUID | None, guest_token: str | None
     ) -> BookingView:
-        guest_id = None
-        if user_id is None:
-            guest = await self._find_guest(guest_token=guest_token)
-            if guest is None:
-                raise NotAuthenticatedError()
-            guest_id = guest.id
+        guest_id = await self._caller_guest_id(user_id=user_id, guest_token=guest_token)
         row = await self._bookings.get_for_participant(
             booking_id=booking_id, user_id=user_id, guest_id=guest_id
         )
         if row is None:
             raise BookingNotFoundError()
-        booking, table, role = row
-        return await self._views.one(booking=booking, table=table, role=role)
+        booking, table, role, participant_id = row
+        return await self._views.one(
+            booking=booking, table=table, role=role, participant_id=participant_id
+        )
+
+    async def get_participant(
+        self, *, booking_id: uuid.UUID, user_id: uuid.UUID | None, guest_token: str | None
+    ) -> ParticipantAccess:
+        return await self._participant(
+            booking_id=booking_id, user_id=user_id, guest_token=guest_token, for_update=False
+        )
+
+    async def lock_participant(
+        self, *, booking_id: uuid.UUID, user_id: uuid.UUID | None, guest_token: str | None
+    ) -> ParticipantAccess:
+        return await self._participant(
+            booking_id=booking_id, user_id=user_id, guest_token=guest_token, for_update=True
+        )
+
+    async def _participant(
+        self,
+        *,
+        booking_id: uuid.UUID,
+        user_id: uuid.UUID | None,
+        guest_token: str | None,
+        for_update: bool,
+    ) -> ParticipantAccess:
+        guest_id = await self._caller_guest_id(user_id=user_id, guest_token=guest_token)
+        row = await self._bookings.get_participation(
+            booking_id=booking_id, user_id=user_id, guest_id=guest_id, for_update=for_update
+        )
+        if row is None:
+            raise BookingNotFoundError()
+        booking, participant_id = row
+        return ParticipantAccess(
+            participant_id=participant_id,
+            preorder_open=booking.status == BookingStatus.CONFIRMED
+            and self._schedule.preorder_open(starts_at=booking.starts_at),
+        )
+
+    async def _caller_guest_id(
+        self, *, user_id: uuid.UUID | None, guest_token: str | None
+    ) -> uuid.UUID | None:
+        if user_id is not None:
+            return None
+        guest = await self._find_guest(guest_token=guest_token)
+        if guest is None:
+            raise NotAuthenticatedError()
+        return guest.id
 
     async def _get(
         self, *, booking_id: uuid.UUID, for_update: bool = False

@@ -13,6 +13,7 @@ class DishView:
     weight_grams: int
     is_available: bool
     popularity: int
+    prep_minutes: int
     image_url: str
     description: str
     calories: int

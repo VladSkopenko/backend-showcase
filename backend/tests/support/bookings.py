@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -9,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionm
 
 from app.common import clock
 from app.features.core.bookings.enums import BookingStatus, ParticipantRole
-from app.model_registry import Booking, BookingParticipant, DiningTable, Location, User
+from app.model_registry import Booking, BookingParticipant, DiningTable, Guest, Location, User
 
 SEARCH = "/api/v1/bookings/tables"
 BOOKINGS = "/api/v1/bookings"
@@ -94,6 +95,42 @@ async def add_booking(
         )
         await session.commit()
     return booking
+
+
+async def add_guest(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    name: str,
+    token: str,
+    expires_at: datetime = START + timedelta(days=31),
+) -> Guest:
+    guest = Guest(
+        name=name, token_hash=hashlib.sha256(token.encode()).hexdigest(), expires_at=expires_at
+    )
+    async with session_factory() as session:
+        session.add(guest)
+        await session.commit()
+    return guest
+
+
+async def add_participant(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    booking_id: str | uuid.UUID,
+    user: User | None = None,
+    guest: Guest | None = None,
+) -> BookingParticipant:
+    participant = BookingParticipant(
+        booking_id=uuid.UUID(str(booking_id)),
+        user_id=None if user is None else user.id,
+        guest_id=None if guest is None else guest.id,
+        role=ParticipantRole.GUEST,
+        created_at=clock.now(),
+    )
+    async with session_factory() as session:
+        session.add(participant)
+        await session.commit()
+    return participant
 
 
 def as_guest(token: str) -> dict[str, str]:

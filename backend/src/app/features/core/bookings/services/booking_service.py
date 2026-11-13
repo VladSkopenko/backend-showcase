@@ -83,15 +83,16 @@ class BookingService:
             if self.EXCLUSION_CONSTRAINT in str(exc.orig):
                 raise SlotUnavailableError() from exc
             raise
-        await self._participants.add(
-            participant=BookingParticipant(
-                booking_id=booking.id,
-                user_id=user_id,
-                role=ParticipantRole.OWNER,
-                created_at=clock.now(),
-            )
+        owner = BookingParticipant(
+            booking_id=booking.id,
+            user_id=user_id,
+            role=ParticipantRole.OWNER,
+            created_at=clock.now(),
         )
-        return await self._views.one(booking=booking, table=table, role=ParticipantRole.OWNER)
+        await self._participants.add(participant=owner)
+        return await self._views.one(
+            booking=booking, table=table, role=ParticipantRole.OWNER, participant_id=owner.id
+        )
 
     async def list_for_user(self, *, user_id: uuid.UUID) -> list[BookingView]:
         return await self._views.many(rows=await self._bookings.list_for_user(user_id=user_id))
@@ -102,13 +103,15 @@ class BookingService:
         )
         if row is None:
             raise BookingNotFoundError()
-        booking, table = row
+        booking, table, owner_id = row
         if booking.status == BookingStatus.CANCELLED:
             raise BookingAlreadyCancelledError()
         self._schedule.check_cancellable(starts_at=booking.starts_at)
         booking.status = BookingStatus.CANCELLED
         await self._bookings.flush()
-        return await self._views.one(booking=booking, table=table, role=ParticipantRole.OWNER)
+        return await self._views.one(
+            booking=booking, table=table, role=ParticipantRole.OWNER, participant_id=owner_id
+        )
 
     async def edit(
         self,
@@ -119,7 +122,7 @@ class BookingService:
         party_size: int,
         duration_minutes: int,
     ) -> BookingView:
-        booking, table = await self._get_editable(user_id=user_id, booking_id=booking_id)
+        booking, table, _ = await self._get_editable(user_id=user_id, booking_id=booking_id)
         self._schedule.check_party_size(party_size=party_size)
         start = self._schedule.to_local(starts_at)
         self._schedule.check_same_day(start=start, current_start=booking.starts_at)
@@ -133,7 +136,7 @@ class BookingService:
             raise SlotUnavailableError()
         await self._users.get_by_id(user_id=user_id, for_update=True)
         await self._tables.get(table_id=table.id, for_update=True)
-        booking, table = await self._get_editable(
+        booking, table, owner_id = await self._get_editable(
             user_id=user_id, booking_id=booking_id, for_update=True
         )
         if party_size < await self._participants.count(booking_id=booking.id):
@@ -155,12 +158,14 @@ class BookingService:
             if self.EXCLUSION_CONSTRAINT in str(exc.orig):
                 raise SlotUnavailableError() from exc
             raise
-        return await self._views.one(booking=booking, table=table, role=ParticipantRole.OWNER)
+        return await self._views.one(
+            booking=booking, table=table, role=ParticipantRole.OWNER, participant_id=owner_id
+        )
 
     async def list_edit_slots(
         self, *, user_id: uuid.UUID, booking_id: uuid.UUID, duration_minutes: int
     ) -> list[SlotView]:
-        booking, table = await self._get_editable(user_id=user_id, booking_id=booking_id)
+        booking, table, _ = await self._get_editable(user_id=user_id, booking_id=booking_id)
         self._schedule.check_duration(duration_minutes=duration_minutes)
         duration = timedelta(minutes=duration_minutes)
         starts = self._schedule.starts_on(day=self._schedule.to_local(booking.starts_at).date())
@@ -183,14 +188,14 @@ class BookingService:
 
     async def _get_editable(
         self, *, user_id: uuid.UUID, booking_id: uuid.UUID, for_update: bool = False
-    ) -> tuple[Booking, DiningTable]:
+    ) -> tuple[Booking, DiningTable, uuid.UUID]:
         row = await self._bookings.get_for_user(
             booking_id=booking_id, user_id=user_id, for_update=for_update
         )
         if row is None:
             raise BookingNotFoundError()
-        booking, table = row
+        booking, _, _ = row
         if booking.status == BookingStatus.CANCELLED:
             raise BookingAlreadyCancelledError()
         self._schedule.check_editable(starts_at=booking.starts_at)
-        return booking, table
+        return row

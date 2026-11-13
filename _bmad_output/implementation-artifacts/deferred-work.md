@@ -116,3 +116,9 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-booking-invites.md`
   summary: Test the join locks (the joiner's user row, then the booking row with `populate_existing`, two joins racing for the last seat, a join racing an edit that lowers `party_size`) and the first-link race (two first `GET /bookings/{id}/invite` requests answering the same code) with two concurrent connections.
   evidence: The shared-connection test harness cannot observe locks or a stale identity-map object, so dropping `for_update=True` in `ParticipantService.join` or `lock_owned` passes every test.
+- source_spec: `_bmad_output/implementation-artifacts/spec-preorder-cart.md`
+  summary: Test that the booking row lock in `ParticipantService.lock_participant` serialises pre-order writes with two concurrent connections: a double submit (the second answers `CART_EMPTY`), two PUTs of one dish (one line, no unique-index 500), and a write racing the owner's cancel.
+  evidence: The shared-connection test harness cannot observe locks or a stale identity-map object, so dropping `for_update=True` or `populate_existing` in `BookingRepository.get_participation` passes every test. The booking lock alone serialises the double submit and the write racing a cancel; the partial index `ix_preorder_items_participant_id_dish_id_draft` backstops only two concurrent PUTs of one dish.
+- source_spec: `_bmad_output/implementation-artifacts/spec-preorder-cart.md`
+  summary: Expose whether pre-order is open (for example `preorder_open` or `preorder_closes_at`) in the booking object, so the cart and the "Create New Pre-Order" button can be disabled before a 409 `PREORDER_CLOSED`.
+  evidence: Figma has a disabled and an enabled "Create New Pre-Order" variant; `ParticipantAccess.preorder_open` is already computed in core. The lock window and pre-order statuses are planned for PR 4.

@@ -63,6 +63,7 @@ class BookingResponse(BaseModel):
     table: BookingTableResponse
     location: BookingLocationResponse
     role: ParticipantRole
+    participant_id: uuid.UUID
     participants: list[ParticipantResponse]
 
 

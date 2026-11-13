@@ -2,7 +2,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import ColumnElement, exists, select
+from sqlalchemy import ColumnElement, and_, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.core.bookings.enums import BookingStatus, ParticipantRole
@@ -68,33 +68,50 @@ class BookingRepository:
 
     async def list_for_user(
         self, *, user_id: uuid.UUID
-    ) -> Sequence[tuple[Booking, DiningTable, ParticipantRole]]:
+    ) -> Sequence[tuple[Booking, DiningTable, ParticipantRole, uuid.UUID]]:
         rows = await self._session.execute(
-            select(Booking, DiningTable, BookingParticipant.role)
+            select(Booking, DiningTable, BookingParticipant.role, BookingParticipant.id)
             .join(DiningTable, DiningTable.id == Booking.table_id)
             .join(BookingParticipant, BookingParticipant.booking_id == Booking.id)
             .where(BookingParticipant.user_id == user_id)
             .order_by(Booking.starts_at.desc(), Booking.id.asc())
         )
-        return [(booking, table, role) for booking, table, role in rows]
+        return [
+            (booking, table, role, participant_id) for booking, table, role, participant_id in rows
+        ]
 
     async def get_for_participant(
         self, *, booking_id: uuid.UUID, user_id: uuid.UUID | None, guest_id: uuid.UUID | None
-    ) -> tuple[Booking, DiningTable, ParticipantRole] | None:
-        identity = (
-            BookingParticipant.user_id == user_id
-            if user_id is not None
-            else BookingParticipant.guest_id == guest_id
-        )
+    ) -> tuple[Booking, DiningTable, ParticipantRole, uuid.UUID] | None:
         row = (
             await self._session.execute(
-                select(Booking, DiningTable, BookingParticipant.role)
+                select(Booking, DiningTable, BookingParticipant.role, BookingParticipant.id)
                 .join(DiningTable, DiningTable.id == Booking.table_id)
                 .join(BookingParticipant, BookingParticipant.booking_id == Booking.id)
-                .where(Booking.id == booking_id, identity)
+                .where(Booking.id == booking_id, self._identity(user_id, guest_id))
             )
         ).first()
-        return None if row is None else (row[0], row[1], row[2])
+        return None if row is None else (row[0], row[1], row[2], row[3])
+
+    async def get_participation(
+        self,
+        *,
+        booking_id: uuid.UUID,
+        user_id: uuid.UUID | None,
+        guest_id: uuid.UUID | None,
+        for_update: bool = False,
+    ) -> tuple[Booking, uuid.UUID] | None:
+        statement = (
+            select(Booking, BookingParticipant.id)
+            .join(BookingParticipant, BookingParticipant.booking_id == Booking.id)
+            .where(Booking.id == booking_id, self._identity(user_id, guest_id))
+        )
+        if for_update:
+            statement = statement.with_for_update(of=Booking).execution_options(
+                populate_existing=True
+            )
+        row = (await self._session.execute(statement)).first()
+        return None if row is None else (row[0], row[1])
 
     async def get(
         self, *, booking_id: uuid.UUID, for_update: bool = False
@@ -113,10 +130,17 @@ class BookingRepository:
 
     async def get_for_user(
         self, *, booking_id: uuid.UUID, user_id: uuid.UUID, for_update: bool = False
-    ) -> tuple[Booking, DiningTable] | None:
+    ) -> tuple[Booking, DiningTable, uuid.UUID] | None:
         statement = (
-            select(Booking, DiningTable)
+            select(Booking, DiningTable, BookingParticipant.id)
             .join(DiningTable, DiningTable.id == Booking.table_id)
+            .join(
+                BookingParticipant,
+                and_(
+                    BookingParticipant.booking_id == Booking.id,
+                    BookingParticipant.role == ParticipantRole.OWNER,
+                ),
+            )
             .where(Booking.id == booking_id, Booking.user_id == user_id)
         )
         if for_update:
@@ -124,7 +148,7 @@ class BookingRepository:
                 populate_existing=True
             )
         row = (await self._session.execute(statement)).first()
-        return None if row is None else (row[0], row[1])
+        return None if row is None else (row[0], row[1], row[2])
 
     async def flush(self) -> None:
         await self._session.flush()
@@ -143,3 +167,9 @@ class BookingRepository:
             Booking.ends_at > starts_at,
             *excluded,
         )
+
+    @staticmethod
+    def _identity(user_id: uuid.UUID | None, guest_id: uuid.UUID | None) -> ColumnElement[bool]:
+        if user_id is not None:
+            return BookingParticipant.user_id == user_id
+        return BookingParticipant.guest_id == guest_id

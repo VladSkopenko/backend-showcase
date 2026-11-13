@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common import clock
 from app.features.core.menu.dto import DishSeedEntry
+from app.features.core.menu.enums import DishCategory
 from app.features.core.menu.repositories import DishRepository
 from app.features.core.menu.services.exceptions import MenuSeedFileError
 
@@ -19,6 +20,11 @@ if TYPE_CHECKING:
 class DishSeedService:
     FILE_NAME = "dishes.json"
     ENTRIES = TypeAdapter(list[DishSeedEntry])
+    DEFAULT_PREP_MINUTES = {
+        DishCategory.APPETIZER: 10,
+        DishCategory.MAIN_COURSE: 20,
+        DishCategory.DESSERT: 10,
+    }
 
     def __init__(self, session: AsyncSession, storage: S3FileStorage) -> None:
         self._repository = DishRepository(session)
@@ -70,6 +76,7 @@ class DishSeedService:
                     "vitamins": entry.vitamins,
                     "is_available": entry.is_available,
                     "popularity": entry.popularity,
+                    "prep_minutes": self._prep_minutes(entry),
                     "image_key": entry.image_key,
                     # The first entry is the newest, so NEWEST follows the file order.
                     "created_at": now - timedelta(minutes=position),
@@ -79,3 +86,8 @@ class DishSeedService:
             ],
             now=now,
         )
+
+    def _prep_minutes(self, entry: DishSeedEntry) -> int:
+        if entry.prep_minutes is not None:
+            return entry.prep_minutes
+        return self.DEFAULT_PREP_MINUTES[entry.category]
