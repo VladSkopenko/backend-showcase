@@ -34,23 +34,20 @@ volume has `prevent_destroy` and cloud-init formats only an empty volume.
 
 ## PR B, `feature/platform-skeleton`
 
-Files, in order, one at a time:
+Files: init, tailscale and n8n in `deploy/platform/compose.yml`, `deploy/platform/tailscale/serve.json`
+(n8n only), `deploy/platform/secrets.sh`, the `deploy-platform` job
+sending the secrets, `deploy/platform/README.md`.
 
-1. `deploy/platform/compose.yml`: init, tailscale, n8n, prometheus, alertmanager, victoria-logs,
-   tempo, grafana, caddy healthcheck.
-2. `deploy/platform/tailscale/serve.json`.
-3. `deploy/platform/prometheus/prometheus.yml`, `deploy/platform/alertmanager/alertmanager.yml`,
-   `deploy/platform/tempo/tempo.yaml`.
-4. `deploy/platform/caddy/Caddyfile`: Grafana host.
-5. `deploy/platform/secrets.sh`.
-6. `.github/workflows/delivery.yml`: platform secrets in the job `env`, sent over stdin.
-7. Docs: ADR 15 (Grafana public exception, Serve does pass identity headers, a new secret also edits
-   `delivery.yml`), spine Stack table and Deferred Grafana item, `n8n/compose.yml` to 2.47.7.
-
-[Claude] Before commit: each healthcheck command checked on throwaway containers of the pinned images.
+[Claude] Checked before commit: init script, the Tailscale service as a live test node, n8n with the
+owner from env under its memory limit, the `.env` the job produces.
 
 Rollout:
 
-1. [Vlad] Run `deploy/platform/secrets.sh` once.
-2. [Vlad] Merge PR B; `deploy-platform` deploys the skeleton.
-3. [Claude] Check the success signal in `SPEC.md`.
+1. [Vlad] Review the diff, say "коммить".
+2. [Vlad] Run `deploy/platform/secrets.sh` from the main checkout.
+3. [Vlad] Merge PR B; `deploy-platform` deploys it.
+4. [Claude] Watch the job and open n8n over the tailnet.
+
+Later services follow `deploy/platform/README.md` ("Adding a service"), each in its own step of #26.
+Docs still to update when Grafana lands: ADR 15 (Grafana public exception), spine Stack table and
+Deferred Grafana item.

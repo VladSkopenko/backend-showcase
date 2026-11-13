@@ -1,9 +1,32 @@
 # Platform stack, deployed once and changed only by its own deploys (AD-1).
 services:
+  # One-shot: creates every service's data directory with the owner that service runs as (ADR 15).
+  # A new service adds one line here and depends on init like the others.
+  init:
+    image: busybox:1.38.0
+    # Must not restart: up --wait treats it as done only while it sits exited with code 0.
+    restart: "no"
+    mem_limit: 32m
+    network_mode: none
+    volumes:
+      - /srv/data/platform:/data
+    # install -d creates missing parents and re-applies owner and mode on every deploy.
+    # Owners come from each image's USER (uid:gid).
+    command:
+      - sh
+      - -euc
+      - |
+        install -d -o 0     -g 0     -m 700 /data/caddy/data /data/caddy/config
+        install -d -o 0     -g 0     -m 700 /data/tailscale
+        install -d -o 1000  -g 1000  -m 700 /data/n8n
+
   caddy:
     image: caddy:2.11
     restart: unless-stopped
     mem_limit: 128m
+    depends_on:
+      init:
+        condition: service_completed_successfully
     ports:
       - "80:80"
       - "443:443"
@@ -15,6 +38,75 @@ services:
       - /srv/data/platform/caddy/config:/config
     networks:
       - edge
+
+  # Private entry: joins the tailnet as its own node and serves each internal UI on its own HTTPS
+  # port with a *.ts.net certificate (ADR 15). Reaches the UIs by service name on the default network.
+  tailscale:
+    image: tailscale/tailscale:v1.104.7
+    restart: unless-stopped
+    mem_limit: 128m
+    environment:
+      # OAuth client secret with ?ephemeral=false&preauthorized=true; the secrets script appends them.
+      TS_AUTHKEY: ${TS_AUTHKEY:?TS_AUTHKEY comes from the GitHub Environment}
+      TS_EXTRA_ARGS: --advertise-tags=tag:platform
+      TS_HOSTNAME: backend-showcase-platform
+      # Userspace networking needs no extra capabilities and no /dev/net/tun.
+      TS_USERSPACE: "true"
+      # State on the data volume and login only when there is none, so the node keeps its name.
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_AUTH_ONCE: "true"
+      # Watched for changes; ${TS_CERT_DOMAIN} inside it becomes the node's ts.net name.
+      TS_SERVE_CONFIG: /config/serve.json
+      # /healthz on port 9002 answers 200 once the node has a tailnet address.
+      TS_ENABLE_HEALTH_CHECK: "true"
+    volumes:
+      - ./tailscale:/config:ro
+      - /srv/data/platform/tailscale:/var/lib/tailscale
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9002/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  # Reached only through the tailscale service on https://<PLATFORM_HOST>:5678 (AD-3).
+  n8n:
+    image: n8nio/n8n:2.47.7
+    restart: unless-stopped
+    mem_limit: 768m
+    environment:
+      # Encrypts saved credentials; losing or changing it makes them unreadable, so it is never rotated.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY comes from the GitHub Environment}
+      # The owner account is (re)written from these on every start and locked in the UI.
+      N8N_INSTANCE_OWNER_MANAGED_BY_ENV: "true"
+      N8N_INSTANCE_OWNER_EMAIL: ${N8N_OWNER_EMAIL:?N8N_OWNER_EMAIL comes from the GitHub Environment}
+      # bcrypt; single-quoted in the .env, otherwise compose eats the $-separated salt.
+      N8N_INSTANCE_OWNER_PASSWORD_HASH: ${N8N_OWNER_PASSWORD_HASH:?N8N_OWNER_PASSWORD_HASH comes from the GitHub Environment}
+      N8N_INSTANCE_OWNER_FIRST_NAME: Vlad
+      N8N_INSTANCE_OWNER_LAST_NAME: Skopenko
+      # n8n itself listens on plain HTTP; these describe the URL browsers use through the tailscale proxy.
+      N8N_HOST: ${PLATFORM_HOST:?PLATFORM_HOST comes from the GitHub Environment}
+      N8N_PROTOCOL: https
+      N8N_EDITOR_BASE_URL: https://${PLATFORM_HOST:?PLATFORM_HOST comes from the GitHub Environment}:5678
+      N8N_PROXY_HOPS: "1"
+      # Schedule triggers fire in this zone, the same zone the booking grid uses.
+      GENERIC_TIMEZONE: Asia/Tbilisi
+      TZ: Asia/Tbilisi
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+    volumes:
+      # SQLite database and n8n's settings file.
+      - /srv/data/platform/n8n:/home/node/.n8n
+    healthcheck:
+      # Readiness, not liveness: 200 only once the database is connected and migrated (ADR 9).
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5678/healthz/readiness"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      init:
+        condition: service_completed_successfully
 
 networks:
   edge:

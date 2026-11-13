@@ -174,10 +174,20 @@ jobs:
         env:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          # Stored by deploy/platform/secrets.sh; a new secret is added there, here and in printf below.
+          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+          N8N_ENCRYPTION_KEY: ${{ secrets.N8N_ENCRYPTION_KEY }}
+          N8N_OWNER_EMAIL: ${{ secrets.N8N_OWNER_EMAIL }}
+          N8N_OWNER_PASSWORD_HASH: ${{ secrets.N8N_OWNER_PASSWORD_HASH }}
+          PLATFORM_HOST: ${{ vars.PLATFORM_HOST }}
         run: |
           install -m 600 /dev/null ~/deploy_key
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/deploy_key
-          out=$(ssh -i ~/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
-            "deploy@$DEPLOY_HOST" "$GITHUB_SHA" < /dev/null)
+          # Secrets go over stdin, never argv; deploy.sh writes stdin to /srv/platform/.env.
+          # The bcrypt hash is single-quoted: unquoted, compose reads its $-separated parts as variables.
+          out=$(printf "TS_AUTHKEY=%s\nN8N_ENCRYPTION_KEY=%s\nN8N_OWNER_EMAIL=%s\nN8N_OWNER_PASSWORD_HASH='%s'\nPLATFORM_HOST=%s\n" \
+            "$TS_AUTHKEY" "$N8N_ENCRYPTION_KEY" "$N8N_OWNER_EMAIL" "$N8N_OWNER_PASSWORD_HASH" "$PLATFORM_HOST" \
+            | ssh -i ~/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+            "deploy@$DEPLOY_HOST" "$GITHUB_SHA")
           echo "$out"
           echo "### Platform: $out" >> "$GITHUB_STEP_SUMMARY"
