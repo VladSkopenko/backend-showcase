@@ -147,9 +147,11 @@ jobs:
           echo "$out"
           echo "### Dev: $out" >> "$GITHUB_STEP_SUMMARY"
 
+  # The platform has no environments to promote between, so every push to main deploys it (ADR 15).
+  # No path filter: its inputs also live outside deploy/platform/, and compose restarts only changed services.
   deploy-platform:
     name: Deploy platform
-    if: github.ref == 'refs/heads/prod'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: platform

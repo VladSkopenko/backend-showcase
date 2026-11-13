@@ -10,7 +10,8 @@ case "$target" in
   dev) branch=main stack=app ;;
   staging) branch=rc stack=app ;;
   prod) branch=prod stack=app ;;
-  platform) branch=prod stack=platform ;;
+  # The platform has one instance for every environment, so it deploys straight from main (ADR 15).
+  platform) branch=main stack=platform ;;
   *) echo "unknown target: $target" >&2; exit 1 ;;
 esac
 
