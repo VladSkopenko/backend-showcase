@@ -47,6 +47,10 @@ class Booking(Base):
     status: Mapped[BookingStatus] = mapped_column(
         Enum(BookingStatus, name="booking_status"), server_default=BookingStatus.CONFIRMED.value
     )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decided_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

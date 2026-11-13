@@ -1,0 +1,148 @@
+import uuid
+from datetime import datetime
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.common import clock
+from app.config.settings import BookingSettings
+from app.features.core.bookings.dto import BookedTableView, BookingRequestPage, BookingRequestView
+from app.features.core.bookings.enums import BookingStatus
+from app.features.core.bookings.models import Booking
+from app.features.core.bookings.repositories import BookableTableRepository, BookingRepository
+from app.features.core.bookings.services.booking_schedule import BookingSchedule
+from app.features.core.bookings.services.exceptions import (
+    BookingNotFoundError,
+    RequestExpiredError,
+    RequestNotPendingError,
+    SlotUnavailableError,
+    StaffOnlyError,
+)
+from app.features.core.locations.dto import LocationView
+from app.features.core.locations.models import DiningTable
+from app.features.core.locations.services.location_catalog_service import LocationCatalogService
+from app.features.core.users.repositories import UserRepository
+
+
+class BookingRequestService:
+    EXCLUSION_CONSTRAINT = "ex_bookings_table_id_period"
+
+    def __init__(
+        self, session: AsyncSession, locations: LocationCatalogService, settings: BookingSettings
+    ) -> None:
+        self._bookings = BookingRepository(session)
+        self._tables = BookableTableRepository(session)
+        self._users = UserRepository(session)
+        self._locations = locations
+        self._schedule = BookingSchedule(settings)
+
+    async def list_pending(
+        self, *, staff_id: uuid.UUID, limit: int, offset: int
+    ) -> BookingRequestPage:
+        await self._check_staff(user_id=staff_id)
+        now = clock.now()
+        rows = await self._bookings.list_pending_requests(
+            starting_after=now, limit=limit, offset=offset
+        )
+        locations = {location.id: location for location in await self._locations.list_all()}
+        return BookingRequestPage(
+            items=[
+                self._to_view(booking, table, locations[table.location_id], name, competing)
+                for booking, table, name, competing in rows
+            ],
+            total=await self._bookings.count_pending_requests(starting_after=now),
+            limit=limit,
+            offset=offset,
+        )
+
+    async def approve(self, *, staff_id: uuid.UUID, booking_id: uuid.UUID) -> BookingRequestView:
+        await self._check_staff(user_id=staff_id)
+        booking, table = await self._get(booking_id=booking_id)
+        # The table first, then the request: the lock order of ADR 13.
+        await self._tables.get(table_id=table.id, for_update=True)
+        booking, table = await self._get(booking_id=booking_id, for_update=True)
+        self._check_pending(booking)
+        now = clock.now()
+        if booking.starts_at <= now:
+            raise RequestExpiredError()
+        if await self._bookings.table_has_confirmed_overlap(
+            table_id=table.id, starts_at=booking.starts_at, ends_at=booking.ends_at
+        ):
+            raise SlotUnavailableError()
+        self._decide(booking, status=BookingStatus.CONFIRMED, staff_id=staff_id, now=now)
+        try:
+            await self._bookings.flush()
+        except IntegrityError as exc:
+            if self.EXCLUSION_CONSTRAINT in str(exc.orig):
+                raise SlotUnavailableError() from exc
+            raise
+        await self._bookings.reject_pending_overlapping(
+            table_id=table.id,
+            starts_at=booking.starts_at,
+            ends_at=booking.ends_at,
+            excluding_booking_id=booking.id,
+            decided_at=now,
+            decided_by_id=staff_id,
+        )
+        return await self._view(booking_id=booking.id)
+
+    async def reject(self, *, staff_id: uuid.UUID, booking_id: uuid.UUID) -> BookingRequestView:
+        await self._check_staff(user_id=staff_id)
+        booking, _ = await self._get(booking_id=booking_id, for_update=True)
+        self._check_pending(booking)
+        self._decide(booking, status=BookingStatus.REJECTED, staff_id=staff_id, now=clock.now())
+        await self._bookings.flush()
+        return await self._view(booking_id=booking.id)
+
+    async def _check_staff(self, *, user_id: uuid.UUID) -> None:
+        user = await self._users.get_by_id(user_id=user_id)
+        if user is None or not user.is_staff:
+            raise StaffOnlyError()
+
+    async def _get(
+        self, *, booking_id: uuid.UUID, for_update: bool = False
+    ) -> tuple[Booking, DiningTable]:
+        row = await self._bookings.get(booking_id=booking_id, for_update=for_update)
+        if row is None:
+            raise BookingNotFoundError()
+        return row
+
+    def _check_pending(self, booking: Booking) -> None:
+        if booking.status != BookingStatus.PENDING:
+            raise RequestNotPendingError()
+
+    def _decide(
+        self, booking: Booking, *, status: BookingStatus, staff_id: uuid.UUID, now: datetime
+    ) -> None:
+        booking.status = status
+        booking.decided_at = now
+        booking.decided_by_id = staff_id
+
+    async def _view(self, *, booking_id: uuid.UUID) -> BookingRequestView:
+        row = await self._bookings.get_request(booking_id=booking_id)
+        if row is None:
+            raise BookingNotFoundError()
+        booking, table, name, competing = row
+        location = await self._locations.get(location_id=table.location_id)
+        return self._to_view(booking, table, location, name, competing)
+
+    def _to_view(
+        self,
+        booking: Booking,
+        table: DiningTable,
+        location: LocationView,
+        owner_first_name: str,
+        competing_requests: int,
+    ) -> BookingRequestView:
+        return BookingRequestView(
+            id=booking.id,
+            status=booking.status,
+            owner_first_name=owner_first_name,
+            party_size=booking.party_size,
+            starts_at=self._schedule.to_local(booking.starts_at),
+            ends_at=self._schedule.to_local(booking.ends_at),
+            created_at=self._schedule.to_local(booking.created_at),
+            table=BookedTableView(id=table.id, label=table.label, capacity=table.capacity),
+            location=location,
+            competing_requests=competing_requests,
+        )

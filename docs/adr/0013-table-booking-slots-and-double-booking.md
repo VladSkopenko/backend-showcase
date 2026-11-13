@@ -8,6 +8,8 @@ Accepted. Amended 2026-11-11: bookings can be edited (start, party size and a du
 fixed set) with the lock order user, table, booking; edit and the day grids enforce a closing
 time. Amended 2026-11-13: parties above the instant limit send a pending request; the overlap
 rules depend on the status, and one "active" rule names the statuses that hold a guest's time.
+Amended 2026-11-13: staff approve or reject requests; approving locks the table, then the request,
+and rejects the overlapping pending requests on that table; `REJECTED` is a terminal status.
 
 ## Context
 
@@ -60,6 +62,26 @@ a check in Python alone cannot see a row another transaction is about to insert.
   together with `REJECTED`. A pending request can be cancelled and joined like a
   booking, cannot be edited (`BOOKING_PENDING`) and keeps the pre-order closed; edit keeps the
   instant party limit, so it never turns a booking into a request.
+- **Staff decisions.** A single `users.is_staff` flag (default false) marks staff; it is set by
+  migrations or by an operator in SQL, never through the API. The staff routes check it in the
+  service and answer `STAFF_ONLY` otherwise. Approve locks the table row, then the request row,
+  so it serialises with every create and edit on that table and with a competing approve. Only a
+  `PENDING` request whose start is still ahead is approved (`REQUEST_NOT_PENDING`,
+  `REQUEST_EXPIRED`); a confirmed overlap on the table refuses it with `SLOT_UNAVAILABLE` and
+  leaves it pending. Otherwise it becomes `CONFIRMED`, and every other `PENDING` request on that
+  table whose period overlaps becomes `REJECTED` in the same transaction; the exclusion
+  constraint stays the backstop. Reject locks only the request and needs `PENDING`. Every
+  decision, including the rejections caused by an approval, stores `decided_at` and
+  `decided_by_id` (`ON DELETE SET NULL`), for the staff reaction-time dashboard.
+- **`REJECTED`.** A rejected request is inactive by the active rule, so it frees the owner's
+  time and closes its invite link like a cancelled booking. The owner's cancel, edit, edit slots
+  and invite link report the inactive status by name: `BOOKING_ALREADY_CANCELLED` for
+  `CANCELLED`, `BOOKING_REJECTED` for `REJECTED`, through one shared check. Joining answers
+  `INVITE_CLOSED` for both.
+- **Approved large bookings.** A confirmed booking on a table above the instant limit cannot be
+  edited (`LARGE_BOOKING_NOT_EDITABLE`, also on the edit slots): edit keeps the instant party
+  limit, so a change would bypass the staff decision. The guest may cancel it and send a new
+  request.
 - **Editing.** The owner of a `CONFIRMED` booking may replace its start, party size and duration
   until the cancel cutoff. The table and the local day stay. Durations run from
   `duration_minutes` to `max_duration_minutes` in steps of `slot_minutes`; creation still uses
@@ -92,5 +114,6 @@ a check in Python alone cannot see a row another transaction is about to insert.
 - `alembic check` cannot reflect exclusion constraints, so drift between the model and the
   database is caught only by the `pg_get_constraintdef` test in `tests/test_database.py`.
 - The lock order (user, then table, then booking) is a rule for every write path on bookings;
-  taking the locks in another order risks deadlocks.
+  taking the locks in another order risks deadlocks. Approve takes no user lock and keeps the
+  table-before-booking part; the pending requests it rejects are locked last by the update.
 - Per-location or per-weekday opening hours would replace the single grid in `BookingSettings`.

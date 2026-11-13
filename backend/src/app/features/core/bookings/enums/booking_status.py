@@ -5,6 +5,7 @@ class BookingStatus(enum.Enum):
     CONFIRMED = "CONFIRMED"
     CANCELLED = "CANCELLED"
     PENDING = "PENDING"
+    REJECTED = "REJECTED"
 
     @classmethod
     def active(cls) -> frozenset[BookingStatus]:

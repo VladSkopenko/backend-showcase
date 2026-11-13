@@ -41,7 +41,7 @@ Grafana. Data accumulates from now on; staging and prod stay on paper.
   - **success:** After a day, bookings by start hour show lunch and dinner peaks, party of 2 is the largest group, weekends have larger parties.
 - **CAP-6**
   - **intent:** Bots are distinct visitors and a staff member.
-  - **success:** About 40 guest bots (regulars and occasional) and one staff bot exist on dev only.
+  - **success:** About 40 guest bots (regulars and occasional) exist on dev only, and one staff bot on dev and local.
 - **CAP-7**
   - **intent:** Bots pre-order food the way their party would.
   - **success:** Most bookings made more than 30 minutes ahead get a submitted pre-order with about one main course per person and location-specific top dishes.
@@ -69,7 +69,7 @@ Grafana. Data accumulates from now on; staging and prod stay on paper.
 - Auto-reject runs as a periodic task inside the API process (one API process per environment).
 - No email is sent to `example.com`; in-app notifications have no push yet (WebSocket comes with the order tracker).
 - Bots use only the public dev API (ADR 14), never staging or prod; the 4-free-tables rule stays; the bot password is unchanged and new bots reuse its hash.
-- Bots and the staff bot come from data migrations gated on `APP_ENVIRONMENT=dev`.
+- Guest bots come from data migrations gated on `APP_ENVIRONMENT=dev`; the staff bot (story 2) is also created on `local`. Staging and prod never get bots.
 - All simulator weights live in one config object at the top of the workflow code; workflows are kept in git.
 - Grafana reads dev, not prod: a deviation from AD-13 recorded in an ADR. Infra files follow ADR 15 and are written one at a time with Vlad.
 

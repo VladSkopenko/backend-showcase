@@ -19,6 +19,8 @@ MEDIA_BASE_URL = "https://media.example.com/n/ns/b/media/o"
 PASSWORD = "correct-horse"
 ADA = "ada@example.com"
 GRACE = "grace@example.com"
+STAFF = "staff@example.com"
+WAITER_BOT = "waiter-bot@example.com"
 TZ = ZoneInfo("Asia/Tbilisi")
 TODAY = date(2026, 11, 12)
 TOMORROW = TODAY + timedelta(days=1)

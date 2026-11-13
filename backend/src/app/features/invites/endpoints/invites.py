@@ -13,6 +13,7 @@ from app.features.core.bookings.services.exceptions import (
     BookingAlreadyCancelledError,
     BookingFullError,
     BookingNotFoundError,
+    BookingRejectedError,
     GuestNameRequiredError,
     InviteClosedError,
 )
@@ -36,6 +37,7 @@ router = APIRouter(tags=[InvitesOpenApiTags.INVITES])
         NotAuthenticatedError,
         BookingNotFoundError,
         BookingAlreadyCancelledError,
+        BookingRejectedError,
         statuses=DOCUMENTED_ERROR_STATUSES,
         takes_input=True,
     ),
@@ -43,7 +45,8 @@ router = APIRouter(tags=[InvitesOpenApiTags.INVITES])
         "Gives the owner of a confirmed booking or pending request its invite code for the "
         "`/join/<code>` link. "
         "The code is created on the first request and stays the same afterwards. A booking the "
-        "user only joined or another user's booking answers 404."
+        "user only joined or another user's booking answers 404; a cancelled or rejected one "
+        "answers with its status."
     ),
 )
 async def get_invite_link(
@@ -66,8 +69,8 @@ async def get_invite_link(
     description=(
         "Shows who invites and to which booking: the owner's first name, whether the booking "
         "is confirmed or a pending request, the time, the party size, the table and the "
-        "location. Closed once the booking is cancelled or shortly before its start. No sign-in "
-        "needed."
+        "location. Closed once the booking is cancelled or rejected, or shortly before its "
+        "start. No sign-in needed."
     ),
 )
 async def preview_invite(code: str, invites: InviteServiceDep) -> InvitePreviewResponse:
@@ -93,8 +96,8 @@ async def preview_invite(code: str, invites: InviteServiceDep) -> InvitePreviewR
         "guest. Without an account a `name` is required, and the `guest_token` cookie is set "
         "to recognise the guest later, also on other bookings; a guest with a valid cookie "
         "keeps the name and gets the cookie renewed. Joining again changes nothing. Closed "
-        "once the booking is cancelled or shortly before its start; refused when the party "
-        "is full."
+        "once the booking is cancelled or rejected, or shortly before its start; refused when "
+        "the party is full."
     ),
 )
 async def join_invite(

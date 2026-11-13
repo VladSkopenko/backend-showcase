@@ -8,6 +8,7 @@ from app.features.core.bookings.services.exceptions import (
     BookingFullError,
     BookingNotFoundError,
     BookingPendingError,
+    BookingRejectedError,
     CancellationClosedError,
     DateOutOfRangeError,
     DayChangeNotAllowedError,
@@ -16,11 +17,15 @@ from app.features.core.bookings.services.exceptions import (
     EndsAfterClosingError,
     GuestNameRequiredError,
     InviteClosedError,
+    LargeBookingNotEditableError,
     OverlappingBookingError,
     PartyBelowParticipantsError,
     PartyTooLargeError,
+    RequestExpiredError,
+    RequestNotPendingError,
     SlotInvalidError,
     SlotUnavailableError,
+    StaffOnlyError,
     TableNotFoundError,
     TableNotSuitableError,
 )
@@ -47,6 +52,11 @@ ERROR_STATUSES: dict[type[DomainError], int] = {
     BookingFullError: status.HTTP_409_CONFLICT,
     GuestNameRequiredError: status.HTTP_400_BAD_REQUEST,
     PartyBelowParticipantsError: status.HTTP_409_CONFLICT,
+    BookingRejectedError: status.HTTP_409_CONFLICT,
+    LargeBookingNotEditableError: status.HTTP_409_CONFLICT,
+    StaffOnlyError: status.HTTP_403_FORBIDDEN,
+    RequestNotPendingError: status.HTTP_409_CONFLICT,
+    RequestExpiredError: status.HTTP_409_CONFLICT,
 }
 
 # The routes also document errors raised by the auth and locations features they build on.

@@ -110,7 +110,9 @@ class InviteClosedError(DomainError):
     code = "INVITE_CLOSED"
 
     def __init__(self) -> None:
-        super().__init__("This invitation is closed: the booking was cancelled or starts soon.")
+        super().__init__(
+            "This invitation is closed: the booking was cancelled or rejected, or starts soon."
+        )
 
 
 class BookingFullError(DomainError):
@@ -132,3 +134,40 @@ class PartyBelowParticipantsError(DomainError):
 
     def __init__(self) -> None:
         super().__init__("The party cannot be smaller than the people who have already joined.")
+
+
+class BookingRejectedError(DomainError):
+    code = "BOOKING_REJECTED"
+
+    def __init__(self) -> None:
+        super().__init__("This booking request was rejected by the restaurant.")
+
+
+class LargeBookingNotEditableError(DomainError):
+    code = "LARGE_BOOKING_NOT_EDITABLE"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "A confirmed large-party booking cannot be changed; cancel it and send a new request."
+        )
+
+
+class StaffOnlyError(DomainError):
+    code = "STAFF_ONLY"
+
+    def __init__(self) -> None:
+        super().__init__("Only restaurant staff can do this.")
+
+
+class RequestNotPendingError(DomainError):
+    code = "REQUEST_NOT_PENDING"
+
+    def __init__(self) -> None:
+        super().__init__("This booking is not a request awaiting a decision.")
+
+
+class RequestExpiredError(DomainError):
+    code = "REQUEST_EXPIRED"
+
+    def __init__(self) -> None:
+        super().__init__("This request's start has passed, so it can no longer be approved.")

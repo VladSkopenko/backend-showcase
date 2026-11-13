@@ -9,9 +9,15 @@ from app.features.core.bookings.schemas.booking import (
     TableCardPageResponse,
     TableCardResponse,
 )
+from app.features.core.bookings.schemas.booking_request import (
+    BookingRequestPageResponse,
+    BookingRequestResponse,
+)
 
 __all__ = [
     "BookingLocationResponse",
+    "BookingRequestPageResponse",
+    "BookingRequestResponse",
     "BookingResponse",
     "BookingTableResponse",
     "CreateBookingRequest",
