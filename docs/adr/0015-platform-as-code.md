@@ -85,7 +85,9 @@ What stays manual, once:
   healthcheck does.
 - The node name `backend-showcase-platform.<tailnet>.ts.net` appears in public Certificate
   Transparency logs, as every HTTPS certificate does.
-- Tailscale serve sees only the tagged node, so tools cannot rely on Tailscale identity headers for
-  sign-in; each UI keeps its own login.
+- Tailscale serve passes the visitor's identity headers (`Tailscale-User-Login`, checked live), but
+  each UI keeps its own login; trusting those headers for sign-in is a separate decision.
+- A new secret is added in three places: `deploy/platform/secrets.sh`, and the `deploy-platform`
+  job's `env` and `printf` in `delivery.yml`.
 - UI changes to n8n workflows and Grafana dashboards must be exported to the repository; a deploy
   overwrites the rest.

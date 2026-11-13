@@ -1,0 +1,10 @@
+{
+  "TCP": {
+    "5678": { "HTTPS": true }
+  },
+  "Web": {
+    "${TS_CERT_DOMAIN}:5678": {
+      "Handlers": { "/": { "Proxy": "http://n8n:5678" } }
+    }
+  }
+}
