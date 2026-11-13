@@ -40,7 +40,8 @@ router = APIRouter(tags=[InvitesOpenApiTags.INVITES])
         takes_input=True,
     ),
     description=(
-        "Gives the owner of a confirmed booking its invite code for the `/join/<code>` link. "
+        "Gives the owner of a confirmed booking or pending request its invite code for the "
+        "`/join/<code>` link. "
         "The code is created on the first request and stays the same afterwards. A booking the "
         "user only joined or another user's booking answers 404."
     ),
@@ -63,9 +64,10 @@ async def get_invite_link(
         takes_input=True,
     ),
     description=(
-        "Shows who invites and to which booking: the owner's first name, the time, the party "
-        "size, the table and the location. Closed once the booking is cancelled or shortly "
-        "before its start. No sign-in needed."
+        "Shows who invites and to which booking: the owner's first name, whether the booking "
+        "is confirmed or a pending request, the time, the party size, the table and the "
+        "location. Closed once the booking is cancelled or shortly before its start. No sign-in "
+        "needed."
     ),
 )
 async def preview_invite(code: str, invites: InviteServiceDep) -> InvitePreviewResponse:

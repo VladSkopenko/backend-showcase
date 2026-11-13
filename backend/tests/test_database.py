@@ -430,10 +430,10 @@ async def test_migrated_bookings_table_has_the_expected_shape(connection: AsyncC
     ]
 
 
-async def test_booking_status_enum_has_both_labels(connection: AsyncConnection) -> None:
+async def test_booking_status_enum_has_every_label(connection: AsyncConnection) -> None:
     labels = await connection.scalar(text("SELECT enum_range(NULL::booking_status)::text[]"))
 
-    assert labels == ["CONFIRMED", "CANCELLED"]
+    assert labels == ["CONFIRMED", "CANCELLED", "PENDING"]
 
 
 async def test_bookings_status_defaults_to_confirmed(connection: AsyncConnection) -> None:

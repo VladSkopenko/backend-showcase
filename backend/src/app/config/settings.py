@@ -137,8 +137,11 @@ class BookingSettings(BaseSettings):
     duration_minutes: int = 90
     horizon_days: int = 30
     cancel_cutoff_minutes: int = 30
-    # Caps both the party and the table capacity: larger tables are booked offline.
+    # Caps both the party and the table capacity of an instant booking; larger parties send a
+    # request that staff confirm.
     max_online_party_size: int = 4
+    # The CHECK on bookings.party_size stores at most 8 people.
+    max_request_party_size: int = Field(default=8, le=8)
     max_duration_minutes: int = 180
     closing_time: time = time(23, 0)
     preorder_lock_minutes: int = 30

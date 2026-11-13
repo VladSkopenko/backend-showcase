@@ -35,7 +35,7 @@ class TableSearchService:
         limit: int,
         offset: int,
     ) -> TableCardPage:
-        self._schedule.check_party_size(party_size=party_size)
+        self._schedule.check_requestable_party_size(party_size=party_size)
         self._schedule.check_date(day=day)
         if slot_time is not None:
             self._schedule.check_slot_time(slot_time=slot_time)
@@ -44,7 +44,7 @@ class TableSearchService:
             raise LocationNotFoundError()
         tables = await self._tables.list_fitting(
             min_capacity=party_size,
-            max_capacity=self._schedule.max_party_size,
+            max_capacity=self._schedule.max_capacity(party_size=party_size),
             location_id=location_id,
         )
         starts = self._schedule.starts_on(day=day)
