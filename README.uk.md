@@ -28,6 +28,13 @@ REST API для мережі ресторанів. Проєкт показує �
 | Інфраструктура | Terraform для VM в Oracle Cloud, мережі, диска з даними, бакета для медіа та його IAM; cloud-init для базової ОС; сервер замінюють, а не латають ([ADR 8](docs/adr/0008-terraform-and-immutable-server.md)) |
 | Платформа | Caddy з автоматичним HTTPS перед app-стеками; одна VM, platform-стек і окремий app-стек для кожного середовища ([ADR 7](docs/adr/0007-single-vm-platform-and-app-stacks.md)) |
 | API | Реєстрація з підтвердженням email, JWT-сесії з ротацією refresh-токенів, скидання пароля, вхід через Google, меню з фото в Object Storage, локації ресторанів зі столами, бронювання столів із сіткою слотів і захистом від подвійного бронювання, зміна бронювання (час, гості, тривалість), запрошення за посиланням для друзів з акаунтом і без, кошик передзамовлення для кожного учасника |
+| Симуляція | n8n у platform-стеку відтворює роботу ресторану на dev: [симулятор бронювань](n8n/workflows/booking-simulator.json) (40 ботів-гостей кожні 2 хвилини бронюють, надсилають запити на великі компанії, передзамовляють і скасовують) і [бот-офіціант](n8n/workflows/waiter-bot.json) (staff-бот схвалює або відхиляє запити). Редактор доступний лише в tailnet, за адресою `https://backend-showcase-platform.tail88eb36.ts.net:5678` ([ADR 14](docs/adr/0014-booking-simulator-on-dev.md), [n8n/README.md](n8n/README.md)) |
+
+### Симуляція на dev
+
+| Бот-офіціант | Симулятор бронювань | Запуски |
+|---|---|---|
+| ![Workflow бота-офіціанта в редакторі n8n](docs/images/n8n-waiter-bot.png) | ![Workflow симулятора бронювань у редакторі n8n](docs/images/n8n-booking-simulator.png) | ![Запуски обох workflow в n8n](docs/images/n8n-executions.png) |
 
 ## Архітектура
 

@@ -29,6 +29,13 @@ the first release.
 | Infrastructure | Terraform for the Oracle Cloud VM, network, data volume, media bucket and its IAM; cloud-init for the base OS; the server is replaced, not patched ([ADR 8](docs/adr/0008-terraform-and-immutable-server.md)) |
 | Platform | Caddy with automatic HTTPS in front of the app stacks; one VM, a platform stack and an app stack per environment ([ADR 7](docs/adr/0007-single-vm-platform-and-app-stacks.md)) |
 | API | Registration with email verification, JWT sessions with refresh rotation, password reset, Google sign-in, a menu with pictures in Object Storage, restaurant locations with their tables, table booking with a slot grid and double-booking protection, editing a booking (time, guests, stay length), invites by link for friends with or without an account, a pre-order cart for every participant |
+| Simulation | n8n in the platform stack plays the restaurant on dev: [booking simulator](n8n/workflows/booking-simulator.json) (40 guest bots book, send large-party requests, pre-order and cancel every 2 minutes) and [waiter bot](n8n/workflows/waiter-bot.json) (a staff bot approves or rejects the requests). The editor is reachable only on the tailnet, at `https://backend-showcase-platform.tail88eb36.ts.net:5678` ([ADR 14](docs/adr/0014-booking-simulator-on-dev.md), [n8n/README.md](n8n/README.md)) |
+
+### Simulation on dev
+
+| Waiter bot | Booking simulator | Runs |
+|---|---|---|
+| ![Waiter bot workflow in the n8n editor](docs/images/n8n-waiter-bot.png) | ![Booking simulator workflow in the n8n editor](docs/images/n8n-booking-simulator.png) | ![n8n executions of both workflows](docs/images/n8n-executions.png) |
 
 ## Architecture
 
