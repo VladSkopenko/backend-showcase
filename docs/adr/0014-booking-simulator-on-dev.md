@@ -8,6 +8,7 @@ Accepted. Amended 2026-11-13: migration `0018` adds a staff bot on dev and local
 bot password. Amended 2026-11-13: migration `0020` adds 36 named guest bots on dev, 40 booking
 bots in all. Amended 2026-11-13: the simulator runs every 2 minutes on the platform n8n, plays
 the 40 bots as regulars and occasional guests, sends large-party requests and pre-orders food.
+Amended 2026-11-14: a second workflow, the waiter bot, decides large-party requests on dev.
 
 ## Context
 
@@ -34,6 +35,13 @@ simulator to dev.
   so does an approved request that has none yet.
 - **Large-party requests.** A party of 5 to 8 sends a request instead of booking, only for starts
   more than 2 hours ahead, which is as close as the API accepts one.
+- **A waiter bot decides the requests.** A second workflow, `n8n/workflows/waiter-bot.json`, signs
+  in as the staff bot every 5 minutes and approves or rejects pending requests through the staff
+  routes of the public dev API, like a busy waiter: it skips some runs, leaves some requests far
+  ahead for later, approves most and rejects the rest, by weights in its own `CONFIG` object. It
+  reads one page of requests in the API's order and decides them one at a time, so the earliest
+  of several competing requests is decided first. It keeps no state, never runs against staging
+  or prod, and requests it leaves too long fall to the API's own 2-hour auto-reject.
 - **Bots come from an environment-gated data migration.** Migration `0011` inserts four verified
   users, `booking-bot-1@example.com` to `booking-bot-4@example.com`, only when
   `APP_ENVIRONMENT` is `dev`; in every other environment its upgrade and downgrade do nothing. The

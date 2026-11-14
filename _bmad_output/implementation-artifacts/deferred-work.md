@@ -157,5 +157,5 @@
   summary: Session rows grow without cleanup; the simulator signs in every 2 minutes (about 720 rows a day on dev) and never logs out, and nothing deletes expired sessions.
   evidence: SessionService stores a row per login with a 30-day expiry; no cleanup job exists. Fix with a periodic cleanup in the background task runner or a logout at the end of each run.
 - source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/6-guest-simulator-v2.md`
-  summary: The plan check runs only by hand; a CI job for `n8n/**` running `node n8n/check-simulator-plan.mjs` would catch drift between the workflow and patterns.md.
+  summary: The plan check runs only by hand; a CI job for `n8n/**` running `npm test` in `n8n/` would catch drift between the workflow and patterns.md.
   evidence: CI is Vlad's infrastructure.

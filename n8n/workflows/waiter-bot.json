@@ -1,0 +1,491 @@
+{
+  "id": "WaiterBotDecides",
+  "name": "Waiter bot",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Tbilisi"
+  },
+  "nodes": [
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000001",
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000002",
+      "name": "Plan the round",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Every number that tunes the waiter lives in CONFIG (starting weights from patterns.md). The\n// plan carries it as `config`, so the later nodes read their numbers from here too.\nconst CONFIG = {\n  // Only the public dev API (ADR 14): the waiter decides the bots' requests, never real guests'.\n  apiBaseUrl: 'https://backend-showcase-dev.duckdns.org/api/v1',\n  // The staff bot from migration 0018, with the booking bots' password.\n  email: 'waiter-bot@example.com',\n  // Chance that a run does nothing at all, so the time to a decision varies.\n  skipChance: 0.4,\n  // Chance that a request the waiter decides is approved; the rest are rejected.\n  approveChance: 0.8,\n  // A request starting more than this many days ahead is left for a later run with\n  // farDeferralChance, so some wait long and a few reach the 2-hour auto-reject.\n  farThresholdDays: 3,\n  farDeferralChance: 0.5,\n  // Requests read per run, earliest start first (the API's maximum page); the rest wait for later\n  // runs.\n  pageSize: 50,\n};\n\n// A skipped run ends here, before signing in.\nif (Math.random() < CONFIG.skipChance) {\n  return [];\n}\n\nreturn [{ json: { apiBaseUrl: CONFIG.apiBaseUrl, email: CONFIG.email, config: CONFIG } }];"
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000003",
+      "name": "Log in",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "BookingBotPasswd",
+          "name": "Booking bot password"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.apiBaseUrl }}/auth/login",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ email: $json.email }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000004",
+      "name": "Keep the session",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const plan = $('Plan the round').first().json;\nconst setCookie = [].concat($input.first().json.headers['set-cookie'] ?? []);\nconst cookie = setCookie.map((header) => header.split(';')[0]).join('; ');\n\nreturn [{ json: { ...plan, cookie } }];"
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000005",
+      "name": "List pending requests",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.apiBaseUrl }}/staff/booking-requests",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "={{ $json.config.pageSize }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000006",
+      "name": "Split the page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// One item per pending request, in the API's order: earliest start first, then oldest request.\n// Only this page is decided; the rest wait for later runs.\nconst { apiBaseUrl, cookie, config } = $('Keep the session').first().json;\n\nreturn $input.first().json.items.map((request) => ({\n  json: { apiBaseUrl, cookie, config, requestId: request.id, startsAt: request.starts_at },\n}));"
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000007",
+      "name": "Each request",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        300
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000008",
+      "name": "Decide the request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        400
+      ],
+      "parameters": {
+        "jsCode": "// Requests come one at a time in the API's order, so approving the earliest of several competing\n// requests rejects the later ones on the API side before the waiter reaches them.\nconst request = $input.first().json;\nconst { config } = request;\nconst farFrom = Date.now() + config.farThresholdDays * 24 * 60 * 60 * 1000;\nconst isFar = Date.parse(request.startsAt) > farFrom;\nconst decideNow = () => (Math.random() < config.approveChance ? 'approve' : 'reject');\nconst decision = isFar && Math.random() < config.farDeferralChance ? 'leave' : decideNow();\n\nreturn [{ json: { ...request, decision } }];"
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000009",
+      "name": "Leave for later",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        600
+      ],
+      "parameters": {
+        "jsCode": "return $input.first().json.decision === 'leave' ? $input.all() : [];"
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000010",
+      "name": "Answer now",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        400
+      ],
+      "parameters": {
+        "jsCode": "return $input.first().json.decision === 'leave' ? [] : $input.all();"
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000011",
+      "name": "Send the decision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.apiBaseUrl }}/staff/booking-requests/{{ $json.requestId }}/{{ $json.decision }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000012",
+      "name": "Check the decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        400
+      ],
+      "parameters": {
+        "jsCode": "// 409 REQUEST_NOT_PENDING (a competitor's approval or the auto-reject got there first) and\n// REQUEST_EXPIRED (it now starts within the auto-reject lead) skip the request quietly. An\n// approval refused with SLOT_UNAVAILABLE (the table was confirmed meanwhile) is followed by a\n// rejection. Any other status but 200 fails the run.\nconst request = $('Decide the request').first().json;\nconst { statusCode, body } = $input.first().json;\nconst quiet = ['REQUEST_NOT_PENDING', 'REQUEST_EXPIRED'];\nif (statusCode === 200 || (statusCode === 409 && quiet.includes(body?.code))) {\n  return [{ json: { ...request, next: 'done' } }];\n}\nif (statusCode === 409 && request.decision === 'approve' && body?.code === 'SLOT_UNAVAILABLE') {\n  return [{ json: { ...request, next: 'reject' } }];\n}\nthrow new Error(`${request.decision} answered ${statusCode}: ${JSON.stringify(body)}`);"
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000013",
+      "name": "Next request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        600
+      ],
+      "parameters": {
+        "jsCode": "return $input.first().json.next === 'done' ? $input.all() : [];"
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000014",
+      "name": "Table taken?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        400
+      ],
+      "parameters": {
+        "jsCode": "return $input.first().json.next === 'reject' ? $input.all() : [];"
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000015",
+      "name": "Reject instead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.apiBaseUrl }}/staff/booking-requests/{{ $json.requestId }}/reject",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "5c7e9a1b-3d2f-4e6a-8b0c-000000000016",
+      "name": "Check the rejection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        400
+      ],
+      "parameters": {
+        "jsCode": "// 409 REQUEST_NOT_PENDING or REQUEST_EXPIRED skips the request quietly: another decision got\n// there first. Any other status but 200 fails the run.\nconst request = $('Table taken?').first().json;\nconst { statusCode, body } = $input.first().json;\nconst quiet = ['REQUEST_NOT_PENDING', 'REQUEST_EXPIRED'];\nif (statusCode !== 200 && !(statusCode === 409 && quiet.includes(body?.code))) {\n  throw new Error(`reject answered ${statusCode}: ${JSON.stringify(body)}`);\n}\n\nreturn [{ json: { ...request, next: 'done' } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "Plan the round",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan the round": {
+      "main": [
+        [
+          {
+            "node": "Log in",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log in": {
+      "main": [
+        [
+          {
+            "node": "Keep the session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep the session": {
+      "main": [
+        [
+          {
+            "node": "List pending requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List pending requests": {
+      "main": [
+        [
+          {
+            "node": "Split the page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split the page": {
+      "main": [
+        [
+          {
+            "node": "Each request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Each request": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Decide the request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide the request": {
+      "main": [
+        [
+          {
+            "node": "Leave for later",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Answer now",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leave for later": {
+      "main": [
+        [
+          {
+            "node": "Each request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer now": {
+      "main": [
+        [
+          {
+            "node": "Send the decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send the decision": {
+      "main": [
+        [
+          {
+            "node": "Check the decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check the decision": {
+      "main": [
+        [
+          {
+            "node": "Table taken?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Next request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Table taken?": {
+      "main": [
+        [
+          {
+            "node": "Reject instead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reject instead": {
+      "main": [
+        [
+          {
+            "node": "Check the rejection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check the rejection": {
+      "main": [
+        [
+          {
+            "node": "Each request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Next request": {
+      "main": [
+        [
+          {
+            "node": "Each request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

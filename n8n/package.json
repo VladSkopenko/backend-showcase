@@ -1,0 +1,11 @@
+{
+  "name": "backend-showcase-n8n",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test tests/"
+  }
+}
