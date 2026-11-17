@@ -15,6 +15,7 @@ REST API для мережі ресторанів. Проєкт показує �
 | API на dev | https://backend-showcase-dev.duckdns.org/health |
 | Документація API (Swagger) | https://backend-showcase-dev.duckdns.org/docs |
 | Фронтенд | https://family-rest.vercel.app, код у [LudSkop/family-rest](https://github.com/LudSkop/family-rest) |
+| Дашборди (Grafana, без облікового запису) | https://backend-showcase-grafana.duckdns.org |
 
 Для staging і production уже є гілки (`rc`, `prod`) і домени. Вони запрацюють із першим релізом.
 
@@ -29,6 +30,7 @@ REST API для мережі ресторанів. Проєкт показує �
 | Платформа | Caddy з автоматичним HTTPS перед app-стеками; одна VM, platform-стек і окремий app-стек для кожного середовища ([ADR 7](docs/adr/0007-single-vm-platform-and-app-stacks.md)) |
 | API | Реєстрація з підтвердженням email, JWT-сесії з ротацією refresh-токенів, скидання пароля, вхід через Google, меню з фото в Object Storage, локації ресторанів зі столами, бронювання столів із сіткою слотів і захистом від подвійного бронювання, зміна бронювання (час, гості, тривалість), запрошення за посиланням для друзів з акаунтом і без, кошик передзамовлення для кожного учасника |
 | Симуляція | n8n у platform-стеку відтворює роботу ресторану на dev: [симулятор бронювань](n8n/workflows/booking-simulator.json) (40 ботів-гостей кожні 2 хвилини бронюють, надсилають запити на великі компанії, передзамовляють і скасовують) і [бот-офіціант](n8n/workflows/waiter-bot.json) (staff-бот схвалює або відхиляє запити). Редактор доступний лише в tailnet, за адресою `https://backend-showcase-platform.tail88eb36.ts.net:5678` ([ADR 14](docs/adr/0014-booking-simulator-on-dev.md), [n8n/README.md](n8n/README.md)) |
+| Дашборди | Публічна Grafana відкривається без облікового запису на п'яти дашбордах із живими даними dev: бронювання, страви, чеки, відвідувачі та рішення персоналу. Дашборди лежать JSON-файлами в [deploy/platform/grafana/dashboards](deploy/platform/grafana/dashboards) і підхоплюються під час деплою; Grafana читає dev через роль бази, яка не бачить email, хешів і токенів, а тест виконує запит кожної панелі під цією роллю ([ADR 19](docs/adr/0019-public-grafana-reads-dev.md)) |
 
 ### Симуляція на dev
 

@@ -1,0 +1,444 @@
+{
+  "uid": "visitors",
+  "title": "Visitors",
+  "description": "Who comes and how often. A visit is a confirmed booking counted for the user who made it; the time axis is the booking's start in Asia/Tbilisi.",
+  "tags": [
+    "restaurant"
+  ],
+  "editable": false,
+  "graphTooltip": 0,
+  "timezone": "Asia/Tbilisi",
+  "time": {
+    "from": "now-7d",
+    "to": "now+14d"
+  },
+  "refresh": "",
+  "schemaVersion": 42,
+  "links": [
+    {
+      "title": "Restaurant",
+      "type": "dashboards",
+      "tags": [
+        "restaurant"
+      ],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "external link",
+      "tooltip": "",
+      "url": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "location",
+        "label": "Location",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "restaurant-dev"
+        },
+        "query": "SELECT address AS __text, id AS __value FROM locations ORDER BY created_at",
+        "definition": "SELECT address AS __text, id AS __value FROM locations ORDER BY created_at",
+        "refresh": 1,
+        "sort": 0,
+        "regex": "",
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": []
+      },
+      {
+        "name": "regular_threshold",
+        "label": "Regular from visits/week",
+        "description": "A visitor with at least this many visits per 7 days of the range is a regular.",
+        "type": "custom",
+        "query": "4,6,8,10,12,14,16",
+        "multi": false,
+        "includeAll": false,
+        "current": {
+          "text": "10",
+          "value": "10"
+        },
+        "options": [
+          {
+            "text": "4",
+            "value": "4",
+            "selected": false
+          },
+          {
+            "text": "6",
+            "value": "6",
+            "selected": false
+          },
+          {
+            "text": "8",
+            "value": "8",
+            "selected": false
+          },
+          {
+            "text": "10",
+            "value": "10",
+            "selected": true
+          },
+          {
+            "text": "12",
+            "value": "12",
+            "selected": false
+          },
+          {
+            "text": "14",
+            "value": "14",
+            "selected": false
+          },
+          {
+            "text": "16",
+            "value": "16",
+            "selected": false
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Party size distribution over time",
+      "description": "Confirmed bookings by the day they start, split by party size. Parties of 5 to 8 come through a request that staff approve.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT date_trunc('day', b.starts_at, 'Asia/Tbilisi') AS time,\n       count(*) FILTER (WHERE b.party_size = 1) AS \"1 guest\",\n       count(*) FILTER (WHERE b.party_size = 2) AS \"2 guests\",\n       count(*) FILTER (WHERE b.party_size = 3) AS \"3 guests\",\n       count(*) FILTER (WHERE b.party_size = 4) AS \"4 guests\",\n       count(*) FILTER (WHERE b.party_size > 4) AS \"5 to 8 guests\"\nFROM bookings b\nJOIN dining_tables t ON t.id = b.table_id\nWHERE $__timeFilter(b.starts_at)\n  AND b.status = 'CONFIRMED'\n  AND t.location_id IN ($location)\nGROUP BY 1\nORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "barAlignment": 1,
+            "barWidthFactor": 0.8,
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisLabel": "Visits",
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "1 guest"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "super-light-blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "2 guests"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "3 guests"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "4 guests"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "semi-dark-blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5 to 8 guests"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "dark-blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Regulars vs occasional",
+      "description": "Visitors with at least the chosen number of visits per 7 days of the range are regulars; the rest are occasional.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 10,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH visitors AS (\n  SELECT b.user_id, count(*) AS visits\n  FROM bookings b\n  JOIN dining_tables t ON t.id = b.table_id\n  WHERE $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n  GROUP BY b.user_id\n), weeks AS (\n  SELECT extract(epoch FROM $__timeTo()::timestamptz - $__timeFrom()::timestamptz) / 604800 AS in_range\n)\nSELECT count(*) FILTER (WHERE visits >= $regular_threshold * weeks.in_range) AS \"Regulars\",\n       count(*) FILTER (WHERE visits < $regular_threshold * weeks.in_range) AS \"Occasional\"\nFROM visitors, weeks"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "percentChangeColorMode": "standard"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Repeat rate",
+      "description": "Share of visitors with two or more visits in the range.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 10,
+        "x": 0,
+        "y": 15
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH visitors AS (\n  SELECT b.user_id, count(*) AS visits\n  FROM bookings b\n  JOIN dining_tables t ON t.id = b.table_id\n  WHERE $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n  GROUP BY b.user_id\n)\nSELECT count(*) FILTER (WHERE visits >= 2)::float / NULLIF(count(*), 0) AS \"Repeat rate\"\nFROM visitors"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "percentChangeColorMode": "standard"
+      }
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Top visitors by bookings",
+      "description": "The ten visitors with the most confirmed bookings in the range, by first and last name.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 14,
+        "x": 10,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT u.first_name || ' ' || u.last_name AS \"Visitor\", count(*) AS \"Visits\"\nFROM bookings b\nJOIN dining_tables t ON t.id = b.table_id\nJOIN users u ON u.id = b.user_id\nWHERE $__timeFilter(b.starts_at)\n  AND b.status = 'CONFIRMED'\n  AND t.location_id IN ($location)\nGROUP BY u.id\nORDER BY 2 DESC, 1\nLIMIT 10"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false,
+            "filterable": false,
+            "sortable": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Visits"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "frameIndex": 0
+      }
+    }
+  ]
+}

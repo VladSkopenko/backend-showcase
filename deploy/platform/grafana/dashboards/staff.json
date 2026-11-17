@@ -1,0 +1,435 @@
+{
+  "uid": "staff",
+  "title": "Staff",
+  "description": "How staff answer requests for 5 to 8 people. The time axis is the moment the request was made, in Asia/Tbilisi.",
+  "tags": [
+    "restaurant"
+  ],
+  "editable": false,
+  "graphTooltip": 0,
+  "timezone": "Asia/Tbilisi",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "refresh": "",
+  "schemaVersion": 42,
+  "links": [
+    {
+      "title": "Restaurant",
+      "type": "dashboards",
+      "tags": [
+        "restaurant"
+      ],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "external link",
+      "tooltip": "",
+      "url": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "location",
+        "label": "Location",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "restaurant-dev"
+        },
+        "query": "SELECT address AS __text, id AS __value FROM locations ORDER BY created_at",
+        "definition": "SELECT address AS __text, id AS __value FROM locations ORDER BY created_at",
+        "refresh": 1,
+        "sort": 0,
+        "regex": "",
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": []
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Pending requests now",
+      "description": "Requests waiting for a decision right now, whatever the time range.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT count(*) AS \"Pending\"\nFROM bookings b\nJOIN dining_tables t ON t.id = b.table_id\nWHERE b.party_size > 4\n  AND b.status = 'PENDING'\n  AND t.location_id IN ($location)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "percentChangeColorMode": "standard"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Time to decision (median, p90)",
+      "description": "From the request to a staff member's approval or rejection. Automatic rejections and requests that lost their table to another request are left out.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 6,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH requests AS (\n  SELECT b.created_at, b.decided_at,\n         CASE\n           WHEN b.status = 'PENDING' THEN 'pending'\n           WHEN b.status = 'REJECTED' AND b.decided_by_id IS NULL THEN 'automatic'\n           WHEN b.status = 'REJECTED' AND EXISTS (\n             SELECT 1 FROM bookings a\n             WHERE a.table_id = b.table_id\n               AND a.decided_at = b.decided_at\n               AND a.decided_by_id IS NOT NULL\n               AND a.status IN ('CONFIRMED', 'CANCELLED')\n           ) THEN 'competitor'\n           WHEN b.status = 'REJECTED' THEN 'rejected'\n           WHEN b.decided_by_id IS NOT NULL AND b.status IN ('CONFIRMED', 'CANCELLED') THEN 'approved'\n           WHEN b.status = 'CANCELLED' THEN 'withdrawn'\n         END AS outcome\n  FROM bookings b\n  JOIN dining_tables t ON t.id = b.table_id\n  WHERE b.party_size > 4\n    AND $__timeFilter(b.created_at)\n    AND t.location_id IN ($location)\n)\nSELECT extract(epoch FROM percentile_cont(0.5) WITHIN GROUP (ORDER BY decided_at - created_at))::float AS \"Median\",\n       extract(epoch FROM percentile_cont(0.9) WITHIN GROUP (ORDER BY decided_at - created_at))::float AS \"p90\"\nFROM requests\nWHERE outcome IN ('approved', 'rejected')"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "percentChangeColorMode": "standard"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Approval rate",
+      "description": "Approved requests over approved plus those a staff member rejected. A request cancelled after its approval still counts as approved.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 14,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH requests AS (\n  SELECT b.created_at, b.decided_at,\n         CASE\n           WHEN b.status = 'PENDING' THEN 'pending'\n           WHEN b.status = 'REJECTED' AND b.decided_by_id IS NULL THEN 'automatic'\n           WHEN b.status = 'REJECTED' AND EXISTS (\n             SELECT 1 FROM bookings a\n             WHERE a.table_id = b.table_id\n               AND a.decided_at = b.decided_at\n               AND a.decided_by_id IS NOT NULL\n               AND a.status IN ('CONFIRMED', 'CANCELLED')\n           ) THEN 'competitor'\n           WHEN b.status = 'REJECTED' THEN 'rejected'\n           WHEN b.decided_by_id IS NOT NULL AND b.status IN ('CONFIRMED', 'CANCELLED') THEN 'approved'\n           WHEN b.status = 'CANCELLED' THEN 'withdrawn'\n         END AS outcome\n  FROM bookings b\n  JOIN dining_tables t ON t.id = b.table_id\n  WHERE b.party_size > 4\n    AND $__timeFilter(b.created_at)\n    AND t.location_id IN ($location)\n)\nSELECT count(*) FILTER (WHERE outcome = 'approved')::float\n       / NULLIF(count(*) FILTER (WHERE outcome IN ('approved', 'rejected')), 0) AS \"Approval rate\"\nFROM requests"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "percentChangeColorMode": "standard"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Auto-rejected share",
+      "description": "Requests rejected automatically 2 hours before their start, over all decided requests.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 19,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH requests AS (\n  SELECT b.created_at, b.decided_at,\n         CASE\n           WHEN b.status = 'PENDING' THEN 'pending'\n           WHEN b.status = 'REJECTED' AND b.decided_by_id IS NULL THEN 'automatic'\n           WHEN b.status = 'REJECTED' AND EXISTS (\n             SELECT 1 FROM bookings a\n             WHERE a.table_id = b.table_id\n               AND a.decided_at = b.decided_at\n               AND a.decided_by_id IS NOT NULL\n               AND a.status IN ('CONFIRMED', 'CANCELLED')\n           ) THEN 'competitor'\n           WHEN b.status = 'REJECTED' THEN 'rejected'\n           WHEN b.decided_by_id IS NOT NULL AND b.status IN ('CONFIRMED', 'CANCELLED') THEN 'approved'\n           WHEN b.status = 'CANCELLED' THEN 'withdrawn'\n         END AS outcome\n  FROM bookings b\n  JOIN dining_tables t ON t.id = b.table_id\n  WHERE b.party_size > 4\n    AND $__timeFilter(b.created_at)\n    AND t.location_id IN ($location)\n)\nSELECT count(*) FILTER (WHERE outcome = 'automatic')::float\n       / NULLIF(count(*) FILTER (WHERE outcome IN ('approved', 'rejected', 'competitor', 'automatic')), 0) AS \"Auto-rejected share\"\nFROM requests"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "percentChangeColorMode": "standard"
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Requests per day",
+      "description": "Requests by the day they were made, split by outcome. A request loses to another request when staff approve a competing one for the same table and time.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH requests AS (\n  SELECT b.created_at, b.decided_at,\n         CASE\n           WHEN b.status = 'PENDING' THEN 'pending'\n           WHEN b.status = 'REJECTED' AND b.decided_by_id IS NULL THEN 'automatic'\n           WHEN b.status = 'REJECTED' AND EXISTS (\n             SELECT 1 FROM bookings a\n             WHERE a.table_id = b.table_id\n               AND a.decided_at = b.decided_at\n               AND a.decided_by_id IS NOT NULL\n               AND a.status IN ('CONFIRMED', 'CANCELLED')\n           ) THEN 'competitor'\n           WHEN b.status = 'REJECTED' THEN 'rejected'\n           WHEN b.decided_by_id IS NOT NULL AND b.status IN ('CONFIRMED', 'CANCELLED') THEN 'approved'\n           WHEN b.status = 'CANCELLED' THEN 'withdrawn'\n         END AS outcome\n  FROM bookings b\n  JOIN dining_tables t ON t.id = b.table_id\n  WHERE b.party_size > 4\n    AND $__timeFilter(b.created_at)\n    AND t.location_id IN ($location)\n)\nSELECT date_trunc('day', created_at, 'Asia/Tbilisi') AS time,\n       count(*) FILTER (WHERE outcome = 'approved') AS \"Approved\",\n       count(*) FILTER (WHERE outcome = 'rejected') AS \"Rejected by staff\",\n       count(*) FILTER (WHERE outcome = 'competitor') AS \"Lost to another request\",\n       count(*) FILTER (WHERE outcome = 'automatic') AS \"Auto-rejected\",\n       count(*) FILTER (WHERE outcome = 'pending') AS \"Pending\",\n       count(*) FILTER (WHERE outcome = 'withdrawn') AS \"Cancelled before a decision\"\nFROM requests\nGROUP BY 1\nORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "barAlignment": 1,
+            "barWidthFactor": 0.8,
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisLabel": "Requests",
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Approved"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Rejected by staff"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Lost to another request"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Auto-rejected"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pending"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "super-light-blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cancelled before a decision"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    }
+  ]
+}

@@ -47,7 +47,7 @@ Grafana. Data accumulates from now on; staging and prod stay on paper.
   - **success:** Most bookings made more than 30 minutes ahead get a submitted pre-order with about one main course per person and location-specific top dishes.
 - **CAP-8**
   - **intent:** Bots cancel some bookings.
-  - **success:** Roughly one booking in seven ends cancelled.
+  - **success:** A visible share of bookings ends cancelled; the share follows from the simulator's weights and is shown as it is.
 - **CAP-9**
   - **intent:** Bots send large-party requests on weekends and holidays.
   - **success:** Pending requests appear daily, more on Friday, Saturday and holidays.

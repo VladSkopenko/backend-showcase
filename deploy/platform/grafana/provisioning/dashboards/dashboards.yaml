@@ -1,0 +1,14 @@
+# Grafana reads this on start: where the dashboards of the repository live (ADR 15, ADR 19).
+apiVersion: 1
+
+providers:
+  - name: restaurant
+    type: file
+    # A provisioned dashboard cannot be saved from the UI: the JSON in the repository is the source.
+    allowUiUpdates: false
+    # Above 10 Grafana polls the directory at this interval, so a changed file needs no restart.
+    # At 10 or below it waits for filesystem events, which may not cross a bind mount.
+    updateIntervalSeconds: 30
+    options:
+      # deploy/platform/grafana/dashboards, mounted by compose.
+      path: /etc/grafana/dashboards

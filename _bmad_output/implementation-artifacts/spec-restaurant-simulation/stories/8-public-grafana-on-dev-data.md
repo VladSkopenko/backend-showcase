@@ -2,7 +2,7 @@
 title: 'Public Grafana on dev data'
 type: 'feature'
 created: '2026-11-16'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '59c8491495625818c0f3ef3f6e2b14ecc660925f'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -96,6 +96,7 @@ context:
 - 2026-11-17, PR B: PR A merged as #40 and its dev deploy was green. The network is external and created by both deploy scripts as `--internal`, like `edge`, because compose accepts no attribute but `name` on an external network; dev PostgreSQL answers there as `app-dev-postgres`. Grafana gets `mem_limit` 768m, not the 256m planned in the platform skeleton: measured idle was about 285 MB in 14 processes (one backend per bundled data source plugin). Only `provisioning/datasources` is mounted, so the image's other provisioning directories stay. The data source pool is 4, one below the role's limit. The admin password is entered by Vlad and written to the `.env` in single quotes.
 - Verified locally on throwaway containers (Grafana 13.2.6, PostgreSQL 18 migrated as `dev`, a test password): anonymous open, `/api/health` without a version, data source health, names readable, `users.email` and `refresh_tokens` denied, dashboard write 403; one anonymous request changed the role's password and the data source then failed, as ADR 19 accepts. Both compose files render with `docker compose config`; the Caddyfile validates in `caddy:2.11`; a single-quoted `.env` value keeps `$`, `#`, quotes and backslashes. Not exercised before the deploy: Caddy's certificate and proxying, the bind-mounted data directory, the real password.
 - 2026-11-17, PR B after review: metrics endpoint off, plugin preinstall off, secure session cookie, short links blocked at Caddy, the admin password guard, and a data source report in `deploy/platform/deploy.sh`. Re-run on a throwaway stack with the real provisioning directory and the same Caddy directives: the report says `unreachable` before the role exists, `ok` with a working login and `unreachable` after the role is locked out; through Caddy `/` is 200, `/metrics` 404, `POST /api/short-urls` 403, names readable, `users.email` denied, admin login 200. Vlad stored `GRAFANA_ADMIN_PASSWORD` before the merge.
+- 2026-11-17, live: PR B merged as #41; `Deploy platform` and `Deploy dev` green, the platform job reported `grafana data source: ok`. From outside the tailnet, without signing in: `https://backend-showcase-grafana.duckdns.org/` answers 200 with a Let's Encrypt certificate, plain HTTP redirects to it, `/api/health` shows no version, `/metrics` is 404, `POST /api/short-urls` 403, a dashboard write 403. The data source health is `Database Connection OK`, so the committed verifier matches the stored password. Anonymous queries through the data source read live data (893 confirmed, 397 cancelled and 16 rejected bookings, 5195 pre-order items, names) and are denied `users.email`, `users.password_hash`, `preorder_items.note`, `refresh_tokens` and an insert; the session runs as `grafana_reader` with the 5 s timeout, read-only default and 64 MB temp limit. The dev API answers `/health` after its PostgreSQL was recreated.
 
 ## Spec Change Log
 

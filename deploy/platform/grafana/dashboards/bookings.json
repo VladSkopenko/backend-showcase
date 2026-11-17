@@ -1,0 +1,434 @@
+{
+  "uid": "bookings",
+  "title": "Bookings",
+  "description": "When guests book and how full the tables are. Times are Asia/Tbilisi; the time axis is the booking's start.",
+  "tags": [
+    "restaurant"
+  ],
+  "editable": false,
+  "graphTooltip": 0,
+  "timezone": "Asia/Tbilisi",
+  "time": {
+    "from": "now-7d",
+    "to": "now+14d"
+  },
+  "refresh": "",
+  "schemaVersion": 42,
+  "links": [
+    {
+      "title": "Restaurant",
+      "type": "dashboards",
+      "tags": [
+        "restaurant"
+      ],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "external link",
+      "tooltip": "",
+      "url": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "location",
+        "label": "Location",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "restaurant-dev"
+        },
+        "query": "SELECT address AS __text, id AS __value FROM locations ORDER BY created_at",
+        "definition": "SELECT address AS __text, id AS __value FROM locations ORDER BY created_at",
+        "refresh": 1,
+        "sort": 0,
+        "regex": "",
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": []
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Bookings per day",
+      "description": "Bookings by the day they start, confirmed and cancelled apart.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT date_trunc('day', b.starts_at, 'Asia/Tbilisi') AS time,\n       count(*) FILTER (WHERE b.status = 'CONFIRMED') AS \"Confirmed\",\n       count(*) FILTER (WHERE b.status = 'CANCELLED') AS \"Cancelled\"\nFROM bookings b\nJOIN dining_tables t ON t.id = b.table_id\nWHERE $__timeFilter(b.starts_at)\n  AND b.status IN ('CONFIRMED', 'CANCELLED')\n  AND t.location_id IN ($location)\nGROUP BY 1\nORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "barAlignment": 1,
+            "barWidthFactor": 0.8,
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisLabel": "Bookings",
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Confirmed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cancelled"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Cancellation rate",
+      "description": "Cancelled bookings over confirmed plus cancelled ones that start in the range.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT count(*) FILTER (WHERE b.status = 'CANCELLED')::float / NULLIF(count(*), 0) AS \"Cancellation rate\"\nFROM bookings b\nJOIN dining_tables t ON t.id = b.table_id\nWHERE $__timeFilter(b.starts_at)\n  AND b.status IN ('CONFIRMED', 'CANCELLED')\n  AND t.location_id IN ($location)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "percentChangeColorMode": "standard"
+      }
+    },
+    {
+      "id": 3,
+      "type": "bargauge",
+      "title": "Occupancy per location",
+      "description": "Booked table time of confirmed bookings over the tables' open time, 10:00 to 23:00 on each day of the range.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH bounds AS (\n  SELECT $__timeFrom()::timestamptz AS range_from, $__timeTo()::timestamptz AS range_to\n), open_days AS (\n  SELECT generate_series(date_trunc('day', range_from, 'Asia/Tbilisi'), range_to, interval '1 day') AS day\n  FROM bounds\n), open_time AS (\n  SELECT COALESCE(sum(extract(epoch FROM GREATEST(\n           LEAST(day + interval '23 hours', range_to) - GREATEST(day + interval '10 hours', range_from),\n           interval '0'\n         ))), 0) AS seconds_per_table\n  FROM open_days, bounds\n), booked AS (\n  SELECT t.location_id, sum(extract(epoch FROM b.ends_at - b.starts_at)) AS seconds\n  FROM bookings b\n  JOIN dining_tables t ON t.id = b.table_id\n  WHERE $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n  GROUP BY t.location_id\n), seats AS (\n  SELECT location_id, count(*) AS tables\n  FROM dining_tables\n  GROUP BY location_id\n)\nSELECT l.address AS \"Location\",\n       (COALESCE(booked.seconds, 0) / NULLIF(seats.tables * open_time.seconds_per_table, 0))::float AS \"Occupancy\"\nFROM locations l\nJOIN seats ON seats.location_id = l.id\nLEFT JOIN booked ON booked.location_id = l.id\nCROSS JOIN open_time\nWHERE l.id IN ($location)\nORDER BY l.created_at"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "min": 0,
+          "max": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "text",
+        "namePlacement": "left",
+        "showUnfilled": true,
+        "sizing": "auto",
+        "minVizWidth": 8,
+        "minVizHeight": 16,
+        "maxVizHeight": 300,
+        "text": {
+          "titleSize": 14,
+          "valueSize": 16
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false,
+          "calcs": []
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Heatmap weekday × start hour",
+      "description": "Confirmed bookings by the weekday and the hour they start.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 15,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH visits AS (\n  SELECT extract(isodow FROM b.starts_at AT TIME ZONE 'Asia/Tbilisi')::int AS weekday,\n         extract(hour FROM b.starts_at AT TIME ZONE 'Asia/Tbilisi')::int AS hour\n  FROM bookings b\n  JOIN dining_tables t ON t.id = b.table_id\n  WHERE $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n)\nSELECT (ARRAY['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])[d.weekday] AS \"Weekday\",\n       count(v.hour) FILTER (WHERE v.hour = 10) AS \"10:00\",\n       count(v.hour) FILTER (WHERE v.hour = 11) AS \"11:00\",\n       count(v.hour) FILTER (WHERE v.hour = 12) AS \"12:00\",\n       count(v.hour) FILTER (WHERE v.hour = 13) AS \"13:00\",\n       count(v.hour) FILTER (WHERE v.hour = 14) AS \"14:00\",\n       count(v.hour) FILTER (WHERE v.hour = 15) AS \"15:00\",\n       count(v.hour) FILTER (WHERE v.hour = 16) AS \"16:00\",\n       count(v.hour) FILTER (WHERE v.hour = 17) AS \"17:00\",\n       count(v.hour) FILTER (WHERE v.hour = 18) AS \"18:00\",\n       count(v.hour) FILTER (WHERE v.hour = 19) AS \"19:00\",\n       count(v.hour) FILTER (WHERE v.hour = 20) AS \"20:00\",\n       count(v.hour) FILTER (WHERE v.hour = 21) AS \"21:00\"\nFROM generate_series(1, 7) AS d (weekday)\nLEFT JOIN visits v ON v.weekday = d.weekday\nGROUP BY d.weekday\nORDER BY d.weekday"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "continuous-blues"
+          },
+          "custom": {
+            "align": "center",
+            "minWidth": 50,
+            "cellOptions": {
+              "type": "color-background",
+              "mode": "basic"
+            },
+            "inspect": false,
+            "filterable": false,
+            "sortable": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Weekday"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto"
+                }
+              },
+              {
+                "id": "custom.align",
+                "value": "left"
+              },
+              {
+                "id": "custom.width",
+                "value": 84
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "frameIndex": 0
+      }
+    },
+    {
+      "id": 5,
+      "type": "barchart",
+      "title": "Lead time distribution",
+      "description": "Confirmed bookings by the number of days between booking and visit.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 9,
+        "x": 15,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH visits AS (\n  SELECT (b.starts_at AT TIME ZONE 'Asia/Tbilisi')::date - (b.created_at AT TIME ZONE 'Asia/Tbilisi')::date AS days_ahead\n  FROM bookings b\n  JOIN dining_tables t ON t.id = b.table_id\n  WHERE $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n)\nSELECT CASE d.days_ahead WHEN 0 THEN 'same day' WHEN 1 THEN '1 day' ELSE d.days_ahead || ' days' END AS \"Booked ahead\",\n       count(v.days_ahead) AS \"Visits\"\nFROM generate_series(0, (SELECT max(days_ahead) FROM visits)) AS d (days_ahead)\nLEFT JOIN visits v ON v.days_ahead = d.days_ahead\nGROUP BY d.days_ahead\nORDER BY d.days_ahead"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "gradientMode": "none",
+            "axisLabel": "Visits",
+            "axisPlacement": "auto"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "stacking": "none",
+        "showValue": "auto",
+        "barWidth": 0.8,
+        "groupWidth": 0.75,
+        "barRadius": 0,
+        "fullHighlight": false,
+        "xTickLabelRotation": -45,
+        "xTickLabelSpacing": 0,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    }
+  ]
+}
