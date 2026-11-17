@@ -14,7 +14,7 @@ deploy/platform/secrets.sh TS_AUTHKEY    # (re)sets exactly the named ones, to r
 ```
 
 It asks for what only a person knows (the Tailscale OAuth client secret, the n8n owner's email and
-password) and generates the rest. Values go to `gh secret set` over stdin, never into argv or output.
+password, the Grafana admin password) and generates the rest. Values go to `gh secret set` over stdin, never into argv or output.
 Running it again without arguments is safe: existing secrets, including `N8N_ENCRYPTION_KEY`, stay.
 
 | Name | Kind | Value |
@@ -24,6 +24,7 @@ Running it again without arguments is safe: existing secrets, including `N8N_ENC
 | `N8N_OWNER_EMAIL` | secret | Entered. |
 | `N8N_OWNER_PASSWORD_HASH` | secret | bcrypt of the entered password. |
 | `GRAFANA_DB_PASSWORD` | secret | Generated. Password of `grafana_reader`, the read-only role on the dev database. The script prints its SCRAM verifier, which goes into the migration that creates the role; setting it again after that migration is merged needs a new migration with the new verifier. |
+| `GRAFANA_ADMIN_PASSWORD` | secret | Entered, without `'`, `\` or `$`. Password of Grafana's `admin`; Grafana applies it only when it first creates its database, after that it is changed in Grafana itself. |
 | `PLATFORM_HOST` | variable | `backend-showcase-platform.<tailnet>.ts.net`, derived from `DEPLOY_HOST`. |
 
 ## Adding a service
@@ -33,5 +34,8 @@ Running it again without arguments is safe: existing secrets, including `N8N_ENC
    directory.
 2. One line in the init service: the data directory with the uid:gid the image runs as.
 3. If it has a private UI: a port in `tailscale/serve.json` and the same port in the tailnet policy grant.
+   If it is public: the `edge` network, a site block in `caddy/Caddyfile` and its DuckDNS name in
+   `deploy/terraform/cloud-init.yaml.tftpl`. Check what the service lets an anonymous visitor read
+   and write before it goes public ([ADR 19](../../docs/adr/0019-public-grafana-reads-dev.md)).
 4. If it needs a secret: a block in `secrets.sh`, the name in the `deploy-platform` job's `env` and
    `printf` in `.github/workflows/delivery.yml`, then run `secrets.sh` without arguments before the merge.

@@ -63,6 +63,19 @@ if wanted GRAFANA_DB_PASSWORD; then
   echo "grafana_reader verifier for the migration (public): $verifier"
 fi
 
+# Grafana's admin signs in on the public host with the login admin. Grafana applies this password
+# only when it first creates its database; after that it is changed in Grafana itself. Three
+# characters are refused: the deploy writes the password to the .env in single quotes, where a
+# quote or a trailing backslash breaks the file, and Grafana expands ${...} inside its settings.
+if wanted GRAFANA_ADMIN_PASSWORD; then
+  read -rsp 'Grafana admin password: ' grafana_admin_password; echo
+  if [[ -z "$grafana_admin_password" || "$grafana_admin_password" == *[\'\\\$]* ]]; then
+    echo "the Grafana admin password must be non-empty and contain no ' \\ or \$" >&2
+    exit 1
+  fi
+  store GRAFANA_ADMIN_PASSWORD "$grafana_admin_password"
+fi
+
 # Not a secret: the platform node's tailnet name, derived from the server's name in DEPLOY_HOST.
 deploy_host=$(gh variable get DEPLOY_HOST)
 gh variable set PLATFORM_HOST --env "$env" --body "backend-showcase-platform.${deploy_host#*.}"

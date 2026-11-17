@@ -19,6 +19,7 @@ services:
         install -d -o 0     -g 0     -m 700 /data/caddy/data /data/caddy/config
         install -d -o 0     -g 0     -m 700 /data/tailscale
         install -d -o 1000  -g 1000  -m 700 /data/n8n
+        install -d -o 472   -g 0     -m 700 /data/grafana
 
   caddy:
     image: caddy:2.11
@@ -108,6 +109,54 @@ services:
       init:
         condition: service_completed_successfully
 
+  # Public at https://backend-showcase-grafana.duckdns.org through Caddy, anonymous Viewer, reads dev (ADR 19).
+  grafana:
+    image: grafana/grafana:13.2.6
+    restart: unless-stopped
+    # Measured idle: about 260 MB in 14 processes, Grafana and one backend per bundled data source plugin.
+    mem_limit: 768m
+    environment:
+      # The address browsers use; Grafana builds its links and redirects from it.
+      GF_SERVER_ROOT_URL: https://backend-showcase-grafana.duckdns.org
+      # Anyone opens the dashboards without signing in. A Viewer can still send any SQL to the data
+      # source, so the database role is the boundary (ADR 19).
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_ANONYMOUS_HIDE_VERSION: "true"
+      # Applies only when Grafana creates its database on the first start; the login is admin.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD comes from the GitHub Environment}
+      # The admin's session cookie travels over HTTPS only.
+      GF_SECURITY_COOKIE_SECURE: "true"
+      # /metrics would be public through Caddy and shows the exact version (ADR 7 keeps metrics off the public host).
+      GF_METRICS_ENABLED: "false"
+      # Otherwise every start downloads unpinned app plugins from grafana.com. The data source
+      # plugins bundled in the image stay available.
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      # Not a Grafana setting: the data source provisioning file reads it as $GRAFANA_DB_PASSWORD.
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?GRAFANA_DB_PASSWORD comes from the GitHub Environment}
+    volumes:
+      # One provisioning subdirectory, not the parent: mounting the parent hides the image's other
+      # provisioning directories, and Grafana logs an error for each missing one.
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      # Grafana's own SQLite database and the bundled plugins it unpacks on the first start.
+      - /srv/data/platform/grafana:/var/lib/grafana
+    healthcheck:
+      # 200 once Grafana's own database answers.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    networks:
+      # Caddy reaches it on edge; dev PostgreSQL is on analytics-dev as app-dev-postgres.
+      - edge
+      - analytics-dev
+
 networks:
   edge:
+    external: true
+  # Internal, created by the deploy scripts (ADR 19).
+  analytics-dev:
     external: true

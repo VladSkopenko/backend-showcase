@@ -2,7 +2,7 @@
 # deploy.sh runs it as project app-<env> and writes APP_ENV, IMAGE and the stdin secrets into that .env.
 # That .env feeds interpolation only: a container gets a value only when it is declared under environment.
 services:
-  # Private to the project's default network, never on edge (AD-13).
+  # On the project's default network and its own analytics network, never on edge (AD-13, ADR 19).
   postgres:
     image: postgres:18
     restart: unless-stopped
@@ -23,6 +23,13 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    networks:
+      # Listing any network drops the implicit default, so it is named here: the API reaches postgres on it.
+      default:
+      # Grafana reads dev here as app-dev-postgres (ADR 19). On staging and prod nothing else joins yet.
+      analytics:
+        aliases:
+          - app-${APP_ENV:?APP_ENV is written by deploy.sh}-postgres
 
   api:
     image: ${IMAGE:?IMAGE is written by deploy.sh}
@@ -57,4 +64,9 @@ services:
 
 networks:
   edge:
+    external: true
+  # One per environment, created as an internal network by the deploy scripts: compose rejects
+  # every attribute except name on an external network, so "internal" cannot be declared here.
+  analytics:
+    name: analytics-${APP_ENV:?APP_ENV is written by deploy.sh}
     external: true

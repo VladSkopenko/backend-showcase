@@ -165,3 +165,12 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/8-public-grafana-on-dev-data.md`
   summary: Migrations run without a `lock_timeout`, so an `ALTER TABLE` waits behind any long reader and API requests to that table queue behind it; set one in `migrations/env.py` so a blocked deploy fails fast instead of stalling.
   evidence: No `lock_timeout` in `backend/migrations/env.py` or `deploy/app/deploy.sh`. On a throwaway PostgreSQL 18 an `ALTER TABLE users` behind a `grafana_reader` query that had lifted its `statement_timeout` waited until `lock_timeout` cancelled it. The public Grafana role makes such a reader available to anyone on dev (ADR 19).
+- source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/8-public-grafana-on-dev-data.md`
+  summary: A change to a Grafana provisioning file alone deploys green without taking effect; make the platform deploy restart or reload Grafana when `deploy/platform/grafana/` changes (story 9 adds dashboard provisioning).
+  evidence: compose does not notice a changed bind-mounted file, which is why `deploy/platform/deploy.sh` reloads Caddy explicitly; Grafana reads data source provisioning at start. Not reproduced on a redeploy.
+- source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/8-public-grafana-on-dev-data.md`
+  summary: Rotate Docker container logs (a `logging` block per service or the daemon default in cloud-init); no container has a size limit.
+  evidence: No `logging:` in either compose file and no `daemon.json` in `deploy/terraform/cloud-init.yaml.tftpl`. Public services log request paths, so anyone can grow the logs on the server's disk.
+- source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/8-public-grafana-on-dev-data.md`
+  summary: Probe the public hosts after a platform deploy (a request through Caddy to each upstream); today a wrong upstream or a missing `edge` membership deploys green.
+  evidence: `caddy reload` fails only on a Caddyfile that does not parse; the healthchecks run on loopback inside each container.
