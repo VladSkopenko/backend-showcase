@@ -68,15 +68,19 @@ anyone on the internet may do.
   Grafana serves it as a copy of that file under its own uid. A test runs every panel and
   variable query as `grafana_reader` on the migrated schema, so a dashboard cannot use a column
   the role lacks or one a later migration removes.
-- **What the dashboards count.** Times are shown and days are cut in `Asia/Tbilisi`; the axis is
+- **What the dashboards count.** Times are shown and days are cut in `Asia/Tbilisi`. The axis is
   the booking's start, and the default range reaches 14 days ahead, because most bookings made
-  today start later. A visit is a confirmed booking: cancelled bookings keep their submitted
-  pre-orders, so counting them would add about a third to the money. A check is quantity times
-  the dish's current price. A regular is a visitor with at least a chosen number of visits per
-  week of the range. A request is a booking for more than 4 people; it was approved when staff
-  decided it and it is confirmed or was cancelled later, rejected automatically when nobody
-  decided it, and lost to another request when its rejection carries the table and decision time
-  of an approval.
+  today start later; the staff dashboard plots requests by their creation and ends today. A
+  visit is a confirmed booking: cancelled bookings keep their submitted pre-orders, about a
+  third of all pre-order money on dev, so counting them would overstate revenue by almost half.
+  A check is quantity times the dish's current price. A regular is a visitor with at least a
+  chosen number of visits per week of the range. A request is a booking for more than 4 people.
+  It was approved when staff decided it and it is confirmed or was cancelled later, rejected
+  automatically when nobody decided it, and lost to another request when its rejection carries
+  the table and decision time of an approval; a request may also be pending or cancelled by the
+  guest before any decision. The approval rate and the time to decision cover staff's own
+  decisions only: approvals and the rejections that are neither automatic nor lost to another
+  request.
 - **An analytics network per environment.** Each environment's PostgreSQL joins an internal
   network `analytics-<env>`, named from `APP_ENV` in the one app compose file
   ([ADR 6](0006-data-stack-per-environment.md)). Grafana joins `edge`, where Caddy reaches it, and

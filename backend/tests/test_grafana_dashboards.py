@@ -1,7 +1,8 @@
 import json
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import pytest
@@ -12,7 +13,8 @@ from support.migrations import run_revision
 
 pytestmark = pytest.mark.anyio
 
-DASHBOARDS = Path(__file__).resolve().parents[2] / "deploy" / "platform" / "grafana" / "dashboards"
+PLATFORM = Path(__file__).resolve().parents[2] / "deploy" / "platform"
+DASHBOARDS = PLATFORM / "grafana" / "dashboards"
 GRAFANA_READER = "0021_add_grafana_reader_role.py"
 ROLE = "grafana_reader"
 DATA_SOURCE = {"type": "grafana-postgresql-datasource", "uid": "restaurant-dev"}
@@ -53,8 +55,17 @@ PANEL_TITLES = {
 }
 UIDS = sorted(PANEL_TITLES)
 VARIABLES = {uid: ["location"] for uid in UIDS} | {"visitors": ["location", "regular_threshold"]}
-DEFAULT_RANGES = {uid: {"from": "now-7d", "to": "now+14d"} for uid in UIDS} | {
-    "staff": {"from": "now-7d", "to": "now"}
+DEFAULT_RANGES = {uid: {"from": "now-7d/d", "to": "now+14d/d"} for uid in UIDS} | {
+    "staff": {"from": "now-7d/d", "to": "now/d"}
+}
+SHARED_DEFINITIONS = [("staff", "requests", 4), ("checks", "checks", 3)]
+MATRIX_FIELDS = ("rowField", "columnField", "valueField")
+EMPTY_WITHOUT_BOOKINGS = {
+    "bookings": "Bookings per day",
+    "dishes": "Top dishes overall and per location",
+    "checks": "Revenue per day",
+    "visitors": "Top visitors by bookings",
+    "staff": "Requests per day",
 }
 
 NOW = datetime.now(UTC)
@@ -63,9 +74,17 @@ TIME_RANGES = {
     "empty": (datetime(2001, 1, 1, tzinfo=UTC), datetime(2001, 1, 8, tzinfo=UTC)),
 }
 
-# One booking of every kind the panels tell apart, inside the default range by start and by
-# creation: a visit with a submitted pre-order, a cancellation, and requests that were approved,
-# rejected by the competing approval, rejected by staff, rejected automatically and left pending.
+LOCATIONS = ["all", "without bookings"]
+SEEDED_LOCATION = "SELECT location_id FROM dining_tables ORDER BY id LIMIT 1"
+SEEDED_DISH_PRICES = (
+    "SELECT sum(price_cents) AS cents FROM (SELECT price_cents FROM dishes ORDER BY id LIMIT 3) d"
+)
+
+# One booking of every kind the panels tell apart, on one table, inside the default range by start
+# and by creation: a visit, a cancellation, and requests that were approved, rejected by the
+# competing approval, rejected by staff, rejected automatically, left pending, cancelled before a
+# decision and cancelled after their approval. Every confirmed booking orders three dishes twice
+# and keeps a draft; every cancelled one keeps a submitted item that no panel may count.
 SEED = """
 WITH visitor AS (
     INSERT INTO users (first_name, last_name, email)
@@ -98,7 +117,9 @@ WITH visitor AS (
             (5, interval '3 days', 'REJECTED', interval '30 minutes', true),
             (7, interval '4 days', 'REJECTED', interval '10 minutes', true),
             (8, interval '5 days', 'REJECTED', interval '5 minutes', false),
-            (5, interval '6 days', 'PENDING', NULL, false)
+            (5, interval '6 days', 'PENDING', NULL, false),
+            (6, interval '7 days', 'CANCELLED', NULL, false),
+            (7, interval '8 days', 'CANCELLED', interval '20 minutes', true)
         ) AS kind (party_size, starts_in, status, decided_ago, by_staff)
     RETURNING id, user_id, status, party_size
 ), seated AS (
@@ -109,11 +130,31 @@ WITH visitor AS (
 INSERT INTO preorder_items (
     participant_id, dish_id, quantity, state, submission_id, submitted_at, created_at, updated_at
 )
-SELECT seated.id, dish.id, 2, 'SUBMITTED', gen_random_uuid(), now(), now(), now()
+SELECT seated.id, dish.id, line.quantity, line.state::preorder_item_state,
+       CASE WHEN line.state = 'SUBMITTED' THEN gen_random_uuid() END,
+       CASE WHEN line.state = 'SUBMITTED' THEN now() END, now(), now()
 FROM seated
-JOIN booked ON booked.id = seated.booking_id AND booked.status = 'CONFIRMED',
-LATERAL (SELECT id FROM dishes ORDER BY id LIMIT 3) AS dish
+JOIN booked ON booked.id = seated.booking_id
+JOIN (VALUES
+    ('CONFIRMED', 'SUBMITTED', 2, 3),
+    ('CONFIRMED', 'DRAFT', 7, 1),
+    ('CANCELLED', 'SUBMITTED', 5, 1)
+) AS line (status, state, quantity, dishes) ON line.status = booked.status::text
+CROSS JOIN LATERAL (SELECT id FROM dishes ORDER BY id LIMIT line.dishes) AS dish
 """
+
+
+@dataclass(frozen=True)
+class Result:
+    columns: list[str]
+    rows: list[Any]
+
+    def column(self, name: str) -> list[Any]:
+        return [row._mapping[name] for row in self.rows]
+
+    def value(self, name: str) -> Any:
+        (value,) = self.column(name)
+        return value
 
 
 def load(uid: str) -> dict[str, Any]:
@@ -144,30 +185,84 @@ def expand(sql: str, *, time_range: tuple[datetime, datetime], variables: dict[s
     return sql
 
 
-async def run(connection: AsyncConnection, *, source: str, sql: str) -> list[Any]:
+def first_definition(sql: str) -> str:
+    return sql[: sql.index("\n)")]
+
+
+async def run(connection: AsyncConnection, *, source: str, sql: str) -> Result:
     try:
-        return list((await connection.exec_driver_sql(sql)).all())
+        result = await connection.exec_driver_sql(sql)
     except DBAPIError as error:
         pytest.fail(f"{source}: {error.orig}\n{sql}")
+    return Result(columns=list(result.keys()), rows=list(result.all()))
 
 
 async def variable_values(
-    connection: AsyncConnection, *, uid: str, dashboard: dict[str, Any]
+    connection: AsyncConnection, *, uid: str, dashboard: dict[str, Any], locations: str
 ) -> dict[str, str]:
-    """All options of a multi-value query variable, quoted as Grafana quotes them for SQL."""
+    """Options of a multi-value query variable, quoted as Grafana quotes them for SQL."""
+    seeded = (await run(connection, source="seeded location", sql=SEEDED_LOCATION)).rows[0][0]
     values = {}
     for name, variable in variables_of(dashboard).items():
         if variable["type"] == "query":
-            rows = await run(connection, source=f"{uid}: variable {name}", sql=variable["query"])
-            assert rows, f"{uid}: variable {name} has no options"
-            values[name] = ", ".join(f"'{row._mapping['__value']}'" for row in rows)
+            result = await run(connection, source=f"{uid}: variable {name}", sql=variable["query"])
+            options = result.column("__value")
+            if locations == "without bookings":
+                options = [option for option in options if option != seeded][:1]
+            assert options, f"{uid}: variable {name} has no options"
+            values[name] = ", ".join(f"'{option}'" for option in options)
         else:
             values[name] = str(variable["current"]["value"])
     return values
 
 
+async def panel_results(
+    reader: AsyncConnection, *, uid: str, time_range: str = "default", locations: str = "all"
+) -> dict[str, Result]:
+    dashboard = load(uid)
+    variables = await variable_values(reader, uid=uid, dashboard=dashboard, locations=locations)
+    return {
+        title: await run(
+            reader,
+            source=f"{uid}: {title}",
+            sql=expand(raw_sql, time_range=TIME_RANGES[time_range], variables=variables),
+        )
+        for title, raw_sql in panel_queries(dashboard)
+    }
+
+
+# The outer test transaction is rolled back afterwards, so neither the role nor the rows outlive
+# a test.
+@pytest.fixture
+async def reader(connection: AsyncConnection, monkeypatch: pytest.MonkeyPatch) -> AsyncConnection:
+    await connection.exec_driver_sql(SEED)
+    await run_revision(
+        connection, monkeypatch, file_name=GRAFANA_READER, step="upgrade", environment="dev"
+    )
+    await connection.execute(text(f"SET LOCAL ROLE {ROLE}"))
+    # SET ROLE does not apply the role's own settings, so its timeout is repeated here.
+    await connection.execute(text("SET LOCAL statement_timeout = '5s'"))
+    return connection
+
+
 def test_the_directory_holds_exactly_the_five_dashboards() -> None:
-    assert sorted(path.name for path in DASHBOARDS.iterdir()) == [f"{uid}.json" for uid in UIDS]
+    assert sorted(path.name for path in DASHBOARDS.glob("*.json")) == [
+        f"{uid}.json" for uid in UIDS
+    ]
+
+
+def test_the_start_page_is_a_dashboard_in_the_directory_the_provider_reads() -> None:
+    compose = (PLATFORM / "compose.yml").read_text()
+    provider = (
+        PLATFORM / "grafana" / "provisioning" / "dashboards" / "dashboards.yaml"
+    ).read_text()
+
+    (home,) = re.findall(r"GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH:\s*(\S+)", compose)
+    (mounted,) = re.findall(r"- \./grafana/dashboards:([^:\s]+)", compose)
+    (provided,) = re.findall(r"^\s*path:\s*(\S+)", provider, flags=re.MULTILINE)
+
+    assert str(PurePosixPath(home).parent) == mounted == provided
+    assert PurePosixPath(home).name in [f"{uid}.json" for uid in UIDS]
 
 
 @pytest.mark.parametrize("uid", UIDS)
@@ -179,9 +274,10 @@ def test_a_dashboard_is_provisioned_read_only_in_the_restaurant_zone_and_range(u
     assert dashboard["timezone"] == "Asia/Tbilisi"
     assert dashboard["time"] == DEFAULT_RANGES[uid]
     assert dashboard["tags"] == [SHARED_TAG]
-    assert [(link["type"], link["tags"]) for link in dashboard["links"]] == [
-        ("dashboards", [SHARED_TAG])
-    ]
+    assert [
+        (link["type"], link["tags"], link["includeVars"], link["keepTime"])
+        for link in dashboard["links"]
+    ] == [("dashboards", [SHARED_TAG], True, False)]
 
 
 @pytest.mark.parametrize("uid", UIDS)
@@ -203,6 +299,12 @@ def test_a_dashboard_filters_by_location_with_all_locations_by_default(uid: str)
     assert location["current"]["value"] == ["$__all"]
 
 
+def test_the_location_variable_is_the_same_on_every_dashboard() -> None:
+    variables = [variables_of(load(uid))["location"] for uid in UIDS]
+
+    assert all(variable == variables[0] for variable in variables)
+
+
 def test_the_regular_threshold_defaults_to_ten() -> None:
     threshold = variables_of(load("visitors"))["regular_threshold"]
 
@@ -219,21 +321,102 @@ def test_every_panel_reads_the_dev_data_source_narrowed_by_location(uid: str) ->
             assert "$location" in target["rawSql"], panel["title"]
 
 
-# The outer test transaction is rolled back afterwards, so neither the role nor the rows outlive
-# a test.
+@pytest.mark.parametrize(("uid", "name", "copies"), SHARED_DEFINITIONS)
+def test_a_definition_shared_by_panels_is_the_same_in_each(
+    uid: str, name: str, copies: int
+) -> None:
+    definitions = [
+        first_definition(sql)
+        for _, sql in panel_queries(load(uid))
+        if sql.startswith(f"WITH {name} AS (")
+    ]
+
+    assert len(definitions) == copies
+    assert len(set(definitions)) == 1
+
+
+@pytest.mark.parametrize("locations", LOCATIONS)
 @pytest.mark.parametrize("time_range", TIME_RANGES)
 @pytest.mark.parametrize("uid", UIDS)
 async def test_every_query_runs_as_the_reader_role(
-    connection: AsyncConnection, monkeypatch: pytest.MonkeyPatch, uid: str, time_range: str
+    reader: AsyncConnection, uid: str, time_range: str, locations: str
 ) -> None:
-    dashboard = load(uid)
-    await connection.exec_driver_sql(SEED)
-    await run_revision(
-        connection, monkeypatch, file_name=GRAFANA_READER, step="upgrade", environment="dev"
-    )
-    await connection.execute(text(f"SET LOCAL ROLE {ROLE}"))
+    await panel_results(reader, uid=uid, time_range=time_range, locations=locations)
 
-    variables = await variable_values(connection, uid=uid, dashboard=dashboard)
-    for title, raw_sql in panel_queries(dashboard):
-        sql = expand(raw_sql, time_range=TIME_RANGES[time_range], variables=variables)
-        await run(connection, source=f"{uid}: {title}", sql=sql)
+
+@pytest.mark.parametrize("uid", UIDS)
+async def test_a_location_without_bookings_shows_nothing(reader: AsyncConnection, uid: str) -> None:
+    title = EMPTY_WITHOUT_BOOKINGS[uid]
+
+    everywhere = await panel_results(reader, uid=uid)
+    elsewhere = await panel_results(reader, uid=uid, locations="without bookings")
+
+    assert everywhere[title].rows
+    assert elsewhere[title].rows == []
+
+
+@pytest.mark.parametrize("uid", UIDS)
+async def test_panels_refer_to_columns_their_queries_return(
+    reader: AsyncConnection, uid: str
+) -> None:
+    addresses = await run(reader, source="addresses", sql="SELECT address FROM locations")
+    results = await panel_results(reader, uid=uid)
+
+    for panel in load(uid)["panels"]:
+        columns = set(results[panel["title"]].columns)
+        transformations = panel.get("transformations", [])
+        matched = [
+            override["matcher"]["options"]
+            for override in panel["fieldConfig"]["overrides"]
+            if override["matcher"]["id"] == "byName"
+        ]
+        assert [step["id"] for step in transformations] in ([], ["groupingToMatrix"]), panel[
+            "title"
+        ]
+        for step in transformations:
+            assert {step["options"][field] for field in MATRIX_FIELDS} <= columns, panel["title"]
+        if any(step["options"]["columnField"] == "location" for step in transformations):
+            assert sorted(matched) == sorted(addresses.column("address")), panel["title"]
+        else:
+            assert set(matched) <= columns, panel["title"]
+
+
+async def test_a_request_withdrawn_while_pending_is_not_a_cancelled_booking(
+    reader: AsyncConnection,
+) -> None:
+    results = await panel_results(reader, uid="bookings")
+
+    assert sum(results["Bookings per day"].column("Confirmed")) == 2
+    assert sum(results["Bookings per day"].column("Cancelled")) == 2
+    assert results["Cancellation rate"].value("Cancellation rate") == pytest.approx(1 / 2)
+
+
+async def test_checks_count_only_the_submitted_items_of_visits(reader: AsyncConnection) -> None:
+    prices = await run(reader, source="dish prices", sql=SEEDED_DISH_PRICES)
+    check = 2 * prices.value("cents") / 100
+
+    results = await panel_results(reader, uid="checks")
+    average = results["Average check per booking and per person"]
+
+    assert results["Revenue per day"].column("Revenue") == [pytest.approx(check)] * 2
+    assert average.value("Per booking") == pytest.approx(check)
+    assert average.value("Per person") == pytest.approx((check / 2 + check / 6) / 2)
+
+
+async def test_the_staff_panels_tell_the_outcomes_of_requests_apart(
+    reader: AsyncConnection,
+) -> None:
+    results = await panel_results(reader, uid="staff")
+    (per_day,) = results["Requests per day"].rows
+
+    assert {name: count for name, count in per_day._mapping.items() if name != "time"} == {
+        "Approved": 2,
+        "Rejected by staff": 1,
+        "Lost to another request": 1,
+        "Auto-rejected": 1,
+        "Pending": 1,
+        "Cancelled before a decision": 1,
+    }
+    assert results["Approval rate"].value("Approval rate") == pytest.approx(2 / 3)
+    assert results["Auto-rejected share"].value("Auto-rejected share") == pytest.approx(1 / 5)
+    assert results["Pending requests now"].value("Pending") == 1

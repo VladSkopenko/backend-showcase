@@ -9,8 +9,8 @@
   "graphTooltip": 0,
   "timezone": "Asia/Tbilisi",
   "time": {
-    "from": "now-7d",
-    "to": "now+14d"
+    "from": "now-7d/d",
+    "to": "now+14d/d"
   },
   "refresh": "",
   "schemaVersion": 42,
@@ -23,7 +23,7 @@
       ],
       "asDropdown": false,
       "includeVars": true,
-      "keepTime": true,
+      "keepTime": false,
       "targetBlank": false,
       "icon": "external link",
       "tooltip": "",
@@ -85,7 +85,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "WITH ordered AS (\n  SELECT i.dish_id, t.location_id, sum(i.quantity)::int AS quantity\n  FROM preorder_items i\n  JOIN booking_participants p ON p.id = i.participant_id\n  JOIN bookings b ON b.id = p.booking_id\n  JOIN dining_tables t ON t.id = b.table_id\n  JOIN dishes d ON d.id = i.dish_id\n  WHERE i.state = 'SUBMITTED'\n    AND $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n  GROUP BY i.dish_id, t.location_id\n), top AS (\n  SELECT dish_id, sum(quantity) AS total\n  FROM ordered\n  GROUP BY dish_id\n  ORDER BY total DESC, dish_id\n  LIMIT 10\n)\nSELECT d.name AS dish, l.address AS location, COALESCE(o.quantity, 0) AS quantity\nFROM top\nJOIN dishes d ON d.id = top.dish_id\nCROSS JOIN locations l\nLEFT JOIN ordered o ON o.dish_id = top.dish_id AND o.location_id = l.id\nWHERE l.id IN ($location)\nORDER BY top.total DESC, d.name, l.created_at"
+          "rawSql": "WITH ordered AS (\n  SELECT i.dish_id, t.location_id, sum(i.quantity)::int AS quantity\n  FROM preorder_items i\n  JOIN booking_participants p ON p.id = i.participant_id\n  JOIN bookings b ON b.id = p.booking_id\n  JOIN dining_tables t ON t.id = b.table_id\n  JOIN dishes d ON d.id = i.dish_id\n  WHERE i.state = 'SUBMITTED'\n    AND $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n  GROUP BY i.dish_id, t.location_id\n), top AS (\n  SELECT o.dish_id, d.name, sum(o.quantity) AS total\n  FROM ordered o\n  JOIN dishes d ON d.id = o.dish_id\n  GROUP BY o.dish_id, d.name\n  ORDER BY total DESC, d.name\n  LIMIT 10\n)\nSELECT top.name AS dish, l.address AS location, COALESCE(o.quantity, 0) AS quantity\nFROM top\nCROSS JOIN locations l\nLEFT JOIN ordered o ON o.dish_id = top.dish_id AND o.location_id = l.id\nWHERE l.id IN ($location)\nORDER BY top.total DESC, top.name, l.created_at"
         }
       ],
       "transformations": [

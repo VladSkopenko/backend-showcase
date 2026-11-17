@@ -89,10 +89,34 @@ context:
 - The start page was tried by the parent on a throwaway Grafana 13.2.6: with `default_home_dashboard_path` an anonymous visit to `/` renders the dashboard with its links, range and zone. Grafana serves it under the uid `default-home-dashboard`, so its link row lists all five dashboards.
 - Reported by the implementation subagent and not re-run by the parent: on a throwaway Grafana provisioned from the repository's own provider and compose paths over a copy of the readable dev rows, a changed dashboard file showed after 5 to 29 seconds with no restart, saving as admin answered 400 "Cannot save provisioned dashboard", and each dashboard rendered with one location chosen and with an empty range. Headless Chromium needs `--shm-size=1g`, or about one load in five hangs.
 - 2026-11-17: Vlad agreed to end Staff's default range at now, since its chart was two thirds empty. The links between dashboards keep the chosen range, so Staff opened from another dashboard still shows that dashboard's range.
+- 2026-11-17, after the code review: the patches of the triage log below were applied by the same implementation subagent; the test file now has 59 cases and asserts figures on seeded rows. The parent ran the full suite (736 passed) and the linters, ran every panel query of the patched files on live dev for the default range, a six-hour range and an empty one (no errors; six hours gives 0 regulars of 36 visitors and 36.7% occupancy at the first location), and loaded the patched files into a throwaway Grafana 13.2.6: five dashboards provisioned, no provisioning error, Staff opens with `now-7d/d to now/d`. That stand had no database, so the patched panels were not rendered with data before the deploy. Reported by the subagent and not re-run: 14 mutations of the dashboard files each failed a test. Three fixes have no test assertion and rest on the live runs: the regular threshold on short ranges, the occupancy clipping and the dish tie-breaker.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+2026-11-17, three layers on the diff of commit 1a286be. Live-data claims were checked by the reviewers through the public data source; patches re-verified by the parent session.
+
+| Finding | Verdict | Route |
+|---|---|---|
+| On a range under 7 days the regular threshold shrinks, so every visitor is a regular (edge-case) | medium: confirmed by the reviewer on live dev, last 6 hours | patch: `GREATEST(weeks, 1)` |
+| Occupancy counts whole bookings against open time clipped to the range (edge-case) | low: over 100% only on ranges under 90 minutes | patch: clip booked time, count overlaps |
+| A request cancelled while pending counts as a cancelled booking and in the cancellation rate (edge-case) | low: one row on dev; it was never a booking | patch: left out of both panels |
+| The default range cuts the first and last day in half (blind, edge-case) | low: visible on every per-day chart | patch: `now-7d/d` to `now+14d/d`, staff to `now/d` |
+| Links keep the time range while Staff has its own default (edge-case) | medium: a link from Staff opens Bookings without its future days | patch: `keepTime` false, pinned in the test |
+| The two Dishes panels break ties differently (blind) | low: a tie at rank 10 would give different lists | patch: same tie-breaker |
+| The role test discards every result: outcome classification, the confirmed and submitted filters can change with all tests green (verification-gap, blind) | medium: filed with a demonstration | patch: seeded rows of every kind and asserted figures |
+| Narrowing by location is checked as text only (verification-gap, blind) | medium | patch: a run with one location and an empty result for another |
+| Panels name result columns and location addresses that nothing checks (verification-gap, blind) | low | patch: names compared with the query's columns and `locations.address` |
+| Pasted CTEs and variable queries can drift apart (blind) | low | patch: copies asserted identical |
+| The start-page path lives in three hand-kept places (blind, verification-gap) | low | patch: the test reads compose and the provider file as text |
+| The directory test fails on a `.DS_Store`; the test does not apply the role's 5 s timeout (edge-case) | low | patch |
+| ADR 19 said cancelled bookings "add about a third" and omitted Staff's axis and outcomes (blind, edge-case, verification-gap) | low: they are a third of the total, so they add almost half | patch: ADR wording |
+| deferred-work.md does not show what this story settles (blind) | low | patch: a "Settled by" section; the data source and provider files still need a restart |
+| A confirmed request whose decider was deleted gets no outcome (edge-case) | low: needs a deleted staff user; the spec defines approval by `decided_by_id` | rejected |
+| The booking grid (10:00 to 21:00, open until 23:00, parties over 4) is repeated in SQL (blind) | low: defaults of `BookingSettings`, the same on every environment | rejected |
+| The deploy gives no sign that dashboards loaded (blind, verification-gap) | low: covered by the deferred probe of public hosts from story 8 | defer: already recorded |
+| Repeat rate reads 100% and cannot move (blind) | false as a defect: every bot visits more than once; the panel shows the data as it is | rejected |
 
 ## Verification
 
