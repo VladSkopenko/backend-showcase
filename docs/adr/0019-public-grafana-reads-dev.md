@@ -7,7 +7,8 @@ Date: 2026-11-17
 Accepted. Amends [ADR 7](0007-single-vm-platform-and-app-stacks.md) and architecture decision
 AD-13: Grafana reads dev, not production, and every environment's PostgreSQL joins an analytics
 network of its own. Amended 2026-11-17: what Grafana itself offers an anonymous visitor is
-trimmed, and the platform deploy reports whether the data source can log in.
+trimmed, and the platform deploy reports whether the data source can log in. Amended 2026-11-17:
+the five dashboards are files in the repository, and what they count is defined below.
 
 ## Context
 
@@ -60,6 +61,22 @@ anyone on the internet may do.
   source's health and prints `ok` or `unreachable` in the job summary. It never fails the deploy:
   the platform must come up when dev is down. That line is the only automatic sign of a wrong
   password or of a role locked out by a visitor.
+- **Dashboards are files.** The five dashboards (bookings, dishes, checks, visitors, staff) are
+  JSON in `deploy/platform/grafana/dashboards`. A file provider polls that directory every 30
+  seconds, so a changed dashboard needs no restart, and a provisioned dashboard cannot be saved
+  from the UI. The start page is the bookings dashboard, set with `default_home_dashboard_path`;
+  Grafana serves it as a copy of that file under its own uid. A test runs every panel and
+  variable query as `grafana_reader` on the migrated schema, so a dashboard cannot use a column
+  the role lacks or one a later migration removes.
+- **What the dashboards count.** Times are shown and days are cut in `Asia/Tbilisi`; the axis is
+  the booking's start, and the default range reaches 14 days ahead, because most bookings made
+  today start later. A visit is a confirmed booking: cancelled bookings keep their submitted
+  pre-orders, so counting them would add about a third to the money. A check is quantity times
+  the dish's current price. A regular is a visitor with at least a chosen number of visits per
+  week of the range. A request is a booking for more than 4 people; it was approved when staff
+  decided it and it is confirmed or was cancelled later, rejected automatically when nobody
+  decided it, and lost to another request when its rejection carries the table and decision time
+  of an approval.
 - **An analytics network per environment.** Each environment's PostgreSQL joins an internal
   network `analytics-<env>`, named from `APP_ENV` in the one app compose file
   ([ADR 6](0006-data-stack-per-environment.md)). Grafana joins `edge`, where Caddy reaches it, and

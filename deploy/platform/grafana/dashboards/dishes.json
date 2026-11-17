@@ -1,0 +1,367 @@
+{
+  "uid": "dishes",
+  "title": "Dishes",
+  "description": "What guests pre-order. Counts are submitted pre-order items of confirmed bookings; the time axis is the booking's start in Asia/Tbilisi.",
+  "tags": [
+    "restaurant"
+  ],
+  "editable": false,
+  "graphTooltip": 0,
+  "timezone": "Asia/Tbilisi",
+  "time": {
+    "from": "now-7d",
+    "to": "now+14d"
+  },
+  "refresh": "",
+  "schemaVersion": 42,
+  "links": [
+    {
+      "title": "Restaurant",
+      "type": "dashboards",
+      "tags": [
+        "restaurant"
+      ],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "external link",
+      "tooltip": "",
+      "url": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "location",
+        "label": "Location",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "restaurant-dev"
+        },
+        "query": "SELECT address AS __text, id AS __value FROM locations ORDER BY created_at",
+        "definition": "SELECT address AS __text, id AS __value FROM locations ORDER BY created_at",
+        "refresh": 1,
+        "sort": 0,
+        "regex": "",
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": []
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "barchart",
+      "title": "Top dishes overall and per location",
+      "description": "The ten most ordered dishes. A bar's length is the total, its segments are the locations.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 14,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH ordered AS (\n  SELECT i.dish_id, t.location_id, sum(i.quantity)::int AS quantity\n  FROM preorder_items i\n  JOIN booking_participants p ON p.id = i.participant_id\n  JOIN bookings b ON b.id = p.booking_id\n  JOIN dining_tables t ON t.id = b.table_id\n  JOIN dishes d ON d.id = i.dish_id\n  WHERE i.state = 'SUBMITTED'\n    AND $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n  GROUP BY i.dish_id, t.location_id\n), top AS (\n  SELECT dish_id, sum(quantity) AS total\n  FROM ordered\n  GROUP BY dish_id\n  ORDER BY total DESC, dish_id\n  LIMIT 10\n)\nSELECT d.name AS dish, l.address AS location, COALESCE(o.quantity, 0) AS quantity\nFROM top\nJOIN dishes d ON d.id = top.dish_id\nCROSS JOIN locations l\nLEFT JOIN ordered o ON o.dish_id = top.dish_id AND o.location_id = l.id\nWHERE l.id IN ($location)\nORDER BY top.total DESC, d.name, l.created_at"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "rowField": "dish",
+            "columnField": "location",
+            "valueField": "quantity",
+            "emptyValue": "null"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "gradientMode": "none",
+            "axisLabel": "Items ordered",
+            "axisPlacement": "auto"
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "48 Rustaveli Avenue"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "14 Baratashvili Street"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "9 Abashidze Street"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "orientation": "horizontal",
+        "stacking": "normal",
+        "showValue": "never",
+        "barWidth": 0.8,
+        "groupWidth": 0.75,
+        "barRadius": 0,
+        "fullHighlight": false,
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "barchart",
+      "title": "Category mix by lunch and dinner",
+      "description": "Share of each category among the items ordered for lunch (starts 12:00 to 14:30) and for dinner (starts 18:00 to 21:30). Other start times are left out.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 10,
+        "x": 14,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH ordered AS (\n  SELECT CASE\n           WHEN (b.starts_at AT TIME ZONE 'Asia/Tbilisi')::time BETWEEN '12:00' AND '14:30' THEN 'lunch'\n           WHEN (b.starts_at AT TIME ZONE 'Asia/Tbilisi')::time BETWEEN '18:00' AND '21:30' THEN 'dinner'\n         END AS meal,\n         d.category, i.quantity\n  FROM preorder_items i\n  JOIN booking_participants p ON p.id = i.participant_id\n  JOIN bookings b ON b.id = p.booking_id\n  JOIN dining_tables t ON t.id = b.table_id\n  JOIN dishes d ON d.id = i.dish_id\n  WHERE i.state = 'SUBMITTED'\n    AND $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n), meals AS (\n  SELECT sum(quantity) FILTER (WHERE meal = 'lunch') AS lunch,\n         sum(quantity) FILTER (WHERE meal = 'dinner') AS dinner\n  FROM ordered\n)\nSELECT CASE o.category\n         WHEN 'APPETIZER' THEN 'Appetizers'\n         WHEN 'MAIN_COURSE' THEN 'Main courses'\n         WHEN 'DESSERT' THEN 'Desserts'\n       END AS \"Category\",\n       100.0 * COALESCE(sum(o.quantity) FILTER (WHERE o.meal = 'lunch'), 0) / meals.lunch AS \"Lunch\",\n       100.0 * COALESCE(sum(o.quantity) FILTER (WHERE o.meal = 'dinner'), 0) / meals.dinner AS \"Dinner\"\nFROM ordered o\nCROSS JOIN meals\nWHERE o.meal IS NOT NULL\nGROUP BY o.category, meals.lunch, meals.dinner\nORDER BY o.category"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "gradientMode": "none",
+            "axisLabel": "Share of the meal's items",
+            "axisPlacement": "auto"
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Lunch"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dinner"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "dark-blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "orientation": "vertical",
+        "stacking": "none",
+        "showValue": "always",
+        "barWidth": 0.8,
+        "groupWidth": 0.75,
+        "barRadius": 0,
+        "fullHighlight": false,
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Dish popularity by hour of day",
+      "description": "Items ordered of the ten most ordered dishes, by the hour the booking starts.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH ordered AS (\n  SELECT d.name, extract(hour FROM b.starts_at AT TIME ZONE 'Asia/Tbilisi')::int AS hour, i.quantity\n  FROM preorder_items i\n  JOIN booking_participants p ON p.id = i.participant_id\n  JOIN bookings b ON b.id = p.booking_id\n  JOIN dining_tables t ON t.id = b.table_id\n  JOIN dishes d ON d.id = i.dish_id\n  WHERE i.state = 'SUBMITTED'\n    AND $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n), top AS (\n  SELECT name, sum(quantity) AS total\n  FROM ordered\n  GROUP BY name\n  ORDER BY total DESC, name\n  LIMIT 10\n)\nSELECT o.name AS \"Dish\",\n       COALESCE(sum(o.quantity) FILTER (WHERE o.hour = 10), 0)::int AS \"10:00\",\n       COALESCE(sum(o.quantity) FILTER (WHERE o.hour = 11), 0)::int AS \"11:00\",\n       COALESCE(sum(o.quantity) FILTER (WHERE o.hour = 12), 0)::int AS \"12:00\",\n       COALESCE(sum(o.quantity) FILTER (WHERE o.hour = 13), 0)::int AS \"13:00\",\n       COALESCE(sum(o.quantity) FILTER (WHERE o.hour = 14), 0)::int AS \"14:00\",\n       COALESCE(sum(o.quantity) FILTER (WHERE o.hour = 15), 0)::int AS \"15:00\",\n       COALESCE(sum(o.quantity) FILTER (WHERE o.hour = 16), 0)::int AS \"16:00\",\n       COALESCE(sum(o.quantity) FILTER (WHERE o.hour = 17), 0)::int AS \"17:00\",\n       COALESCE(sum(o.quantity) FILTER (WHERE o.hour = 18), 0)::int AS \"18:00\",\n       COALESCE(sum(o.quantity) FILTER (WHERE o.hour = 19), 0)::int AS \"19:00\",\n       COALESCE(sum(o.quantity) FILTER (WHERE o.hour = 20), 0)::int AS \"20:00\",\n       COALESCE(sum(o.quantity) FILTER (WHERE o.hour = 21), 0)::int AS \"21:00\"\nFROM ordered o\nJOIN top ON top.name = o.name\nGROUP BY o.name, top.total\nORDER BY top.total DESC, o.name"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "continuous-blues"
+          },
+          "custom": {
+            "align": "center",
+            "minWidth": 50,
+            "cellOptions": {
+              "type": "color-background",
+              "mode": "basic"
+            },
+            "inspect": false,
+            "filterable": false,
+            "sortable": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dish"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto"
+                }
+              },
+              {
+                "id": "custom.align",
+                "value": "left"
+              },
+              {
+                "id": "custom.width",
+                "value": 260
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "frameIndex": 0
+      }
+    }
+  ]
+}

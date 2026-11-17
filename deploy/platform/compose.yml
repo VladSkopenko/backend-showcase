@@ -132,12 +132,17 @@ services:
       # Otherwise every start downloads unpinned app plugins from grafana.com. The data source
       # plugins bundled in the image stay available.
       GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      # The start page: a visitor who opens the host sees this dashboard file instead of the welcome page.
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/bookings.json
       # Not a Grafana setting: the data source provisioning file reads it as $GRAFANA_DB_PASSWORD.
       GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?GRAFANA_DB_PASSWORD comes from the GitHub Environment}
     volumes:
-      # One provisioning subdirectory, not the parent: mounting the parent hides the image's other
+      # Provisioning subdirectories, not their parent: mounting the parent hides the image's other
       # provisioning directories, and Grafana logs an error for each missing one.
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      # The dashboards themselves; the provider polls this directory, so a changed file needs no restart.
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
       # Grafana's own SQLite database and the bundled plugins it unpacks on the first start.
       - /srv/data/platform/grafana:/var/lib/grafana
     healthcheck:

@@ -15,6 +15,7 @@ tiers.
 | API on dev | https://backend-showcase-dev.duckdns.org/health |
 | API docs (Swagger) | https://backend-showcase-dev.duckdns.org/docs |
 | Frontend | https://family-rest.vercel.app, source in [LudSkop/family-rest](https://github.com/LudSkop/family-rest) |
+| Dashboards (Grafana, no account needed) | https://backend-showcase-grafana.duckdns.org |
 
 Staging and production already have their branches (`rc`, `prod`) and domains. They go live with
 the first release.
@@ -30,6 +31,7 @@ the first release.
 | Platform | Caddy with automatic HTTPS in front of the app stacks; one VM, a platform stack and an app stack per environment ([ADR 7](docs/adr/0007-single-vm-platform-and-app-stacks.md)) |
 | API | Registration with email verification, JWT sessions with refresh rotation, password reset, Google sign-in, a menu with pictures in Object Storage, restaurant locations with their tables, table booking with a slot grid and double-booking protection, editing a booking (time, guests, stay length), invites by link for friends with or without an account, a pre-order cart for every participant |
 | Simulation | n8n in the platform stack plays the restaurant on dev: [booking simulator](n8n/workflows/booking-simulator.json) (40 guest bots book, send large-party requests, pre-order and cancel every 2 minutes) and [waiter bot](n8n/workflows/waiter-bot.json) (a staff bot approves or rejects the requests). The editor is reachable only on the tailnet, at `https://backend-showcase-platform.tail88eb36.ts.net:5678` ([ADR 14](docs/adr/0014-booking-simulator-on-dev.md), [n8n/README.md](n8n/README.md)) |
+| Dashboards | A public Grafana opens without an account on five dashboards over the live dev data: bookings, dishes, checks, visitors and staff decisions. The dashboards are JSON files in [deploy/platform/grafana/dashboards](deploy/platform/grafana/dashboards), provisioned on deploy; Grafana reads dev through a database role that sees no emails, hashes or tokens, and a test runs every panel query as that role ([ADR 19](docs/adr/0019-public-grafana-reads-dev.md)) |
 
 ### Simulation on dev
 

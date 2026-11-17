@@ -1,0 +1,377 @@
+{
+  "uid": "checks",
+  "title": "Checks",
+  "description": "What a visit is worth. A check is quantity times the dish's current price over the submitted pre-order items of a confirmed booking; the time axis is the booking's start in Asia/Tbilisi.",
+  "tags": [
+    "restaurant"
+  ],
+  "editable": false,
+  "graphTooltip": 0,
+  "timezone": "Asia/Tbilisi",
+  "time": {
+    "from": "now-7d",
+    "to": "now+14d"
+  },
+  "refresh": "",
+  "schemaVersion": 42,
+  "links": [
+    {
+      "title": "Restaurant",
+      "type": "dashboards",
+      "tags": [
+        "restaurant"
+      ],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "external link",
+      "tooltip": "",
+      "url": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "location",
+        "label": "Location",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "restaurant-dev"
+        },
+        "query": "SELECT address AS __text, id AS __value FROM locations ORDER BY created_at",
+        "definition": "SELECT address AS __text, id AS __value FROM locations ORDER BY created_at",
+        "refresh": 1,
+        "sort": 0,
+        "regex": "",
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": []
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Average check per booking and per person",
+      "description": "Average over confirmed bookings with a submitted pre-order; per person divides each check by the party size.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 9,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH checks AS (\n  SELECT b.id, b.starts_at, b.party_size, t.location_id,\n         sum(i.quantity * d.price_cents) / 100.0 AS amount\n  FROM preorder_items i\n  JOIN booking_participants p ON p.id = i.participant_id\n  JOIN bookings b ON b.id = p.booking_id\n  JOIN dining_tables t ON t.id = b.table_id\n  JOIN dishes d ON d.id = i.dish_id\n  WHERE i.state = 'SUBMITTED'\n    AND $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n  GROUP BY b.id, t.location_id\n)\nSELECT avg(amount)::float AS \"Per booking\",\n       avg(amount / party_size)::float AS \"Per person\"\nFROM checks"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "percentChangeColorMode": "standard"
+      }
+    },
+    {
+      "id": 2,
+      "type": "bargauge",
+      "title": "Check by category",
+      "description": "The average check split by dish category: the category's money over the number of checks.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 9,
+        "x": 0,
+        "y": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH lines AS (\n  SELECT b.id AS booking_id, d.category, i.quantity * d.price_cents / 100.0 AS amount\n  FROM preorder_items i\n  JOIN booking_participants p ON p.id = i.participant_id\n  JOIN bookings b ON b.id = p.booking_id\n  JOIN dining_tables t ON t.id = b.table_id\n  JOIN dishes d ON d.id = i.dish_id\n  WHERE i.state = 'SUBMITTED'\n    AND $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n)\nSELECT CASE category\n         WHEN 'APPETIZER' THEN 'Appetizers'\n         WHEN 'MAIN_COURSE' THEN 'Main courses'\n         WHEN 'DESSERT' THEN 'Desserts'\n       END AS \"Category\",\n       (sum(amount) / (SELECT count(DISTINCT booking_id) FROM lines))::float AS \"Average per check\"\nFROM lines\nGROUP BY category\nORDER BY 2 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "text",
+        "namePlacement": "left",
+        "showUnfilled": true,
+        "sizing": "auto",
+        "minVizWidth": 8,
+        "minVizHeight": 16,
+        "maxVizHeight": 300,
+        "text": {
+          "titleSize": 14,
+          "valueSize": 16
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false,
+          "calcs": []
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "barchart",
+      "title": "Check by location and weekday",
+      "description": "Average check per booking by the weekday the booking starts, for each location.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 15,
+        "x": 9,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH checks AS (\n  SELECT b.id, b.starts_at, b.party_size, t.location_id,\n         sum(i.quantity * d.price_cents) / 100.0 AS amount\n  FROM preorder_items i\n  JOIN booking_participants p ON p.id = i.participant_id\n  JOIN bookings b ON b.id = p.booking_id\n  JOIN dining_tables t ON t.id = b.table_id\n  JOIN dishes d ON d.id = i.dish_id\n  WHERE i.state = 'SUBMITTED'\n    AND $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n  GROUP BY b.id, t.location_id\n)\nSELECT (ARRAY['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])[w.weekday] AS weekday, l.address AS location, avg(c.amount)::float AS average_check\nFROM generate_series(1, 7) AS w (weekday)\nCROSS JOIN locations l\nLEFT JOIN checks c ON c.location_id = l.id\n  AND extract(isodow FROM c.starts_at AT TIME ZONE 'Asia/Tbilisi') = w.weekday\nWHERE l.id IN ($location)\nGROUP BY w.weekday, l.id\nORDER BY w.weekday, l.created_at"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "rowField": "weekday",
+            "columnField": "location",
+            "valueField": "average_check",
+            "emptyValue": "null"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "gradientMode": "none",
+            "axisLabel": "Average check",
+            "axisPlacement": "auto"
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "48 Rustaveli Avenue"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "14 Baratashvili Street"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "9 Abashidze Street"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "orientation": "vertical",
+        "stacking": "none",
+        "showValue": "never",
+        "barWidth": 0.8,
+        "groupWidth": 0.75,
+        "barRadius": 0,
+        "fullHighlight": false,
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Revenue per day",
+      "description": "Sum of the checks by the day the booking starts.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "restaurant-dev"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "restaurant-dev"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH checks AS (\n  SELECT b.id, b.starts_at, b.party_size, t.location_id,\n         sum(i.quantity * d.price_cents) / 100.0 AS amount\n  FROM preorder_items i\n  JOIN booking_participants p ON p.id = i.participant_id\n  JOIN bookings b ON b.id = p.booking_id\n  JOIN dining_tables t ON t.id = b.table_id\n  JOIN dishes d ON d.id = i.dish_id\n  WHERE i.state = 'SUBMITTED'\n    AND $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n  GROUP BY b.id, t.location_id\n)\nSELECT date_trunc('day', starts_at, 'Asia/Tbilisi') AS time, sum(amount)::float AS \"Revenue\"\nFROM checks\nGROUP BY 1\nORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "barAlignment": 1,
+            "barWidthFactor": 0.8,
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisLabel": "Revenue",
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    }
+  ]
+}
