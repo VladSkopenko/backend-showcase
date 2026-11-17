@@ -20,20 +20,21 @@ Fixed decisions for stories 4 and 5. Each story spec adds routes, schemas and to
 - A hand-written tool loop: at most 5 model rounds and 15 tool calls per turn; past either, the turn ends with a fixed fallback text.
 - Every round streams (`astream` with the tools bound); text chunks go to the client as they arrive, tool-call chunks are aggregated.
 - A turn is capped at 240 s of wall time, then ends with `error`.
-- Database transactions stay short: one before the first model call (user message, history, limit check) and one after the last (assistant message, usage, pending action). No transaction is open during a model call.
+- Database transactions stay short: one before the first model call (user message, history, limit check), one after each model call that records its usage, and one after the last (assistant message, pending action). No transaction is open during a model call.
 - Validation errors in tool arguments reach the model as an error it can fix, not a generic failure.
 
 ## History
 
 - Sessions and messages live in Postgres. The model sees the last 20 messages of the session, with the status of each proposed action appended to its message.
-- Sessions without activity for 7 days are deleted by the cleanup job from story 3.
+- Sessions without activity for 7 days are deleted; story 4 adds this to the cleanup job that story 3 builds for `refresh_tokens` and `verification_codes`.
 
 ## Limits
 
 - Global for the whole system; counters in Postgres (the app stack has no Redis).
 - A daily budget of 1 USD, counted from the provider's reported token usage times per-model prices in settings; the day is the restaurant's local day.
 - At most 10 turns per minute.
-- Both are checked before a turn starts. A started turn finishes; the overshoot is bounded by the per-turn caps.
+- The budget is soft. Both limits are checked before a turn starts, with no reservation; a started turn finishes, so the overshoot is at most the cost of the turns in flight, each bounded by the per-turn caps and a `max_tokens` per model call in settings. The hard ceiling is the limit Vlad sets in the OpenAI dashboard.
+- Usage is recorded after every model call, so a turn that dies midway still counts what it spent.
 - Exhausted: `429` with an error code and the reset time, before any stream starts.
 
 ## Confirmed writes
@@ -44,7 +45,7 @@ Fixed decisions for stories 4 and 5. Each story spec adds routes, schemas and to
 - The `action` event comes after the last `chunk` and before `done`; the card belongs to that assistant message and reads back with the history.
 - The client sends only the action id to apply or cancel.
 - Apply re-checks access and the domain rules through the same services as the HTTP routes, then writes. Claiming the row is one atomic `UPDATE ... WHERE status = 'pending'`; a repeated Apply executes nothing.
-- After Apply the assistant streams a short comment on the outcome, with no tools bound.
+- After Apply the assistant streams a short comment on the outcome, with no tools bound. Its usage counts toward the budget. When the budget is exhausted, Apply still runs and the comment is a fixed text with no model call.
 - Card text is English. The model's reply is in the user's language.
 
 ## Key and environments

@@ -39,8 +39,8 @@ confirmed by the person.
   - **intent:** The assistant answers from the system's data.
   - **success:** It answers about the menu and a dish's composition, how busy the restaurant is, a free table for given people and time, the user's bookings and the user's cart, from tool results; it cannot read another user's data.
 - **CAP-6**
-  - **intent:** Spending on the model provider has a hard ceiling for the whole system.
-  - **success:** Once the daily budget or the per-minute cap is reached, a new turn is refused before streaming with a code and the reset time; a turn already running finishes.
+  - **intent:** Spending on the model provider has a soft daily limit for the whole system.
+  - **success:** Once the daily budget or the per-minute cap is reached, a new turn is refused before streaming with a code and the reset time; a turn already running finishes, so the overshoot is at most the cost of the turns in flight.
 - **CAP-7**
   - **intent:** The assistant changes data only after the person confirms.
   - **success:** Creating, editing and cancelling a booking, adding and removing a dish in the cart and submitting the user's pre-order part arrive as a card; nothing changes until Apply; Apply re-checks access and rules; a double Apply executes once; the card shows every status in `assistant.md`.

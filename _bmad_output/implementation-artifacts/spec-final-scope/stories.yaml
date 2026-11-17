@@ -25,8 +25,8 @@
 - id: "4"
   title: "Assistant: conversation and read tools"
   description: >-
-    Sessions, the streamed turn, read tools and the global limits, with the frontend task document
-    and the Figma mockup (CAP-4, CAP-5, CAP-6, CAP-8, CAP-9, CAP-10).
+    Sessions with their 7-day cleanup, the streamed turn, read tools and the global limits, with
+    the frontend task document and the Figma mockup (CAP-4, CAP-5, CAP-6, CAP-8, CAP-9, CAP-10).
   spec_checkpoint: true
   done_checkpoint: true
   invoke_dev_with: >-
