@@ -1,0 +1,33 @@
+# Grafana reads this on every start and makes the data source match it (ADR 15).
+apiVersion: 1
+
+datasources:
+  # The dev database through the role that sees no emails, hashes or tokens (ADR 19).
+  - name: Restaurant (dev)
+    # Fixed, so the dashboards provisioned from the repository can refer to it.
+    uid: restaurant-dev
+    type: postgres
+    # Queries run from the Grafana server, never from the browser.
+    access: proxy
+    # dev PostgreSQL by its alias on the analytics-dev network.
+    url: app-dev-postgres:5432
+    user: grafana_reader
+    secureJsonData:
+      # From the container's environment; the value lives in the GitHub Environment.
+      password: $GRAFANA_DB_PASSWORD
+    jsonData:
+      database: app
+      # Plain TCP inside one host, on an internal Docker network; the server has no certificate.
+      sslmode: disable
+      # One below the role's CONNECTION LIMIT 5, so a reload that briefly keeps the old pool
+      # open still gets a connection.
+      maxOpenConns: 4
+      maxIdleConns: 4
+      # Seconds a connection is reused before Grafana opens a new one; the default.
+      connMaxLifetime: 14400
+      # Chooses the functions the query builder offers; 1500 is the highest value the docs list,
+      # the server runs 18.
+      postgresVersion: 1500
+    isDefault: true
+    # Changed only through this file.
+    editable: false

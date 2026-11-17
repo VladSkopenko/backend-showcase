@@ -6,7 +6,8 @@ Date: 2026-11-17
 
 Accepted. Amends [ADR 7](0007-single-vm-platform-and-app-stacks.md) and architecture decision
 AD-13: Grafana reads dev, not production, and every environment's PostgreSQL joins an analytics
-network of its own.
+network of its own. Amended 2026-11-17: what Grafana itself offers an anonymous visitor is
+trimmed, and the platform deploy reports whether the data source can log in.
 
 ## Context
 
@@ -49,6 +50,16 @@ anyone on the internet may do.
   on dev the migration revokes `TEMPORARY` on the application database and `EXECUTE` on
   `lo_creat`, `lo_create` and `lo_from_bytea` from `PUBLIC`. The application connects as the owner
   and is not affected.
+- **Grafana's own anonymous surface is trimmed.** Its `/metrics` endpoint is off, because Caddy
+  would publish it with the exact version. Caddy answers 403 on `/api/short-urls`, because an
+  anonymous Viewer may create short links and each is a row in Grafana's database that never
+  expires. Plugin preinstall is off, so a start downloads nothing unpinned; the data source
+  plugins bundled in the image remain. The admin's session cookie is `Secure`.
+- **The deploy reports the data source, and does not depend on it.** Grafana's healthcheck passes
+  without the dev database, so after `up --wait` the platform deploy asks Grafana for the data
+  source's health and prints `ok` or `unreachable` in the job summary. It never fails the deploy:
+  the platform must come up when dev is down. That line is the only automatic sign of a wrong
+  password or of a role locked out by a visitor.
 - **An analytics network per environment.** Each environment's PostgreSQL joins an internal
   network `analytics-<env>`, named from `APP_ENV` in the one app compose file
   ([ADR 6](0006-data-stack-per-environment.md)). Grafana joins `edge`, where Caddy reaches it, and
@@ -76,8 +87,8 @@ anyone on the internet may do.
 - Anyone can run any `SELECT` the role allows, including the names of everyone registered on dev
   next to their bookings and orders.
 - PostgreSQL lets a role change its own password and reset its own defaults. One anonymous query
-  can therefore lock Grafana out of the database or remove the timeout for good, and nothing
-  reports it. Recovery is a new migration that sets a fresh verifier and the defaults again, with
+  can therefore lock Grafana out of the database or remove the timeout for good. A lock-out shows
+  only as `unreachable` in the next platform deploy; a removed timeout is not reported. Recovery is a new migration that sets a fresh verifier and the defaults again, with
   the secret set again by `secrets.sh GRAFANA_DB_PASSWORD`, like a bot password rotation.
 - With `statement_timeout` lifted, a visitor can keep the role's 5 connections busy: dashboards
   stall and dev PostgreSQL works harder. The connection limit and the container's memory limit

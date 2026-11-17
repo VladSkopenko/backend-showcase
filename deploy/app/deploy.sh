@@ -21,6 +21,9 @@ umask 077
 mv "$dir/.env.new" "$dir/.env"
 
 docker network inspect edge > /dev/null 2>&1 || docker network create edge > /dev/null
+# Internal: the network itself gives no route outside the host. The platform deploy creates
+# analytics-dev the same way, so whichever deploy runs first makes it (ADR 19).
+docker network inspect "analytics-$env" > /dev/null 2>&1 || docker network create --internal "analytics-$env" > /dev/null
 compose=(docker compose --project-name "$project" --file deploy/app/compose.yml --env-file "$dir/.env")
 # Postgres first; an unchanged postgres service is left running on redeploys.
 "${compose[@]}" up --detach --wait --wait-timeout 120 postgres

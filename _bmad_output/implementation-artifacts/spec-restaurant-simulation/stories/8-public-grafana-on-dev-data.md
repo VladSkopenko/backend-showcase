@@ -78,10 +78,10 @@ context:
 - [x] `docs/adr/0019-public-grafana-reads-dev.md`, `docs/adr/0007-single-vm-platform-and-app-stacks.md` (status line), `README.md` and `README.uk.md` (ADR table) -- the decision record -- docs.
 
 **Execution (PR B, each file with Vlad):**
-- [ ] `deploy/app/compose.yml`, `deploy/app/deploy.sh`, `deploy/platform/deploy.sh` -- the `analytics-<env>` network.
-- [ ] `deploy/platform/compose.yml`, `deploy/platform/grafana/` -- Grafana service, init line, data source provisioning.
-- [ ] `deploy/platform/caddy/Caddyfile` -- the public host.
-- [ ] `deploy/platform/secrets.sh`, `.github/workflows/delivery.yml`, `deploy/platform/README.md` -- the admin password and both secrets in the deploy job.
+- [x] `deploy/app/compose.yml`, `deploy/app/deploy.sh`, `deploy/platform/deploy.sh` -- the `analytics-<env>` network.
+- [x] `deploy/platform/compose.yml`, `deploy/platform/grafana/` -- Grafana service, init line, data source provisioning.
+- [x] `deploy/platform/caddy/Caddyfile` -- the public host.
+- [x] `deploy/platform/secrets.sh`, `.github/workflows/delivery.yml`, `deploy/platform/README.md` -- the admin password and both secrets in the deploy job.
 
 **Acceptance Criteria:**
 - Given the full suite, when `uv run pytest` runs, then all pass; CI's round trip and `alembic check` succeed.
@@ -93,6 +93,9 @@ context:
 
 - 2026-11-17, PR A: Vlad ran `deploy/platform/secrets.sh`; `GRAFANA_DB_PASSWORD` is stored in the `platform` environment and its verifier is committed in `0021`. `temp_file_limit` is 64 MB. `CREATE ROLE` runs through `exec_driver_sql`, because `op.execute` reads the `:` inside the verifier as bind parameters. The tests list the readable columns themselves and do not fail when a later migration adds a column: it simply stays invisible to the role.
 - Verified: full suite (675 passed) and linters; a throwaway PostgreSQL 18 migrated as `dev` to head, down one, to head, down to base and to head again, `alembic check` clean; a real `grafana_reader` session there got its defaults (5 s, read-only, 64 MB), read names, bookings and dishes, and was denied `users.email`, `preorder_items.note`, `refresh_tokens`, a temporary table, a large object and an insert. The real password is not exercised until Grafana's data source connects in PR B.
+- 2026-11-17, PR B: PR A merged as #40 and its dev deploy was green. The network is external and created by both deploy scripts as `--internal`, like `edge`, because compose accepts no attribute but `name` on an external network; dev PostgreSQL answers there as `app-dev-postgres`. Grafana gets `mem_limit` 768m, not the 256m planned in the platform skeleton: measured idle was about 285 MB in 14 processes (one backend per bundled data source plugin). Only `provisioning/datasources` is mounted, so the image's other provisioning directories stay. The data source pool is 4, one below the role's limit. The admin password is entered by Vlad and written to the `.env` in single quotes.
+- Verified locally on throwaway containers (Grafana 13.2.6, PostgreSQL 18 migrated as `dev`, a test password): anonymous open, `/api/health` without a version, data source health, names readable, `users.email` and `refresh_tokens` denied, dashboard write 403; one anonymous request changed the role's password and the data source then failed, as ADR 19 accepts. Both compose files render with `docker compose config`; the Caddyfile validates in `caddy:2.11`; a single-quoted `.env` value keeps `$`, `#`, quotes and backslashes. Not exercised before the deploy: Caddy's certificate and proxying, the bind-mounted data directory, the real password.
+- 2026-11-17, PR B after review: metrics endpoint off, plugin preinstall off, secure session cookie, short links blocked at Caddy, the admin password guard, and a data source report in `deploy/platform/deploy.sh`. Re-run on a throwaway stack with the real provisioning directory and the same Caddy directives: the report says `unreachable` before the role exists, `ok` with a working login and `unreachable` after the role is locked out; through Caddy `/` is 200, `/metrics` 404, `POST /api/short-urls` 403, names readable, `users.email` denied, admin login 200. Vlad stored `GRAFANA_ADMIN_PASSWORD` before the merge.
 
 ## Spec Change Log
 
@@ -115,6 +118,25 @@ PR A, 2026-11-17. PostgreSQL claims were re-run by the parent session on a throw
 | Denials run without savepoints, so later queries in the test would fail (edge-case, blind) | false: each denied statement is the last statement of its own parametrized test | rejected; the task line no longer says "savepoints" |
 | The Intent says "without personal data" while names are public (edge-case) | low: wording inside the frozen block; the constraint below it states names are public on purpose | Vlad reworded the Intent on 2026-11-17: no emails, password hashes or tokens, of personal data only names |
 | The story file is untracked and missing from the diff (blind) | false: left out of the review diff on purpose; it is committed with PR A | rejected |
+
+PR B, 2026-11-17. Grafana and compose claims were re-run by the parent session on throwaway containers (Grafana 13.2.6 behind Caddy 2.11, PostgreSQL 18).
+
+| Finding | Verdict | Route |
+|---|---|---|
+| `/metrics` is public through Caddy and shows the exact version (blind, edge-case) | medium: confirmed, 200 with `grafana_build_info`; against ADR 7 | patch: `GF_METRICS_ENABLED=false`, 404 after |
+| Every start downloads unpinned app plugins from grafana.com (edge-case) | medium: confirmed, five app plugins and about 190 MB in the data directory | patch: `GF_PLUGINS_PREINSTALL_DISABLED=true`; bundled data sources stay, idle about 260 MB |
+| An anonymous Viewer creates short links without limit (blind, edge-case) | medium: confirmed, each POST answers 200; links never expire; the volume is shared with prod | patch: Caddy answers 403 on `/api/short-urls*` |
+| The admin session cookie has no `Secure` flag (blind) | low: confirmed in the defaults | patch: `GF_SECURITY_COOKIE_SECURE=true`; HSTS left to a later Caddy-wide decision |
+| An admin password ending in a backslash breaks the `.env`; `${...}` in it is expanded by Grafana (edge-case) | medium: both confirmed (`config` fails to read the file; `pa${ss}wd` logs in as `pawd`) | patch: `secrets.sh` refuses `'`, `\` and `$` |
+| Nothing automated observes the data source: the healthcheck passes without the database (verification-gap, blind) | medium: confirmed | patch: `deploy.sh` reports `grafana data source: ok` or `unreachable` after `up --wait`, without failing the deploy (the platform must deploy when dev is down, ADR 19). Vlad asked for the check; a container healthcheck was rejected because it would fail `up --wait` |
+| The comment said containers on the internal network get no route outside (blind) | low: they have other networks | patch: comment |
+| "Adding a service" knows only private UIs (blind) | low | patch: a line for public services |
+| A later change to the provisioning file deploys green without taking effect (verification-gap, blind) | medium: by reading; compose does not notice a changed bind-mounted file and Grafana reads data sources at start | defer: story 9 adds dashboard provisioning and must settle reloads |
+| No probe of the public route through Caddy (verification-gap) | low: same as the dev host | defer |
+| No Docker log rotation; request paths are logged (blind) | medium: pre-existing for every container | defer |
+| Both deploys may create `analytics-dev` at the same moment (blind, edge-case) | low: narrow window on the first rollout or a new VM; `edge` uses the same line | rejected |
+| Setting `GRAFANA_ADMIN_PASSWORD` again changes nothing and no path recovers a forgotten one (blind) | low: the README says when it applies; Vlad keeps the password | rejected |
+| No link to Grafana in the root README (blind) | false for this story: the page has no dashboards until story 9 | rejected; the link comes with story 9 |
 
 ## Verification
 

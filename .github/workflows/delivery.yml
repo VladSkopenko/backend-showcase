@@ -179,14 +179,17 @@ jobs:
           N8N_ENCRYPTION_KEY: ${{ secrets.N8N_ENCRYPTION_KEY }}
           N8N_OWNER_EMAIL: ${{ secrets.N8N_OWNER_EMAIL }}
           N8N_OWNER_PASSWORD_HASH: ${{ secrets.N8N_OWNER_PASSWORD_HASH }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          GRAFANA_DB_PASSWORD: ${{ secrets.GRAFANA_DB_PASSWORD }}
           PLATFORM_HOST: ${{ vars.PLATFORM_HOST }}
         run: |
           install -m 600 /dev/null ~/deploy_key
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/deploy_key
           # Secrets go over stdin, never argv; deploy.sh writes stdin to /srv/platform/.env.
           # The bcrypt hash is single-quoted: unquoted, compose reads its $-separated parts as variables.
-          out=$(printf "TS_AUTHKEY=%s\nN8N_ENCRYPTION_KEY=%s\nN8N_OWNER_EMAIL=%s\nN8N_OWNER_PASSWORD_HASH='%s'\nPLATFORM_HOST=%s\n" \
-            "$TS_AUTHKEY" "$N8N_ENCRYPTION_KEY" "$N8N_OWNER_EMAIL" "$N8N_OWNER_PASSWORD_HASH" "$PLATFORM_HOST" \
+          # The Grafana admin password is typed by a person, so it is single-quoted too.
+          out=$(printf "TS_AUTHKEY=%s\nN8N_ENCRYPTION_KEY=%s\nN8N_OWNER_EMAIL=%s\nN8N_OWNER_PASSWORD_HASH='%s'\nGRAFANA_ADMIN_PASSWORD='%s'\nGRAFANA_DB_PASSWORD=%s\nPLATFORM_HOST=%s\n" \
+            "$TS_AUTHKEY" "$N8N_ENCRYPTION_KEY" "$N8N_OWNER_EMAIL" "$N8N_OWNER_PASSWORD_HASH" "$GRAFANA_ADMIN_PASSWORD" "$GRAFANA_DB_PASSWORD" "$PLATFORM_HOST" \
             | ssh -i ~/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
             "deploy@$DEPLOY_HOST" "$GITHUB_SHA")
           echo "$out"
