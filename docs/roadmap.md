@@ -7,34 +7,41 @@ product, the target stack and the phases. Ticked items are done and verified.
 
 ## Product vision
 
-A restaurant app. Guests register, browse the menu, book tables, order food and follow the order
-live. The restaurant gets invoices, reviews, notifications and analytics.
+A restaurant app that ends at the pre-order. Guests register, browse the menu, book tables, invite
+friends to the booking, pre-order food for the visit and ask an AI assistant. The restaurant
+decides large-party requests, sends notifications and shows its numbers in a public Grafana.
 
 | Feature | What makes it interesting |
 |---|---|
-| Accounts | registration and login, roles for guests, staff and managers |
+| Accounts | registration with email verification, login with rotating refresh tokens, Google sign-in |
 | Menu | categories, dishes, prices, availability |
 | Table booking | double booking is impossible at the database level: a PostgreSQL exclusion constraint on table and time range |
-| Food orders | an order is a state machine: placed, accepted, cooking, ready, completed or cancelled |
-| Live order tracker | the guest sees every stage with an ETA countdown and the kitchen screen sees new orders instantly, over WebSocket with Redis pub/sub so it works across workers |
-| Payments | a payment provider sandbox with signed webhooks and idempotency keys, so a repeated webhook never charges twice |
-| Invoices | PDF with VAT rendered by a background job and stored in Object Storage |
-| Reviews | on a dish, a visit or a booking: one table with three foreign keys and a CHECK that exactly one is set |
-| Analytics | Grafana reads PostgreSQL directly: revenue, popular dishes, ratings, no-shows |
-| Frontend | menu and booking, order tracker, kitchen screen; a separate Next.js repository that reaches this API through its own server-side proxy |
+| Invites | friends join a booking through a link, also without an account |
+| Pre-order | every participant keeps their own cart and submits it in parts; the owner sees the whole group |
+| Large-party requests | 5 to 8 people send a request that does not hold the table; staff approve or reject, and a request still pending 2 hours before the start is rejected automatically |
+| Notifications | in-app notifications and emails for request decisions |
+| AI assistant | a chat on the website with streamed answers, tools over the guest's data and the menu, and changes only after the person confirms a card; one daily budget for the whole system |
+| Analytics | a public Grafana reads the dev database: bookings by hour, top dishes, average check, visitors, staff reaction time |
+| Frontend | menu, booking, invites, pre-order and the assistant chat; a separate Next.js repository that reaches this API through its own server-side proxy |
 
 ### n8n as the traffic simulator
 
-n8n plays the visitors and the kitchen. On dev it books random tables through the REST API, so the
-booking grid shows a live flow; it never books on staging or prod, where it would take real guests'
-tables ([ADR 14](adr/0014-booking-simulator-on-dev.md)). It also moves demo orders through the
-kitchen ([ADR 9](adr/0009-alerting-from-outside-the-vm.md)). Workflows are exported to
+n8n plays the visitors and the waiter. On dev about 40 guest bots book tables, pre-order, cancel
+and send large-party requests through the REST API with the patterns of a real restaurant, and a
+waiter bot decides the requests; it never runs on staging or prod, where it would take real
+guests' tables ([ADR 14](adr/0014-booking-simulator-on-dev.md)). Workflows are exported to
 `n8n/workflows/` and versioned with the code.
 
 ### Out of scope
 
+- Food orders as a state machine, a live order tracker and a kitchen screen.
+- Payments, even in a sandbox: a real restaurant bills at the table. Invoices and reviews go with
+  them.
+- Roles for guests, staff and managers in the product (waiters live only in n8n), and menu
+  management routes.
+- Translations of the menu and the API.
 - Live video from the kitchen. A media server would eat the free VM's bandwidth and CPU and adds
-  little backend value; the live kitchen screen covers the demo.
+  little backend value.
 
 ## Planned stack
 
@@ -42,8 +49,8 @@ kitchen ([ADR 9](adr/0009-alerting-from-outside-the-vm.md)). Workflows are expor
 |---|---|
 | API | Python 3.14, FastAPI, Pydantic v2, uvicorn |
 | Data | PostgreSQL, SQLAlchemy 2.0 async, Alembic |
-| Real-time | WebSocket, Redis pub/sub |
-| Background jobs | Celery or Taskiq on Redis, decided in an ADR |
+| AI assistant | OpenAI through LangChain, answers streamed over Server-Sent Events, history and limits in PostgreSQL |
+| Background jobs | periodic tasks inside the API process, one API process per environment |
 | Dependencies | uv with a lockfile |
 | Code quality | ruff for lint and format, mypy |
 | Tests | pytest, pytest-asyncio, httpx2, testcontainers, coverage with a minimum threshold |
@@ -55,7 +62,7 @@ kitchen ([ADR 9](adr/0009-alerting-from-outside-the-vm.md)). Workflows are expor
 | Dashboards | Grafana provisioned from the repo: technical metrics plus business analytics from PostgreSQL |
 | Logs and traces | VictoriaLogs, lighter than Loki, decided in an ADR; OpenTelemetry traces in Tempo |
 | Alerts | Alertmanager to a Telegram bot, Watchdog to healthchecks.io as a dead-man switch |
-| Automation | n8n workflows that simulate visitors: random table bookings through the REST API |
+| Automation | n8n workflows that simulate guests and a waiter on dev through the REST API |
 | Private access | Tailscale for Prometheus, VictoriaLogs, n8n and CI deploys |
 | Infrastructure | Terraform for the Oracle Cloud VM, network, firewall and data volume; cloud-init for the base OS; Caddy with automatic HTTPS |
 | Frontend | Next.js in a separate repository, hosted on Vercel; see [ADR 10](adr/0010-frontend-in-a-separate-repository.md) |
@@ -75,7 +82,7 @@ Done when: the repo is public and the README explains what is coming.
 
 ### Phase 1. Minimal API
 - [x] FastAPI app with `/health`, registration and login
-- [ ] Menu as the first CRUD resource
+- [x] Menu as the first read-only resource
 - [x] PostgreSQL, SQLAlchemy models, first Alembic migration
 - [ ] docker compose for local development: app, Postgres, Redis
 - [x] Tests for the endpoints against a real database
@@ -109,7 +116,7 @@ following [ADR 15](adr/0015-platform-as-code.md).
 - [ ] Prometheus scraping all three environments and the exporters
 - [ ] Grafana dashboards provisioned from the repo, with an environment selector
 - [ ] Structured JSON logs in VictoriaLogs, traces in Tempo, linked from Grafana
-- [ ] Alert rules with Alertmanager sending to Telegram, a dead-man switch on healthchecks.io, an alert on orders stuck in `placed`
+- [ ] Alert rules with Alertmanager sending to Telegram, a dead-man switch on healthchecks.io
 - [ ] n8n in the platform stack; Prometheus, VictoriaLogs and n8n reachable only through Tailscale
 
 Done when: a broken production deploy raises an alert in Telegram within minutes.
@@ -124,29 +131,34 @@ Done when: a broken production deploy raises an alert in Telegram within minutes
 Done when: the server can be destroyed and recreated with one command, and production data survives it.
 
 ### Phase 6. Performance
-- [ ] k6 scenario for booking and ordering with thresholds
+- [ ] k6 scenario for booking and pre-order with thresholds
 - [ ] Load test run in CI on demand against staging, results and Grafana screenshots in this README
 
 Done when: the README states the measured throughput and p95 latency.
 
 ### Phase 7. Product
 Each feature starts from its own BMAD spec.
-- [ ] Table booking with the exclusion constraint
-- [ ] Orders as a state machine, with the live tracker and the kitchen screen over WebSocket
-- [ ] Payments in a provider sandbox with signed, idempotent webhooks
-- [ ] Invoice PDFs in a background job
-- [ ] Reviews on dishes, visits and bookings
-- [ ] n8n workflow that books random tables through the REST API, so dev shows a live booking flow
-- [ ] Business dashboards in Grafana
-- [ ] Frontend in its own repository: menu and booking, order tracker, kitchen screen
+- [x] Table booking with the exclusion constraint
+- [x] Invites: friends join a booking through a link, also without an account
+- [x] Pre-order: every participant's own cart, submitted in parts
+- [x] Large-party requests decided by staff, rejected automatically 2 hours before the start
+- [x] In-app notifications and decision emails
+- [x] n8n simulator on dev: guest bots book, pre-order, cancel and send requests; a waiter bot decides them
+- [x] Business dashboards in a public Grafana on dev data
+- [ ] Group pre-order: the booking owner sees every participant's submitted parts
+- [ ] Cleanup of expired refresh tokens and old verification codes
+- [ ] AI assistant: a chat with streamed answers and read tools, under one daily budget for the system
+- [ ] AI assistant actions: booking and cart changes through cards the person confirms
+- [ ] Frontend in its own repository: menu, booking, invites, pre-order and the assistant chat
 
-Done when: a guest books, orders, pays, follows the order live, gets an invoice and leaves a review,
-and the manager sees all of it in Grafana.
+Done when: a guest books a table, invites friends, everyone pre-orders and the owner sees the
+group's pre-order; the assistant answers about the menu and books a table after the guest
+confirms; the public Grafana shows the restaurant's numbers.
 
 ## What a reviewer should eventually see
 
 - A green CI badge and a coverage badge at the top of this README
 - Three live URLs with HTTPS: dev, staging and production
-- A GIF of the live order tracker and the kitchen screen, with a link to the frontend repository
+- A GIF of booking a table through the assistant chat, with a link to the frontend repository
 - An architecture diagram and the decision records
 - Grafana screenshots and load test numbers

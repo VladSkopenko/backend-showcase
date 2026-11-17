@@ -139,7 +139,8 @@ written by hand.
 
 - Observability: metrics, dashboards, logs and alerts to Telegram
 - Staging and production live, with migration rollback on a failed deploy
-- Table booking, cart and orders as a state machine with a live tracker
+- The whole group's pre-order for the booking owner
+- An AI assistant on the website: streamed answers about the menu and the restaurant, bookings and cart changes after the guest confirms
 - Load tests with k6 and published numbers
 
 The full plan is in [docs/roadmap.md](docs/roadmap.md).
