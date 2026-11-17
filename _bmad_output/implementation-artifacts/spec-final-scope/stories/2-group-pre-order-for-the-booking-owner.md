@@ -2,7 +2,7 @@
 title: 'Group pre-order for the booking owner'
 type: 'feature'
 created: '2026-11-17'
-status: 'in-review'
+status: 'done'
 baseline_commit: '096445269a1aae2bdc8d03bfec8ad953c10d6ae5'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -102,6 +102,7 @@ Response, flat participant fields so the frontend's `Participant` type fits:
 - ADR 17 Alternatives were touched too: the price-snapshot reason no longer cites the owner send, and the lock alternative no longer cites owner group actions.
 - Live check (2026-11-17, local API at revision 0019, which lacks only the dev bot data and the Grafana role): owner 200 with Anna 5900 (two parts), Boris 1800, Clara 3600, total 11300 equal to the sum and to each `my-pre-order`; Boris 404 `BOOKING_NOT_FOUND`; cookie guest and no session 401 `NOT_AUTHENTICATED`. The dev smoke check waits for the deploy.
 - 2026-11-17, parent session after the code review patches: 746 tests, ruff, format check, mypy and 10 import contracts clean. The live check script was re-run on a fresh local API by the parent with the same result (Anna 5900 in two parts, Boris 1800, Clara 3600, total 11300; Boris 404, cookie guest and no session 401). Local `app` now holds four `live-*@example.com` users with two bookings from the two runs. During the patches the implementation subagent tried to run `ruff format`, which writes files; the permission system refused it and nothing ran.
+- 2026-11-17, live on dev: #45 merged as ac721c6 without waiting for CI (Vlad's word); the PR's CI and `Deploy dev` then passed. `GET /api/v1/bookings/{id}/group-pre-order` on the dev host answers 401 `NOT_AUTHENTICATED` without a session, and the route is in the dev OpenAPI.
 
 ## Spec Change Log
 

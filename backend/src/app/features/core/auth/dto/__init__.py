@@ -1,3 +1,4 @@
+from app.features.core.auth.dto.deleted_auth_rows import DeletedAuthRows
 from app.features.core.auth.dto.issued_code import IssuedCode
 from app.features.core.auth.dto.issued_session import IssuedSession
 from app.features.core.auth.dto.login_outcome import LoginOutcome
@@ -9,6 +10,7 @@ from app.features.core.auth.dto.rendered_email import RenderedEmail
 from app.features.core.auth.dto.verification_outcome import VerificationOutcome
 
 __all__ = [
+    "DeletedAuthRows",
     "IssuedCode",
     "IssuedSession",
     "LoginOutcome",

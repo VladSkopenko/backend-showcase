@@ -179,3 +179,9 @@
 
 - The staff dashboard tells competitor rejections apart without a new column: "Requests per day" has the outcome "Lost to another request", a rejection with the table and decision time of an approval (entry from the review of 2-staff-role-and-request-decisions).
 - Dashboard JSON files are polled by a file provider, so a changed dashboard needs no restart. Still open from the review of 8-public-grafana-on-dev-data: the data source file and the provider file are read only when Grafana starts, and the platform deploy does not restart it.
+
+## Deferred from: review of 3-cleanup-of-session-and-verification-rows (2026-11-17)
+
+- source_spec: `_bmad_output/implementation-artifacts/spec-final-scope/stories/3-cleanup-of-session-and-verification-rows.md`
+  summary: Test that the app lifespan passes each periodic task its own interval setting (`CLEANUP_INTERVAL_SECONDS`, `BOOKING_AUTO_REJECT_INTERVAL_SECONDS`), for both tasks at once.
+  evidence: The lifespan test asserts only task names; passing the wrong setting or a literal in `main.py` passes every test. The request-expiry wiring had the same gap before this story.

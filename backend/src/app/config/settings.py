@@ -168,6 +168,14 @@ class NotificationSettings(BaseSettings):
     skip_email_domains: list[str] = ["example.com"]
 
 
+class CleanupSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="CLEANUP_", env_file=ENV_FILE, extra="ignore")
+
+    # How often the API process deletes expired refresh tokens and superseded verification codes
+    # (the newest code of a user and purpose always stays).
+    interval_seconds: int = Field(default=3600, gt=0)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -182,6 +190,7 @@ class Settings(BaseSettings):
     booking: BookingSettings = Field(default_factory=BookingSettings)
     preorder: PreorderSettings = Field(default_factory=PreorderSettings)
     notifications: NotificationSettings = Field(default_factory=NotificationSettings)
+    cleanup: CleanupSettings = Field(default_factory=CleanupSettings)
 
     @classmethod
     def settings_customise_sources(

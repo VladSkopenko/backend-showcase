@@ -477,21 +477,3 @@ async def test_the_periodic_task_repeats_survives_failures_and_stops(
         "Background task 'fake sweep' failed; the next run tries again"
     ]
     assert not [t for t in asyncio.all_tasks() if t.get_name() == "fake sweep"]
-
-
-async def test_the_app_lifespan_starts_and_stops_the_request_expiry_task(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    started = asyncio.Event()
-
-    async def fake_run(self: RequestExpiryJob) -> None:
-        started.set()
-
-    monkeypatch.setattr(RequestExpiryJob, "run", fake_run)
-    app = create_app()
-
-    async with app.router.lifespan_context(app):
-        await asyncio.wait_for(started.wait(), timeout=5)
-        assert [t for t in asyncio.all_tasks() if t.get_name() == "request expiry"]
-
-    assert not [t for t in asyncio.all_tasks() if t.get_name() == "request expiry"]

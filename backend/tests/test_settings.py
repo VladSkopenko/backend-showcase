@@ -352,3 +352,20 @@ def test_notification_env_vars_land_in_the_notifications_block(
     monkeypatch.setenv("NOTIFICATIONS_SKIP_EMAIL_DOMAINS", '["example.com", "bots.test"]')
 
     assert Settings().notifications.skip_email_domains == ["example.com", "bots.test"]
+
+
+def test_cleanup_defaults() -> None:
+    assert Settings().cleanup.interval_seconds == 3600
+
+
+@pytest.mark.parametrize(("value", "valid"), [("0", False), ("1", True), ("900", True)])
+def test_cleanup_interval_env_var_lands_in_the_cleanup_block_and_is_always_positive(
+    monkeypatch: pytest.MonkeyPatch, value: str, valid: bool
+) -> None:
+    monkeypatch.setenv("CLEANUP_INTERVAL_SECONDS", value)
+
+    if valid:
+        assert Settings().cleanup.interval_seconds == int(value)
+    else:
+        with pytest.raises(ValidationError, match="interval_seconds"):
+            Settings()

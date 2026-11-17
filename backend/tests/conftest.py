@@ -60,6 +60,7 @@ def isolated_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
                 "BOOKING_",
                 "PREORDER_",
                 "NOTIFICATIONS_",
+                "CLEANUP_",
             )
         ):
             monkeypatch.delenv(name)
