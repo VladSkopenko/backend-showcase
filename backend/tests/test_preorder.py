@@ -874,3 +874,289 @@ async def test_remove_and_submit_report_the_first_failing_check(
         await remove_item(client, party.booking, menu.soup.id, guest), 404, "CART_ITEM_NOT_FOUND"
     )
     assert_error(await submit(client, party.booking, guest), 409, "CART_EMPTY")
+
+
+@dataclass
+class Group:
+    booking: Booking
+    max_token: str
+
+
+async def add_group(
+    session_factory: async_sessionmaker[AsyncSession],
+    venue: Venue,
+    users: dict[str, User],
+    fake_clock: FakeClock,
+    *,
+    status: BookingStatus = BookingStatus.CONFIRMED,
+) -> Group:
+    booking = await add_booking(
+        session_factory,
+        user=users[ADA],
+        table=venue.four,
+        starts_at=NOON,
+        party_size=3,
+        status=status,
+    )
+    fake_clock.advance(seconds=1)
+    await add_participant(session_factory, booking_id=booking.id, user=users[GRACE])
+    fake_clock.advance(seconds=1)
+    token = f"max-{uuid.uuid4()}"
+    guest = await add_guest(session_factory, name="Max", token=token)
+    await add_participant(session_factory, booking_id=booking.id, guest=guest)
+    return Group(booking=booking, max_token=token)
+
+
+@pytest.fixture
+async def group(
+    session_factory: async_sessionmaker[AsyncSession],
+    venue: Venue,
+    users: dict[str, User],
+    fake_clock: FakeClock,
+) -> Group:
+    return await add_group(session_factory, venue, users, fake_clock)
+
+
+async def group_preorder(
+    client: httpx2.AsyncClient, booking: Booking, headers: dict[str, str] | None = None
+) -> httpx2.Response:
+    return await client.get(f"{BOOKINGS}/{booking.id}/group-pre-order", headers=headers)
+
+
+async def submit_lines(
+    client: httpx2.AsyncClient,
+    fake_clock: FakeClock,
+    booking: Booking,
+    lines: list[tuple[Dish, int]],
+    headers: dict[str, str] | None = None,
+) -> None:
+    await fill(client, fake_clock, booking, lines, headers)
+    response = await submit(client, booking, headers)
+    assert response.status_code == 200, response.text
+
+
+def own_parts(body: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {"parts": participant["parts"], "total_cents": participant["total_cents"]}
+        for participant in body["participants"]
+    ]
+
+
+async def test_the_owner_sees_every_participant_with_their_parts_and_totals(
+    client: httpx2.AsyncClient,
+    group: Group,
+    menu: Menu,
+    fake_clock: FakeClock,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    booking, max_guest = group.booking, as_guest(group.max_token)
+    grace_own = await add_booking(
+        session_factory, user=users[GRACE], table=venue.other, starts_at=NOON
+    )
+    await sign_in(client, ADA)
+    await submit_lines(client, fake_clock, booking, [(menu.steak, 1)])
+    await submit_lines(client, fake_clock, booking, [(menu.soup, 2)])
+    ada = (await my_preorder(client, booking)).json()
+    await sign_in(client, GRACE)
+    await submit_lines(client, fake_clock, grace_own, [(menu.steak, 3)])
+    elsewhere = (await my_preorder(client, grace_own)).json()
+    await submit_lines(client, fake_clock, booking, [(menu.cake, 1)])
+    grace = (await my_preorder(client, booking)).json()
+    client.cookies.clear()
+    await submit_lines(client, fake_clock, booking, [(menu.soup, 1), (menu.steak, 1)], max_guest)
+    max_parts = (await my_preorder(client, booking, max_guest)).json()
+    await sign_in(client, ADA)
+    shown = (await client.get(f"{BOOKINGS}/{booking.id}")).json()
+
+    response = await group_preorder(client, booking)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert set(body) == {"participants", "total_cents"}
+    assert all(
+        set(participant) == {"id", "name", "role", "parts", "total_cents"}
+        for participant in body["participants"]
+    )
+    assert [
+        {"id": participant["id"], "name": participant["name"], "role": participant["role"]}
+        for participant in body["participants"]
+    ] == shown["participants"]
+    assert [(participant["name"], participant["role"]) for participant in body["participants"]] == [
+        ("Ada", "OWNER"),
+        ("Grace", "GUEST"),
+        ("Max", "GUEST"),
+    ]
+    assert own_parts(body) == [ada, grace, max_parts]
+    assert [len(participant["parts"]) for participant in body["participants"]] == [2, 1, 1]
+    assert [participant["total_cents"] for participant in body["participants"]] == [
+        2400 + 1700,
+        650,
+        850 + 2400,
+    ]
+    assert body["total_cents"] == 4100 + 650 + 3250
+    [elsewhere_part] = elsewhere["parts"]
+    assert elsewhere_part["id"] not in {
+        part["id"] for participant in body["participants"] for part in participant["parts"]
+    }
+
+
+async def test_parts_are_grouped_by_participant_in_join_order_whatever_the_submit_order(
+    client: httpx2.AsyncClient, group: Group, menu: Menu, fake_clock: FakeClock
+) -> None:
+    max_guest = as_guest(group.max_token)
+    await submit_lines(client, fake_clock, group.booking, [(menu.cake, 1)], max_guest)
+    await sign_in(client, ADA)
+    await submit_lines(client, fake_clock, group.booking, [(menu.steak, 1)])
+    client.cookies.clear()
+    await submit_lines(client, fake_clock, group.booking, [(menu.soup, 2)], max_guest)
+    await sign_in(client, ADA)
+    await submit_lines(client, fake_clock, group.booking, [(menu.soup, 1)])
+
+    body = (await group_preorder(client, group.booking)).json()
+
+    assert [participant["name"] for participant in body["participants"]] == [
+        "Ada",
+        "Grace",
+        "Max",
+    ]
+    assert [
+        [lines_of(part) for part in participant["parts"]] for participant in body["participants"]
+    ] == [
+        [[("Test Steak", 1, None, 2400)], [("Test Soup", 1, None, 850)]],
+        [],
+        [[("Test Cake", 1, None, 650)], [("Test Soup", 2, None, 1700)]],
+    ]
+    assert [participant["total_cents"] for participant in body["participants"]] == [3250, 0, 2350]
+    assert body["total_cents"] == 5600
+
+
+async def test_a_participant_with_only_a_draft_is_listed_without_parts(
+    client: httpx2.AsyncClient, group: Group, menu: Menu, fake_clock: FakeClock
+) -> None:
+    await sign_in(client, ADA)
+    await submit_lines(client, fake_clock, group.booking, [(menu.steak, 1)])
+    await fill(client, fake_clock, group.booking, [(menu.cake, 3)])
+    await fill(client, fake_clock, group.booking, [(menu.soup, 2)], as_guest(group.max_token))
+
+    response = await group_preorder(client, group.booking)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [lines_of(part) for part in body["participants"][0]["parts"]] == [
+        [("Test Steak", 1, None, 2400)]
+    ]
+    assert own_parts(body)[1:] == [{"parts": [], "total_cents": 0}] * 2
+    assert body["total_cents"] == 2400
+
+
+async def test_the_group_shows_the_live_menu(
+    client: httpx2.AsyncClient,
+    group: Group,
+    menu: Menu,
+    fake_clock: FakeClock,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await sign_in(client, ADA)
+    await submit_lines(client, fake_clock, group.booking, [(menu.steak, 1), (menu.soup, 2)])
+    client.cookies.clear()
+    await submit_lines(
+        client, fake_clock, group.booking, [(menu.cake, 1)], as_guest(group.max_token)
+    )
+    async with session_factory() as session:
+        await session.execute(update(Dish).where(Dish.id == menu.soup.id).values(price_cents=900))
+        await session.commit()
+    await make_unavailable(session_factory, menu.steak)
+    await sign_in(client, ADA)
+
+    body = (await group_preorder(client, group.booking)).json()
+
+    [ada_part] = body["participants"][0]["parts"]
+    assert ada_part["items"][0]["dish"] == dish_body(menu.steak, is_available=False)
+    assert ada_part["items"][1]["dish"]["price_cents"] == 900
+    assert lines_of(ada_part) == [("Test Steak", 1, None, 2400), ("Test Soup", 2, None, 1800)]
+    assert ada_part["total_cents"] == 4200
+    assert [participant["total_cents"] for participant in body["participants"]] == [4200, 0, 650]
+    assert body["total_cents"] == 4850
+
+
+async def test_a_pending_request_lists_the_group_without_parts(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    menu: Menu,
+    session_factory: async_sessionmaker[AsyncSession],
+    fake_clock: FakeClock,
+) -> None:
+    pending = await add_group(
+        session_factory, venue, users, fake_clock, status=BookingStatus.PENDING
+    )
+    await sign_in(client, ADA)
+
+    response = await group_preorder(client, pending.booking)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [participant["name"] for participant in body["participants"]] == [
+        "Ada",
+        "Grace",
+        "Max",
+    ]
+    assert own_parts(body) == [{"parts": [], "total_cents": 0}] * 3
+    assert body["total_cents"] == 0
+
+
+@pytest.mark.parametrize("status", [BookingStatus.REJECTED, BookingStatus.CANCELLED])
+async def test_an_inactive_booking_keeps_the_group_as_it_was(
+    client: httpx2.AsyncClient,
+    group: Group,
+    menu: Menu,
+    fake_clock: FakeClock,
+    session_factory: async_sessionmaker[AsyncSession],
+    status: BookingStatus,
+) -> None:
+    await submit_lines(
+        client, fake_clock, group.booking, [(menu.cake, 2)], as_guest(group.max_token)
+    )
+    await sign_in(client, ADA)
+    await submit_lines(client, fake_clock, group.booking, [(menu.steak, 1)])
+    before = (await group_preorder(client, group.booking)).json()
+    async with session_factory() as session:
+        await session.execute(
+            update(Booking).where(Booking.id == group.booking.id).values(status=status)
+        )
+        await session.commit()
+    fake_clock.current = NOON + timedelta(hours=3)
+    await sign_in(client, ADA)
+
+    response = await group_preorder(client, group.booking)
+
+    assert response.status_code == 200, response.text
+    assert response.json() == before
+    assert before["total_cents"] == 1300 + 2400
+
+
+async def test_only_the_owner_reads_the_group(
+    client: httpx2.AsyncClient,
+    group: Group,
+    venue: Venue,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    elsewhere = await add_booking(
+        session_factory, user=users[ADA], table=venue.six, starts_at=at(TOMORROW, 18)
+    )
+
+    nobody = await group_preorder(client, group.booking)
+    cookie_guest = await group_preorder(client, group.booking, as_guest(group.max_token))
+    await sign_in(client, GRACE)
+    joined_user = await group_preorder(client, group.booking)
+    stranger = await group_preorder(client, elsewhere)
+    unknown = await group_preorder(client, Booking(id=uuid.uuid4()))
+
+    assert_error(nobody, 401, "NOT_AUTHENTICATED")
+    assert_error(cookie_guest, 401, "NOT_AUTHENTICATED")
+    assert_error(joined_user, 404, "BOOKING_NOT_FOUND")
+    assert_error(stranger, 404, "BOOKING_NOT_FOUND")
+    assert_error(unknown, 404, "BOOKING_NOT_FOUND")

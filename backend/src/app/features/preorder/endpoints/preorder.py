@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter
 
 from app.common.error_responses import error_responses
-from app.features.core.auth.endpoints.dependencies import OptionalUserDep
+from app.features.core.auth.endpoints.dependencies import CurrentUserDep, OptionalUserDep
 from app.features.core.auth.services.exceptions import NotAuthenticatedError
 from app.features.core.bookings.endpoints.dependencies import GuestTokenCookie
 from app.features.core.bookings.services.exceptions import BookingNotFoundError
@@ -13,6 +13,7 @@ from app.features.preorder.endpoints.errors import DOCUMENTED_ERROR_STATUSES
 from app.features.preorder.endpoints.openapi_tags import PreorderOpenApiTags
 from app.features.preorder.schemas import (
     CartResponse,
+    GroupPreorderResponse,
     MyPreorderResponse,
     SetCartItemRequest,
     SubmittedPartResponse,
@@ -191,3 +192,29 @@ async def get_my_preorder(
         booking_id=booking_id, user_id=None if user is None else user.id, guest_token=guest_token
     )
     return MyPreorderResponse.model_validate(mine)
+
+
+@router.get(
+    "/group-pre-order",
+    response_model=GroupPreorderResponse,
+    responses=error_responses(
+        NotAuthenticatedError,
+        BookingNotFoundError,
+        statuses=DOCUMENTED_ERROR_STATUSES,
+        takes_input=True,
+    ),
+    description=(
+        "Shows the owner of the booking what the whole group has pre-ordered: every participant, "
+        "the owner first and then the guests in the order they joined, with their submitted "
+        "parts oldest first at the current menu prices and their total, plus the group total. "
+        "Drafts are never shown; a participant who has submitted nothing has no parts. Open in "
+        "every booking status, also after the pre-order has closed. Only the signed-in owner "
+        "reads it: a booking the user only joined or another user's booking answers 404, and a "
+        "guest identified only by the `guest_token` cookie is not signed in."
+    ),
+)
+async def get_group_preorder(
+    booking_id: uuid.UUID, user: CurrentUserDep, preorder: PreorderServiceDep
+) -> GroupPreorderResponse:
+    group = await preorder.get_group_preorder(booking_id=booking_id, user_id=user.id)
+    return GroupPreorderResponse.model_validate(group)

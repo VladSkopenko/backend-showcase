@@ -15,6 +15,7 @@ from app.features.core.bookings.dto import (
     JoinOutcome,
     OwnedBooking,
     ParticipantAccess,
+    ParticipantView,
 )
 from app.features.core.bookings.enums import BookingStatus, ParticipantRole
 from app.features.core.bookings.models import Booking, BookingParticipant, Guest
@@ -60,6 +61,18 @@ class ParticipantService:
         booking, _, _ = row
         self._inactive.check_active(status=booking.status)
         return OwnedBooking(id=booking.id)
+
+    async def list_for_owner(
+        self, *, user_id: uuid.UUID, booking_id: uuid.UUID
+    ) -> list[ParticipantView]:
+        row = await self._bookings.get_for_user(booking_id=booking_id, user_id=user_id)
+        if row is None:
+            raise BookingNotFoundError()
+        booking, _, _ = row
+        return [
+            ParticipantView(id=participant.id, name=name, role=participant.role)
+            for participant, name in await self._participants.list_named(booking_ids=[booking.id])
+        ]
 
     async def preview(self, *, booking_id: uuid.UUID) -> InvitePreviewView:
         booking, table = await self._get(booking_id=booking_id)

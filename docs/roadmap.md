@@ -145,7 +145,7 @@ Each feature starts from its own BMAD spec.
 - [x] In-app notifications and decision emails
 - [x] n8n simulator on dev: guest bots book, pre-order, cancel and send requests; a waiter bot decides them
 - [x] Business dashboards in a public Grafana on dev data
-- [ ] Group pre-order: the booking owner sees every participant's submitted parts
+- [x] Group pre-order: the booking owner sees every participant's submitted parts
 - [ ] Cleanup of expired refresh tokens and old verification codes
 - [ ] AI assistant: a chat with streamed answers and read tools, under one daily budget for the system
 - [ ] AI assistant actions: booking and cart changes through cards the person confirms
