@@ -53,6 +53,7 @@ FLOWS = {
         ("delete", "/api/v1/bookings/{booking_id}/cart/items/{dish_id}"),
         ("post", "/api/v1/bookings/{booking_id}/cart/submit"),
         ("get", "/api/v1/bookings/{booking_id}/my-pre-order"),
+        ("get", "/api/v1/bookings/{booking_id}/group-pre-order"),
     ],
     "Staff": [
         ("get", "/api/v1/staff/booking-requests"),

@@ -4,6 +4,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from app.features.core.bookings.schemas import ParticipantResponse
+
 ItemNote = Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
 
 
@@ -53,4 +55,16 @@ class MyPreorderResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     parts: list[SubmittedPartResponse]
+    total_cents: int
+
+
+class ParticipantPreorderResponse(ParticipantResponse):
+    parts: list[SubmittedPartResponse]
+    total_cents: int
+
+
+class GroupPreorderResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    participants: list[ParticipantPreorderResponse]
     total_cents: int

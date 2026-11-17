@@ -4,7 +4,8 @@ Date: 2026-11-11
 
 ## Status
 
-Accepted
+Accepted. Amended 2026-11-17: removing a guest and leaving a booking are dropped with the final
+scope; they do not come with the group pre-order.
 
 ## Context
 
@@ -61,8 +62,9 @@ only its owner in `bookings.user_id`, and every caller of the API was a signed-i
 ## Consequences
 
 - A guest who clears cookies or switches devices cannot get back to the booking and has to join
-  again under a new identity, which takes another seat. Removing a guest and leaving a booking come
-  with the group pre-order.
+  again under a new identity, which takes another seat; the old participant stays for good, so the
+  owner's group pre-order lists them with no parts and the participant count stays higher. A
+  participant cannot be removed and cannot leave a booking.
 - The access cookie lives 15 minutes, so the client refreshes the session before joining;
   otherwise a signed-in user without an access cookie joins as a guest.
 - The join locks and the first-link race need two concurrent connections to test; the

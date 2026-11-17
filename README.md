@@ -29,7 +29,7 @@ the first release.
 | Deploy | A merge to `main` deploys dev with no manual steps. CI reaches the server only through Tailscale, and a forced-command entrypoint deploys only commits from the environment's branch ([ADR 2](docs/adr/0002-ci-access-through-tailscale.md), [ADR 3](docs/adr/0003-deploy-entrypoint-verifies-commit.md)) |
 | Infrastructure | Terraform for the Oracle Cloud VM, network, data volume, media bucket and its IAM; cloud-init for the base OS; the server is replaced, not patched ([ADR 8](docs/adr/0008-terraform-and-immutable-server.md)) |
 | Platform | Caddy with automatic HTTPS in front of the app stacks; one VM, a platform stack and an app stack per environment ([ADR 7](docs/adr/0007-single-vm-platform-and-app-stacks.md)) |
-| API | Registration with email verification, JWT sessions with refresh rotation, password reset, Google sign-in, a menu with pictures in Object Storage, restaurant locations with their tables, table booking with a slot grid and double-booking protection, editing a booking (time, guests, stay length), invites by link for friends with or without an account, a pre-order cart for every participant |
+| API | Registration with email verification, JWT sessions with refresh rotation, password reset, Google sign-in, a menu with pictures in Object Storage, restaurant locations with their tables, table booking with a slot grid and double-booking protection, editing a booking (time, guests, stay length), invites by link for friends with or without an account, a pre-order cart for every participant, and the whole group's pre-order for the booking owner |
 | Simulation | n8n in the platform stack plays the restaurant on dev: [booking simulator](n8n/workflows/booking-simulator.json) (40 guest bots book, send large-party requests, pre-order and cancel every 2 minutes) and [waiter bot](n8n/workflows/waiter-bot.json) (a staff bot approves or rejects the requests). The editor is reachable only on the tailnet, at `https://backend-showcase-platform.tail88eb36.ts.net:5678` ([ADR 14](docs/adr/0014-booking-simulator-on-dev.md), [n8n/README.md](n8n/README.md)) |
 | Dashboards | A public Grafana opens without an account on five dashboards over the live dev data: bookings, dishes, checks, visitors and staff decisions. The dashboards are JSON files in [deploy/platform/grafana/dashboards](deploy/platform/grafana/dashboards), provisioned on deploy; Grafana reads dev through a database role that sees no emails, hashes or tokens, and a test runs every panel query as that role ([ADR 19](docs/adr/0019-public-grafana-reads-dev.md)) |
 
@@ -101,7 +101,7 @@ Each non-obvious choice has a short record in [docs/adr](docs/adr):
 | [14](docs/adr/0014-booking-simulator-on-dev.md) | n8n simulates visitors on dev only, with bots from an environment-gated migration |
 | [15](docs/adr/0015-platform-as-code.md) | Platform as code: a merge to `main` deploys the whole platform |
 | [16](docs/adr/0016-booking-participants-and-guest-identity.md) | Booking participants in core, invites as a regular feature, guests known by a hashed-token cookie |
-| [17](docs/adr/0017-preorder-parts-per-participant.md) | Pre-order drafts per participant submitted into one group, live prices, the join window and the booking lock |
+| [17](docs/adr/0017-preorder-parts-per-participant.md) | Pre-order drafts per participant submitted into one group, the owner's view of the whole group, live prices, the join window and the booking lock |
 | [18](docs/adr/0018-in-app-notifications.md) | In-app notifications written in the decision's transaction, emails after the commit, skipped domains |
 | [19](docs/adr/0019-public-grafana-reads-dev.md) | Public Grafana reads dev through a role limited to listed columns; the role is the security boundary |
 
@@ -139,7 +139,6 @@ written by hand.
 
 - Observability: metrics, dashboards, logs and alerts to Telegram
 - Staging and production live, with migration rollback on a failed deploy
-- The whole group's pre-order for the booking owner
 - An AI assistant on the website: streamed answers about the menu and the restaurant, bookings and cart changes after the guest confirms
 - Load tests with k6 and published numbers
 

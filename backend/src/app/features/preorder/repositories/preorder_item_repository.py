@@ -1,5 +1,5 @@
 import uuid
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,11 +23,13 @@ class PreorderItemRepository:
         )
         return items.all()
 
-    async def list_submitted(self, *, participant_id: uuid.UUID) -> Sequence[PreorderItem]:
+    async def list_submitted(
+        self, *, participant_ids: Collection[uuid.UUID]
+    ) -> Sequence[PreorderItem]:
         items = await self._session.scalars(
             select(PreorderItem)
             .where(
-                PreorderItem.participant_id == participant_id,
+                PreorderItem.participant_id.in_(participant_ids),
                 PreorderItem.state == PreorderItemState.SUBMITTED,
             )
             .order_by(

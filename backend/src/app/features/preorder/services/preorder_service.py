@@ -11,7 +11,14 @@ from app.features.core.bookings.dto import ParticipantAccess
 from app.features.core.bookings.services.participant_service import ParticipantService
 from app.features.core.menu.dto import DishView
 from app.features.core.menu.services.dish_catalog_service import DishCatalogService
-from app.features.preorder.dto import CartLineView, CartView, MyPreorderView, SubmittedPartView
+from app.features.preorder.dto import (
+    CartLineView,
+    CartView,
+    GroupPreorderView,
+    MyPreorderView,
+    ParticipantPreorderView,
+    SubmittedPartView,
+)
 from app.features.preorder.enums import PreorderItemState
 from app.features.preorder.models import PreorderItem
 from app.features.preorder.repositories import PreorderItemRepository
@@ -142,25 +149,39 @@ class PreorderService:
         participant = await self._participants.get_participant(
             booking_id=booking_id, user_id=user_id, guest_token=guest_token
         )
-        items = await self._items.list_submitted(participant_id=participant.participant_id)
+        items = await self._items.list_submitted(participant_ids=[participant.participant_id])
         dishes = await self._dishes.get_many(dish_ids={item.dish_id for item in items})
-        grouped: dict[uuid.UUID, list[PreorderItem]] = {}
+        parts = self._parts(items, dishes)
+        return MyPreorderView(parts=parts, total_cents=self._parts_total(parts))
+
+    async def get_group_preorder(
+        self, *, booking_id: uuid.UUID, user_id: uuid.UUID
+    ) -> GroupPreorderView:
+        participants = await self._participants.list_for_owner(
+            user_id=user_id, booking_id=booking_id
+        )
+        items = await self._items.list_submitted(
+            participant_ids=[participant.id for participant in participants]
+        )
+        dishes = await self._dishes.get_many(dish_ids={item.dish_id for item in items})
+        by_participant: dict[uuid.UUID, list[PreorderItem]] = {}
         for item in items:
-            grouped.setdefault(cast(uuid.UUID, item.submission_id), []).append(item)
-        parts = []
-        for submission_id, part_items in grouped.items():
-            lines = self._lines(part_items, dishes)
-            parts.append(
-                SubmittedPartView(
-                    id=submission_id,
-                    submitted_at=cast(datetime, part_items[0].submitted_at).astimezone(
-                        self._timezone
-                    ),
-                    items=lines,
-                    total_cents=self._total(lines),
+            by_participant.setdefault(item.participant_id, []).append(item)
+        views = []
+        for participant in participants:
+            parts = self._parts(by_participant.get(participant.id, []), dishes)
+            views.append(
+                ParticipantPreorderView(
+                    id=participant.id,
+                    name=participant.name,
+                    role=participant.role,
+                    parts=parts,
+                    total_cents=self._parts_total(parts),
                 )
             )
-        return MyPreorderView(parts=parts, total_cents=sum(part.total_cents for part in parts))
+        return GroupPreorderView(
+            participants=views, total_cents=sum(view.total_cents for view in views)
+        )
 
     async def _lock_open(
         self, *, booking_id: uuid.UUID, user_id: uuid.UUID | None, guest_token: str | None
@@ -177,6 +198,27 @@ class PreorderService:
         dishes = await self._dishes.get_many(dish_ids={item.dish_id for item in items})
         lines = self._lines(items, dishes)
         return CartView(items=lines, total_cents=self._total(lines))
+
+    def _parts(
+        self, items: Sequence[PreorderItem], dishes: dict[uuid.UUID, DishView]
+    ) -> list[SubmittedPartView]:
+        grouped: dict[uuid.UUID, list[PreorderItem]] = {}
+        for item in items:
+            grouped.setdefault(cast(uuid.UUID, item.submission_id), []).append(item)
+        parts = []
+        for submission_id, part_items in grouped.items():
+            lines = self._lines(part_items, dishes)
+            parts.append(
+                SubmittedPartView(
+                    id=submission_id,
+                    submitted_at=cast(datetime, part_items[0].submitted_at).astimezone(
+                        self._timezone
+                    ),
+                    items=lines,
+                    total_cents=self._total(lines),
+                )
+            )
+        return parts
 
     @staticmethod
     def _lines(
@@ -196,3 +238,7 @@ class PreorderService:
     @staticmethod
     def _total(lines: Sequence[CartLineView]) -> int:
         return sum(line.line_total_cents for line in lines)
+
+    @staticmethod
+    def _parts_total(parts: Sequence[SubmittedPartView]) -> int:
+        return sum(part.total_cents for part in parts)
