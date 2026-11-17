@@ -9,8 +9,8 @@
   "graphTooltip": 0,
   "timezone": "Asia/Tbilisi",
   "time": {
-    "from": "now-7d",
-    "to": "now+14d"
+    "from": "now-7d/d",
+    "to": "now+14d/d"
   },
   "refresh": "",
   "schemaVersion": 42,
@@ -23,7 +23,7 @@
       ],
       "asDropdown": false,
       "includeVars": true,
-      "keepTime": true,
+      "keepTime": false,
       "targetBlank": false,
       "icon": "external link",
       "tooltip": "",
@@ -279,7 +279,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "WITH visitors AS (\n  SELECT b.user_id, count(*) AS visits\n  FROM bookings b\n  JOIN dining_tables t ON t.id = b.table_id\n  WHERE $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n  GROUP BY b.user_id\n), weeks AS (\n  SELECT extract(epoch FROM $__timeTo()::timestamptz - $__timeFrom()::timestamptz) / 604800 AS in_range\n)\nSELECT count(*) FILTER (WHERE visits >= $regular_threshold * weeks.in_range) AS \"Regulars\",\n       count(*) FILTER (WHERE visits < $regular_threshold * weeks.in_range) AS \"Occasional\"\nFROM visitors, weeks"
+          "rawSql": "WITH visitors AS (\n  SELECT b.user_id, count(*) AS visits\n  FROM bookings b\n  JOIN dining_tables t ON t.id = b.table_id\n  WHERE $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n    AND t.location_id IN ($location)\n  GROUP BY b.user_id\n), weeks AS (\n  SELECT extract(epoch FROM $__timeTo()::timestamptz - $__timeFrom()::timestamptz) / 604800 AS in_range\n)\nSELECT count(*) FILTER (WHERE visits >= $regular_threshold * GREATEST(weeks.in_range, 1)) AS \"Regulars\",\n       count(*) FILTER (WHERE visits < $regular_threshold * GREATEST(weeks.in_range, 1)) AS \"Occasional\"\nFROM visitors, weeks"
         }
       ],
       "fieldConfig": {

@@ -9,8 +9,8 @@
   "graphTooltip": 0,
   "timezone": "Asia/Tbilisi",
   "time": {
-    "from": "now-7d",
-    "to": "now"
+    "from": "now-7d/d",
+    "to": "now/d"
   },
   "refresh": "",
   "schemaVersion": 42,
@@ -23,7 +23,7 @@
       ],
       "asDropdown": false,
       "includeVars": true,
-      "keepTime": true,
+      "keepTime": false,
       "targetBlank": false,
       "icon": "external link",
       "tooltip": "",

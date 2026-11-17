@@ -174,3 +174,8 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/8-public-grafana-on-dev-data.md`
   summary: Probe the public hosts after a platform deploy (a request through Caddy to each upstream); today a wrong upstream or a missing `edge` membership deploys green.
   evidence: `caddy reload` fails only on a Caddyfile that does not parse; the healthchecks run on loopback inside each container.
+
+## Settled by: 9-dashboards (2026-11-17)
+
+- The staff dashboard tells competitor rejections apart without a new column: "Requests per day" has the outcome "Lost to another request", a rejection with the table and decision time of an approval (entry from the review of 2-staff-role-and-request-decisions).
+- Dashboard JSON files are polled by a file provider, so a changed dashboard needs no restart. Still open from the review of 8-public-grafana-on-dev-data: the data source file and the provider file are read only when Grafana starts, and the platform deploy does not restart it.

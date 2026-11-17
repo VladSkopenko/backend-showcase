@@ -9,8 +9,8 @@
   "graphTooltip": 0,
   "timezone": "Asia/Tbilisi",
   "time": {
-    "from": "now-7d",
-    "to": "now+14d"
+    "from": "now-7d/d",
+    "to": "now+14d/d"
   },
   "refresh": "",
   "schemaVersion": 42,
@@ -23,7 +23,7 @@
       ],
       "asDropdown": false,
       "includeVars": true,
-      "keepTime": true,
+      "keepTime": false,
       "targetBlank": false,
       "icon": "external link",
       "tooltip": "",
@@ -85,7 +85,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT date_trunc('day', b.starts_at, 'Asia/Tbilisi') AS time,\n       count(*) FILTER (WHERE b.status = 'CONFIRMED') AS \"Confirmed\",\n       count(*) FILTER (WHERE b.status = 'CANCELLED') AS \"Cancelled\"\nFROM bookings b\nJOIN dining_tables t ON t.id = b.table_id\nWHERE $__timeFilter(b.starts_at)\n  AND b.status IN ('CONFIRMED', 'CANCELLED')\n  AND t.location_id IN ($location)\nGROUP BY 1\nORDER BY 1"
+          "rawSql": "SELECT date_trunc('day', b.starts_at, 'Asia/Tbilisi') AS time,\n       count(*) FILTER (WHERE b.status = 'CONFIRMED') AS \"Confirmed\",\n       count(*) FILTER (WHERE b.status = 'CANCELLED') AS \"Cancelled\"\nFROM bookings b\nJOIN dining_tables t ON t.id = b.table_id\nWHERE $__timeFilter(b.starts_at)\n  AND b.status IN ('CONFIRMED', 'CANCELLED')\n  AND NOT (b.status = 'CANCELLED' AND b.party_size > 4 AND b.decided_by_id IS NULL)\n  AND t.location_id IN ($location)\nGROUP BY 1\nORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -184,7 +184,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT count(*) FILTER (WHERE b.status = 'CANCELLED')::float / NULLIF(count(*), 0) AS \"Cancellation rate\"\nFROM bookings b\nJOIN dining_tables t ON t.id = b.table_id\nWHERE $__timeFilter(b.starts_at)\n  AND b.status IN ('CONFIRMED', 'CANCELLED')\n  AND t.location_id IN ($location)"
+          "rawSql": "SELECT count(*) FILTER (WHERE b.status = 'CANCELLED')::float / NULLIF(count(*), 0) AS \"Cancellation rate\"\nFROM bookings b\nJOIN dining_tables t ON t.id = b.table_id\nWHERE $__timeFilter(b.starts_at)\n  AND b.status IN ('CONFIRMED', 'CANCELLED')\n  AND NOT (b.status = 'CANCELLED' AND b.party_size > 4 AND b.decided_by_id IS NULL)\n  AND t.location_id IN ($location)"
         }
       ],
       "fieldConfig": {
@@ -237,7 +237,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "WITH bounds AS (\n  SELECT $__timeFrom()::timestamptz AS range_from, $__timeTo()::timestamptz AS range_to\n), open_days AS (\n  SELECT generate_series(date_trunc('day', range_from, 'Asia/Tbilisi'), range_to, interval '1 day') AS day\n  FROM bounds\n), open_time AS (\n  SELECT COALESCE(sum(extract(epoch FROM GREATEST(\n           LEAST(day + interval '23 hours', range_to) - GREATEST(day + interval '10 hours', range_from),\n           interval '0'\n         ))), 0) AS seconds_per_table\n  FROM open_days, bounds\n), booked AS (\n  SELECT t.location_id, sum(extract(epoch FROM b.ends_at - b.starts_at)) AS seconds\n  FROM bookings b\n  JOIN dining_tables t ON t.id = b.table_id\n  WHERE $__timeFilter(b.starts_at)\n    AND b.status = 'CONFIRMED'\n  GROUP BY t.location_id\n), seats AS (\n  SELECT location_id, count(*) AS tables\n  FROM dining_tables\n  GROUP BY location_id\n)\nSELECT l.address AS \"Location\",\n       (COALESCE(booked.seconds, 0) / NULLIF(seats.tables * open_time.seconds_per_table, 0))::float AS \"Occupancy\"\nFROM locations l\nJOIN seats ON seats.location_id = l.id\nLEFT JOIN booked ON booked.location_id = l.id\nCROSS JOIN open_time\nWHERE l.id IN ($location)\nORDER BY l.created_at"
+          "rawSql": "WITH bounds AS (\n  SELECT $__timeFrom()::timestamptz AS range_from, $__timeTo()::timestamptz AS range_to\n), open_days AS (\n  SELECT generate_series(date_trunc('day', range_from, 'Asia/Tbilisi'), range_to, interval '1 day') AS day\n  FROM bounds\n), open_time AS (\n  SELECT COALESCE(sum(extract(epoch FROM GREATEST(\n           LEAST(day + interval '23 hours', range_to) - GREATEST(day + interval '10 hours', range_from),\n           interval '0'\n         ))), 0) AS seconds_per_table\n  FROM open_days, bounds\n), booked AS (\n  SELECT t.location_id,\n         sum(extract(epoch FROM LEAST(b.ends_at, range_to) - GREATEST(b.starts_at, range_from))) AS seconds\n  FROM bookings b\n  JOIN dining_tables t ON t.id = b.table_id\n  CROSS JOIN bounds\n  WHERE b.starts_at < range_to\n    AND b.ends_at > range_from\n    AND b.status = 'CONFIRMED'\n  GROUP BY t.location_id\n), seats AS (\n  SELECT location_id, count(*) AS tables\n  FROM dining_tables\n  GROUP BY location_id\n)\nSELECT l.address AS \"Location\",\n       (COALESCE(booked.seconds, 0) / NULLIF(seats.tables * open_time.seconds_per_table, 0))::float AS \"Occupancy\"\nFROM locations l\nJOIN seats ON seats.location_id = l.id\nLEFT JOIN booked ON booked.location_id = l.id\nCROSS JOIN open_time\nWHERE l.id IN ($location)\nORDER BY l.created_at"
         }
       ],
       "fieldConfig": {
