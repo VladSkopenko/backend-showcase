@@ -80,7 +80,7 @@ confirmed by the person.
 
 ## Success signal
 
-- On dev, a verified user asks in Ukrainian what is in a dish and for a free table for four on Friday evening, applies the card, and the booking appears in their bookings; the owner of a booking sees the whole group's pre-order; dev's `refresh_tokens` count stops growing; spending stops at the daily budget.
+- On dev, a verified user asks in Ukrainian what is in a dish and for a free table for four on Friday evening, applies the card, and the booking appears in their bookings; the owner of a booking sees the whole group's pre-order; dev's `refresh_tokens` count stops growing; once the day's spend reaches the budget, new turns are refused until the next day.
 
 ## Assumptions
 

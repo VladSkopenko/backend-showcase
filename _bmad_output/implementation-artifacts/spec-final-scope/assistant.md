@@ -33,7 +33,8 @@ Fixed decisions for stories 4 and 5. Each story spec adds routes, schemas and to
 - Global for the whole system; counters in Postgres (the app stack has no Redis).
 - A daily budget of 1 USD, counted from the provider's reported token usage times per-model prices in settings; the day is the restaurant's local day.
 - At most 10 turns per minute.
-- The budget is soft. Both limits are checked before a turn starts, with no reservation; a started turn finishes, so the overshoot is at most the cost of the turns in flight, each bounded by the per-turn caps and a `max_tokens` per model call in settings. The hard ceiling is the limit Vlad sets in the OpenAI dashboard.
+- The budget is soft. Both limits are checked before a turn starts, with no reservation; a started turn finishes, so the overshoot is at most the cost of the turns in flight, each bounded by the per-turn caps and a `max_tokens` per model call in settings. Story 4 states the worst-case overshoot in dollars from those caps, the history window, `max_tokens` and the prices in settings.
+- The OpenAI dashboard has no daily limit, only a monthly hard spend limit per organization or project, active with "Enforce a hard limit"; its enforcement lags, so recorded spend can slightly exceed it ([spend limits](https://developers.openai.com/api/docs/guides/spend-limits)). It is the monthly backstop, not the daily budget.
 - Usage is recorded after every model call, so a turn that dies midway still counts what it spent.
 - Exhausted: `429` with an error code and the reset time, before any stream starts.
 
