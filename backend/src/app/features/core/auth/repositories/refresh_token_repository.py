@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from typing import Any, cast
 
-from sqlalchemy import select, update
+from sqlalchemy import CursorResult, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.core.auth.models import RefreshToken
@@ -36,3 +37,11 @@ class RefreshTokenRepository:
             )
             .values(revoked_at=now)
         )
+
+    async def delete_expired(self, *, now: datetime) -> int:
+        result = await self._session.execute(
+            delete(RefreshToken)
+            .where(RefreshToken.expires_at <= now)
+            .execution_options(synchronize_session=False)
+        )
+        return cast(CursorResult[Any], result).rowcount

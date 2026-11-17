@@ -41,7 +41,7 @@ from app.features.invites.endpoints import router as invites_router
 from app.features.preorder.endpoints import ERROR_STATUSES as PREORDER_ERROR_STATUSES
 from app.features.preorder.endpoints import PreorderOpenApiTags
 from app.features.preorder.endpoints import router as preorder_router
-from app.infrastructure.background_tasks import PeriodicTask, RequestExpiryJob
+from app.infrastructure.background_tasks import CleanupJob, PeriodicTask, RequestExpiryJob
 from app.infrastructure.email import create_email_sender
 from app.infrastructure.oauth import OAuthClients
 
@@ -70,10 +70,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             ),
         ).run,
     )
+    cleanup = PeriodicTask(
+        name="cleanup",
+        interval_seconds=settings.cleanup.interval_seconds,
+        job=CleanupJob(get_sessionmaker()).run,
+    )
     request_expiry.start()
+    cleanup.start()
     try:
         yield
     finally:
+        await cleanup.stop()
         await request_expiry.stop()
         await get_engine().dispose()
 

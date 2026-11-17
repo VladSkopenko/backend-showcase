@@ -1,8 +1,10 @@
 import uuid
 from datetime import datetime
+from typing import Any, cast
 
-from sqlalchemy import select, update
+from sqlalchemy import CursorResult, delete, exists, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.features.core.auth.enums import VerificationPurpose
 from app.features.core.auth.models import VerificationCode
@@ -48,3 +50,21 @@ class VerificationCodeRepository:
             .where(VerificationCode.id == code_id)
             .values(attempts=VerificationCode.attempts + 1)
         )
+
+    async def delete_superseded(self, *, now: datetime, created_at_or_before: datetime) -> int:
+        # The newest code of a user and purpose always stays: verify reads only that one.
+        newer = aliased(VerificationCode)
+        result = await self._session.execute(
+            delete(VerificationCode)
+            .where(
+                VerificationCode.expires_at <= now,
+                VerificationCode.created_at <= created_at_or_before,
+                exists().where(
+                    newer.user_id == VerificationCode.user_id,
+                    newer.purpose == VerificationCode.purpose,
+                    newer.created_at > VerificationCode.created_at,
+                ),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        return cast(CursorResult[Any], result).rowcount
