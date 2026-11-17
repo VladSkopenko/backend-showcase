@@ -23,6 +23,7 @@ Running it again without arguments is safe: existing secrets, including `N8N_ENC
 | `N8N_ENCRYPTION_KEY` | secret | Generated. Never rotate it: n8n's saved credentials become unreadable. |
 | `N8N_OWNER_EMAIL` | secret | Entered. |
 | `N8N_OWNER_PASSWORD_HASH` | secret | bcrypt of the entered password. |
+| `GRAFANA_DB_PASSWORD` | secret | Generated. Password of `grafana_reader`, the read-only role on the dev database. The script prints its SCRAM verifier, which goes into the migration that creates the role; setting it again after that migration is merged needs a new migration with the new verifier. |
 | `PLATFORM_HOST` | variable | `backend-showcase-platform.<tailnet>.ts.net`, derived from `DEPLOY_HOST`. |
 
 ## Adding a service

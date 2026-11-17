@@ -159,3 +159,9 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/6-guest-simulator-v2.md`
   summary: The plan check runs only by hand; a CI job for `n8n/**` running `npm test` in `n8n/` would catch drift between the workflow and patterns.md.
   evidence: CI is Vlad's infrastructure.
+
+## Deferred from: review of 8-public-grafana-on-dev-data (2026-11-17)
+
+- source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/8-public-grafana-on-dev-data.md`
+  summary: Migrations run without a `lock_timeout`, so an `ALTER TABLE` waits behind any long reader and API requests to that table queue behind it; set one in `migrations/env.py` so a blocked deploy fails fast instead of stalling.
+  evidence: No `lock_timeout` in `backend/migrations/env.py` or `deploy/app/deploy.sh`. On a throwaway PostgreSQL 18 an `ALTER TABLE users` behind a `grafana_reader` query that had lifted its `statement_timeout` waited until `lock_timeout` cancelled it. The public Grafana role makes such a reader available to anyone on dev (ADR 19).
