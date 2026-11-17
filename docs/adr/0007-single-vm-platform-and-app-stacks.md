@@ -4,7 +4,8 @@ Date: 2026-10-28
 
 ## Status
 
-Accepted
+Accepted. Amended by [ADR 19](0019-public-grafana-reads-dev.md): Grafana reads dev, not
+production, and every environment's PostgreSQL joins an analytics network of its own.
 
 ## Context
 
