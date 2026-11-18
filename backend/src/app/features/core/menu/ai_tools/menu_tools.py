@@ -1,11 +1,10 @@
 import uuid
-from decimal import Decimal
 from typing import Any
 
 from langchain_core.tools import BaseTool, StructuredTool
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.ai_tools import AiToolContext, invalid_arguments, tool_result
+from app.common.ai_tools import AiToolContext, invalid_arguments, tool_result, usd
 from app.features.core.menu.ai_tools.arguments import GetDishArguments, ListMenuArguments
 from app.features.core.menu.dto import DishView
 from app.features.core.menu.enums import DishCategory, DishSort
@@ -27,7 +26,8 @@ class MenuTools:
                     "Lists the restaurant's menu, the most popular dishes first, sold-out ones "
                     "included: name, category, price in USD, availability, weight, calories and "
                     "preparation time per dish. Filter by category or omit it for the whole menu. "
-                    "At most 50 dishes are listed; `total` counts every dish that matches."
+                    f"At most {self.LIST_LIMIT} dishes are listed; `total` counts every dish "
+                    "that matches."
                 ),
                 args_schema=ListMenuArguments,
                 handle_validation_error=invalid_arguments,
@@ -76,7 +76,7 @@ class MenuTools:
             "id": str(dish.id),
             "name": dish.name,
             "category": dish.category.value,
-            "price": f"{Decimal(dish.price_cents).scaleb(-2):f}",
+            "price": usd(dish.price_cents),
             "is_available": dish.is_available,
             "weight_grams": dish.weight_grams,
             "calories": dish.calories,

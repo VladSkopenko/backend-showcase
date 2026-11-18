@@ -2,7 +2,8 @@
 title: 'Assistant: read tools and languages'
 type: 'feature'
 created: '2026-11-18'
-status: 'draft'
+status: 'done'
+baseline_commit: 'f83ef7775b3371dd73f1eeb7125f5600ce4325fa'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -59,9 +60,9 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `backend/tests/test_assistant_tools.py` -- one test per matrix row, written first and failing -- contract.
-- [ ] Context fields, the three `ai_tools` packages, the toolkit and prompt builders -- behaviour.
-- [ ] `docs/roadmap.md`, `README.md`, `README.uk.md` -- record.
+- [x] `backend/tests/test_assistant_tools.py` -- one test per matrix row, written first and failing -- contract.
+- [x] Context fields, the three `ai_tools` packages, the toolkit and prompt builders -- behaviour.
+- [x] `docs/roadmap.md`, `README.md`, `README.uk.md` -- record.
 
 **Acceptance Criteria:**
 - Given the full suite, when `uv run pytest` runs, then all pass, and ruff, mypy and `lint-imports` are clean.
@@ -69,12 +70,29 @@ context:
 
 ## Implementation Notes
 
+- 2026-11-18: implemented by a subagent; four tools in three `ai_tools` packages (locations, bookings, pre-order), `AiToolContext` with `booking` and `max_item_quantity`, prompt facts from `BookingSettings` with the language rule first and the guest's name and the date and time last (stable prefix). After the review patches: 852 tests, ruff, format check, mypy (342 files), 11 import contracts clean.
+- 2026-11-18, live, parent session: local `app` migrated 0022 -> 0023, API on port 8010 with Vlad's key. A verified `live4d-…@example.com` (Taras) booked Table 1 at 48 Rustaveli Avenue for two on Friday 2026-11-20 at 19:00 and put two Chicken Chkmeruli and two Spinach & Feta Khachapuri in the cart ($78) through the routes. Nine questions in English, Ukrainian and Russian (locations, a table for four on Friday at 19:00, my bookings and cart) each answered in the question's language, every stream ended with `done`, two `thinking` for one lookup and three for two; the facts match the routes and the database: 10, 16 and 20 tables, the Vake district from the location description, free tables for four at all three locations (20 tables), the booking and the cart with the $78 total. A second user asking for that booking's pre-order by id was told no such booking exists. After the read-only prompt rule, the Russian follow-up "Да, забронируй" was declined with a pointer to the booking page.
+
 ## Spec Change Log
 
 ## Review Triage Log
 
 | Finding | Verdict | Evidence | Route |
 |---|---|---|---|
+| Code review follow-up: grouped by location after ranges still measured 7.7k of 8000 (parent) | medium | one booked start per table adds a range | patch: tables grouped under their location; 4879 free day, 5359 with a booking on every table, both pinned |
+| Live check: the assistant offered to book a table it cannot book | medium | Russian answer "Хотите, я помогу забронировать столик?" with no write tools | patch: a read-only rule in the prompt; after it, the same question points to the booking page and "book it" is declined |
+| Code review: `find_tables` overflows the tool result cap on real data and loses `total` (edge-case, blind) | high | 32 tables fit a party of 2 in the local `app` (read-only count); ~12k characters against 8000 | patch: `total` first, free starts as ranges, a 32-table test |
+| Code review: no instant or request mark per table (blind) | medium | the model cannot say which applies | patch: `by_request` |
+| Code review: upcoming bookings uncapped (edge-case, blind) | medium | same overflow on a busy account | patch: cap 10 |
+| Code review: upcoming tie order differs from the past block (edge-case) | low | equal `starts_at` only | rejected |
+| Code review: `get_my_preorder` drops the submitted total and the open flag (edge-case, blind) | low | already computed by the services | patch |
+| Code review: the prompt misses the request lead time and the same-day edit rule (blind) | medium | `check_requestable_start`, `check_same_day` | patch |
+| Code review: descriptions hard-code 50 and 10 (blind) | low | constants exist | patch |
+| Code review: the date and time sit before the static prompt, defeating the prefix cache (blind) | low | the prefix changes every minute | patch: date and time last |
+| Code review: `location_id`, unknown location, in-progress booking and swapped prompt values untested (verification-gap, blind) | medium | no test exercises them | patch: tests |
+| Code review: roadmap and README ticked before the acceptance is recorded (blind) | false | they ship with the merge, after the live check | rejected |
+| Code review: the frontend task doc still says the second `thinking` is a menu lookup (blind) | low | doc line 70 | patch: by the parent |
+| Code review: unrelated working-tree edits (blind) | false | the 4c dev note and the doc rule go in a separate docs commit; the deferred-work entry is not this session's and stays out | none |
 | Spec review: `list_my_bookings` shaping looks like a copied rule; "upcoming" undefined | low | `booking_repository.py:74-86` orders `starts_at desc` | patch: `ends_at > now`, shaping allowed |
 | Spec review: `find_tables` does not say `limit`, `offset` | medium | `table_search_service.py:28-37` | patch |
 | Spec review: tool context fields unnamed; the preorder tool needs five | medium | `preorder/endpoints/dependencies.py:16-28` | patch: fields named |

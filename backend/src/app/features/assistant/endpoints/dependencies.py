@@ -65,6 +65,8 @@ def get_assistant_turn_service(
         user_id=user.id,
         sessionmaker=database.get_sessionmaker(),
         public_base_url=settings.media.public_base_url,
+        booking=settings.booking,
+        max_item_quantity=settings.preorder.max_item_quantity,
     )
     return AssistantTurnService(
         context.sessionmaker,
@@ -76,7 +78,7 @@ def get_assistant_turn_service(
             output_per_million_usd=settings.openai.output_price_per_million_usd,
         ),
         tools=ToolkitBuilder(context).build(),
-        prompts=SystemPromptBuilder(timezone=settings.booking.timezone),
+        prompts=SystemPromptBuilder(booking=settings.booking),
         user_id=user.id,
         first_name=user.first_name,
         history_messages=settings.assistant.history_messages,
