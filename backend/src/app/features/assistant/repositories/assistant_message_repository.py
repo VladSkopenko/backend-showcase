@@ -1,9 +1,11 @@
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.features.assistant.enums import AssistantMessageRole
 from app.features.assistant.models import AssistantMessage
 
 
@@ -33,3 +35,17 @@ class AssistantMessageRepository:
             .limit(limit)
         )
         return list(reversed(latest_first.all()))
+
+    async def list_latest_user_message_times_since(
+        self, *, since: datetime, limit: int
+    ) -> list[datetime]:
+        latest_first = await self._session.scalars(
+            select(AssistantMessage.created_at)
+            .where(
+                AssistantMessage.role == AssistantMessageRole.USER,
+                AssistantMessage.created_at > since,
+            )
+            .order_by(AssistantMessage.created_at.desc())
+            .limit(limit)
+        )
+        return list(latest_first)

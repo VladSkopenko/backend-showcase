@@ -3,7 +3,9 @@ import logging
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Sequence
 from contextlib import asynccontextmanager
+from decimal import Decimal
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
@@ -17,13 +19,14 @@ from langchain_core.messages import (
     ToolMessage,
     message_chunk_to_message,
 )
+from langchain_core.messages.ai import UsageMetadata
 from langchain_core.tools import BaseTool
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.common import clock
 from app.common.ai_tools import AiToolErrors, cut_tool_result, tool_error
 from app.common.errors import DomainError
-from app.features.assistant.dto import AssistantEvent
+from app.features.assistant.dto import AssistantEvent, ModelPrices
 from app.features.assistant.enums import AssistantMessageRole
 from app.features.assistant.models import AssistantMessage
 from app.features.assistant.repositories import (
@@ -37,6 +40,7 @@ from app.features.assistant.services.exceptions import (
     AssistantTurnTimeoutError,
 )
 from app.features.assistant.services.system_prompt_builder import SystemPromptBuilder
+from app.features.assistant.services.usage_ledger import UsageLedger
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +48,8 @@ logger = logging.getLogger(__name__)
 class AssistantTurnService:
     """One turn: `start()` stores the question in a short transaction, `stream()` answers it.
 
-    No transaction is open during a model call: tools open their own per call, and the answer
-    is stored in one more at the end.
+    No transaction is open during a model call: tools open their own per call, the usage of
+    every call is recorded in its own, and the answer is stored in one more at the end.
     """
 
     TIMEOUT_CODE = "ASSISTANT_TIMEOUT"
@@ -62,6 +66,8 @@ class AssistantTurnService:
         sessionmaker: async_sessionmaker[AsyncSession],
         *,
         model: BaseChatModel,
+        model_name: str,
+        prices: ModelPrices,
         tools: Sequence[BaseTool],
         prompts: SystemPromptBuilder,
         user_id: uuid.UUID,
@@ -71,9 +77,14 @@ class AssistantTurnService:
         max_tool_calls: int,
         turn_timeout_seconds: int,
         tool_result_max_chars: int,
+        timezone: ZoneInfo,
+        daily_budget_usd: Decimal,
+        turns_per_minute: int,
     ) -> None:
         self._sessionmaker = sessionmaker
         self._model = model.bind_tools(tools)
+        self._model_name = model_name
+        self._prices = prices
         self._tools = {tool.name: tool for tool in tools}
         self._prompts = prompts
         self._user_id = user_id
@@ -83,6 +94,9 @@ class AssistantTurnService:
         self._max_tool_calls = max_tool_calls
         self._turn_timeout_seconds = turn_timeout_seconds
         self._tool_result_max_chars = tool_result_max_chars
+        self._timezone = timezone
+        self._daily_budget_usd = daily_budget_usd
+        self._turns_per_minute = turns_per_minute
         self._session_id: uuid.UUID | None = None
         self._messages: list[BaseMessage] = []
         self._deadline = 0.0
@@ -95,6 +109,7 @@ class AssistantTurnService:
             )
             if chat_session is None:
                 raise AssistantSessionNotFoundError()
+            await self._ledger(session).check(now=now)
             messages = AssistantMessageRepository(session)
             await messages.add(
                 message=AssistantMessage(
@@ -153,6 +168,8 @@ class AssistantTurnService:
                 if chunk.text:
                     sent.append(str(chunk.text))
                     yield AssistantEvent.chunk(str(chunk.text))
+            if reply.usage_metadata is not None:
+                await self._record(reply.usage_metadata)
             if not reply.tool_calls and not reply.invalid_tool_calls:
                 answered = True
                 break
@@ -183,6 +200,7 @@ class AssistantTurnService:
             content=chunk.content,
             tool_calls=chunk.tool_calls,
             invalid_tool_calls=chunk.invalid_tool_calls,
+            usage_metadata=chunk.usage_metadata,
         )
 
     async def _run_tool(self, call: ToolCall) -> ToolMessage:
@@ -219,6 +237,19 @@ class AssistantTurnService:
             if timeout.expired():
                 raise AssistantTurnTimeoutError() from None
             raise
+
+    async def _record(self, usage: UsageMetadata) -> None:
+        async with self._transaction() as session:
+            await self._ledger(session).record(usage=usage, model=self._model_name)
+
+    def _ledger(self, session: AsyncSession) -> UsageLedger:
+        return UsageLedger(
+            session,
+            prices=self._prices,
+            timezone=self._timezone,
+            daily_budget_usd=self._daily_budget_usd,
+            turns_per_minute=self._turns_per_minute,
+        )
 
     async def _finish(self, text: str) -> AssistantEvent:
         if self._session_id is None:

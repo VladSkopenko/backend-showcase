@@ -7,6 +7,7 @@ from typing import Any, cast
 from langchain_core.callbacks import AsyncCallbackManagerForLLMRun, CallbackManagerForLLMRun
 from langchain_core.language_models import BaseChatModel, LanguageModelInput
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
+from langchain_core.messages.ai import InputTokenDetails, UsageMetadata
 from langchain_core.messages.tool import tool_call_chunk
 from langchain_core.outputs import ChatGenerationChunk, ChatResult
 from langchain_core.runnables import Runnable
@@ -42,7 +43,17 @@ class Act:
     action: Callable[[], None]
 
 
-Step = Text | Call | Raise | Wait | Act
+@dataclass(frozen=True)
+class Usage:
+    """The provider's reported usage, sent as one empty chunk the way langchain-openai does."""
+
+    input_tokens: int
+    # None leaves input_token_details out, as langchain-openai does when nothing was cached.
+    cached_input_tokens: int | None
+    output_tokens: int
+
+
+Step = Text | Call | Raise | Wait | Act | Usage
 Script = Sequence[Step]
 
 
@@ -51,7 +62,7 @@ class ScriptExhaustedError(Exception):
 
 
 class FakeChatModel(BaseChatModel):
-    """Plays one script per model call: text chunks, tool-call chunks, a failure or a stall."""
+    """Plays one script per model call: text, tool calls, usage, a failure or a stall."""
 
     scripts: Sequence[Script]
     received: list[list[BaseMessage]] = Field(default_factory=list)
@@ -109,4 +120,17 @@ class FakeChatModel(BaseChatModel):
                     await asyncio.sleep(seconds)
                 case Act(action):
                     action()
+                case Usage(input_tokens, cached_input_tokens, output_tokens):
+                    usage = UsageMetadata(
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        total_tokens=input_tokens + output_tokens,
+                    )
+                    if cached_input_tokens is not None:
+                        usage["input_token_details"] = InputTokenDetails(
+                            cache_read=cached_input_tokens
+                        )
+                    yield ChatGenerationChunk(
+                        message=AIMessageChunk(content="", usage_metadata=usage)
+                    )
         yield ChatGenerationChunk(message=AIMessageChunk(content=""))

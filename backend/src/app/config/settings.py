@@ -1,4 +1,5 @@
 from datetime import time
+from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -181,9 +182,14 @@ class OpenAISettings(BaseSettings):
 
     # Empty means the assistant routes are unavailable; the rest of the API runs.
     api_key: SecretStr = SecretStr("")
-    model: str = Field(default="gpt-4.1-mini", min_length=1)
+    # assistant_model_calls.model is String(100).
+    model: str = Field(default="gpt-4.1-mini", min_length=1, max_length=100)
     max_output_tokens: int = Field(default=1024, gt=0)
     request_timeout_seconds: int = Field(default=60, gt=0)
+    # USD per million tokens of OPENAI_MODEL; the assistant's daily budget counts usage with them.
+    input_price_per_million_usd: Decimal = Field(default=Decimal("0.40"), ge=0)
+    cached_input_price_per_million_usd: Decimal = Field(default=Decimal("0.10"), ge=0)
+    output_price_per_million_usd: Decimal = Field(default=Decimal("1.60"), ge=0)
 
     @property
     def is_configured(self) -> bool:
@@ -203,6 +209,10 @@ class AssistantSettings(BaseSettings):
     turn_timeout_seconds: int = Field(default=240, gt=0)
     # A longer tool result is cut before it reaches the model.
     tool_result_max_chars: int = Field(default=8000, gt=0)
+    # Global limits, checked before a turn starts: a soft daily spend in the restaurant's local
+    # day (a running turn finishes) and the user messages of the last minute.
+    daily_budget_usd: Decimal = Field(default=Decimal("1.0"), gt=0)
+    turns_per_minute: int = Field(default=10, gt=0)
 
 
 class Settings(BaseSettings):

@@ -9,6 +9,7 @@ from app.common import database
 from app.common.ai_tools import AiToolContext
 from app.common.database import get_session
 from app.config.settings import Settings, get_settings
+from app.features.assistant.dto import ModelPrices
 from app.features.assistant.services.assistant_session_service import AssistantSessionService
 from app.features.assistant.services.assistant_turn_service import AssistantTurnService
 from app.features.assistant.services.exceptions import AssistantUnavailableError
@@ -68,6 +69,12 @@ def get_assistant_turn_service(
     return AssistantTurnService(
         context.sessionmaker,
         model=model,
+        model_name=settings.openai.model,
+        prices=ModelPrices(
+            input_per_million_usd=settings.openai.input_price_per_million_usd,
+            cached_input_per_million_usd=settings.openai.cached_input_price_per_million_usd,
+            output_per_million_usd=settings.openai.output_price_per_million_usd,
+        ),
         tools=ToolkitBuilder(context).build(),
         prompts=SystemPromptBuilder(timezone=settings.booking.timezone),
         user_id=user.id,
@@ -77,6 +84,9 @@ def get_assistant_turn_service(
         max_tool_calls=settings.assistant.max_tool_calls,
         turn_timeout_seconds=settings.assistant.turn_timeout_seconds,
         tool_result_max_chars=settings.assistant.tool_result_max_chars,
+        timezone=settings.booking.timezone,
+        daily_budget_usd=settings.assistant.daily_budget_usd,
+        turns_per_minute=settings.assistant.turns_per_minute,
     )
 
 

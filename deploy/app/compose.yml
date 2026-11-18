@@ -52,6 +52,8 @@ services:
       # Public base URL of the environment's media bucket; a plain GitHub Environment variable, not a secret.
       # The API refuses to start without it. No write keys here: only the local seed uploads pictures.
       MEDIA_PUBLIC_BASE_URL: ${MEDIA_PUBLIC_BASE_URL:?MEDIA_PUBLIC_BASE_URL comes from the GitHub Environment}
+      # The assistant's OpenAI key from the GitHub Environment. Left empty, /api/v1/assistant/* answers 503.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy

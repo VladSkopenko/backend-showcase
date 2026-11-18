@@ -15,6 +15,22 @@ class AssistantSessionNotFoundError(DomainError):
         super().__init__("No chat with this id exists.")
 
 
+class AssistantBusyError(DomainError):
+    code = "ASSISTANT_BUSY"
+
+    def __init__(self, retry_after: int) -> None:
+        super().__init__("The assistant is busy. Try again shortly.")
+        self.retry_after = retry_after
+
+
+class AssistantBudgetExhaustedError(DomainError):
+    code = "ASSISTANT_BUDGET_EXHAUSTED"
+
+    def __init__(self, retry_after: int) -> None:
+        super().__init__("The assistant has reached its limit for today. Try again tomorrow.")
+        self.retry_after = retry_after
+
+
 # Raised inside a running stream, where no HTTP status applies: the turn service turns them into
 # `error` events and owns their codes.
 class AssistantTurnTimeoutError(Exception):
