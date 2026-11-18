@@ -1,5 +1,6 @@
 """What every feature's ai_tools package shares; imports nothing from features (ADR 20)."""
 
+import dataclasses
 import json
 import uuid
 from collections.abc import AsyncIterator, Mapping
@@ -52,10 +53,11 @@ class ProposalSink:
     def is_full(self) -> bool:
         return self.proposal is not None
 
-    def hold(self, proposal: Proposal) -> None:
+    def propose(self, *, kind: str, payload: dict[str, Any], card: Card) -> str:
         if self.proposal is not None:
             raise RuntimeError("A turn holds one proposal")
-        self.proposal = proposal
+        self.proposal = Proposal(kind=kind, payload=payload, card=card)
+        return tool_result({"status": "awaiting_confirmation", "card": dataclasses.asdict(card)})
 
 
 @dataclass(frozen=True)

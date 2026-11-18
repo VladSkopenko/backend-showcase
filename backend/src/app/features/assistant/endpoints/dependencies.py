@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common import database
 from app.common.ai_tools import AiToolContext, ProposalSink
 from app.common.database import get_session
-from app.config.settings import Settings, get_settings
+from app.config.settings import OpenAISettings, Settings, get_settings
 from app.features.assistant.dto import ModelPrices
 from app.features.assistant.services.assistant_action_service import AssistantActionService
 from app.features.assistant.services.assistant_apply_service import AssistantApplyService
@@ -66,16 +66,26 @@ def get_model_call_runner(settings: SettingsDep) -> ModelCallRunner:
     )
 
 
-def get_chat_model(settings: SettingsDep) -> BaseChatModel:
+def build_chat_model(openai: OpenAISettings) -> ChatOpenAI | None:
+    # Built once per process; langchain-openai shares one cached httpx pool across instances.
+    if not openai.is_configured:
+        return None
     return ChatOpenAI(
-        model=settings.openai.model,
-        api_key=settings.openai.api_key,
-        max_completion_tokens=settings.openai.max_output_tokens,
-        timeout=settings.openai.request_timeout_seconds,
+        model=openai.model,
+        api_key=openai.api_key,
+        max_completion_tokens=openai.max_output_tokens,
+        timeout=openai.request_timeout_seconds,
         max_retries=1,
         stream_usage=True,
         use_responses_api=False,
     )
+
+
+def get_chat_model(request: Request) -> BaseChatModel:
+    model: ChatOpenAI | None = request.app.state.chat_model
+    if model is None:
+        raise AssistantUnavailableError()
+    return model
 
 
 VerifiedUserDep = Annotated[UserResponse, Depends(get_verified_user)]

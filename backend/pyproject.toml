@@ -149,7 +149,8 @@ source_modules = ["app.common", "app.features.core"]
 forbidden_modules = ["app.features.*"]
 
 [[tool.importlinter.contracts]]
-# Bookings imports notifications one way (ADR 18); the reverse would make a core cycle.
+# Bookings hands the decision emails their notices one way (ADR 21); the reverse would make a core
+# cycle.
 name = "Notifications import nothing from bookings"
 type = "forbidden"
 source_modules = ["app.features.core.notifications"]
@@ -193,7 +194,6 @@ allowed_importers = [
 dev = [
     "boto3>=1.43.126",
     "boto3-stubs[s3]>=1.43.126",
-    "httpx2>=2.16.0",
     "import-linter>=2.15",
     "mypy>=2.4.1",
     "pytest>=9.2.0",

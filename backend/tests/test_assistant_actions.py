@@ -48,7 +48,7 @@ QUESTION = "Book the table for four tomorrow at 19:00, please."
 ANSWER = "Here is the booking for you to confirm."
 COMMENT = "It is booked, see you tomorrow."
 TTL = timedelta(hours=24)
-DONE_FIXED = "Done: it is in your reservations."
+DONE_FIXED = "Done."
 CARD_KEYS = {"id", "kind", "status", "card", "created_at", "expires_at", "result", "error"}
 
 

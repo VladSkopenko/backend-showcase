@@ -54,8 +54,9 @@ simulator to dev.
   password hash and plain insert as `0011`. Each has a distinct first and last name, a fixed mix of
   Georgian and international common names, not taken from any known person. Bots 1 to 4 keep
   their `Booking Bot N` names. No column marks a bot or its persona: the simulator decides which
-  bots are regulars. The downgrade deletes exactly the 36 added emails, and their bookings,
-  booking participations and notifications go with them through `ON DELETE CASCADE`.
+  bots are regulars. The downgrade deletes exactly the 36 added emails, and their bookings and
+  booking participations go with them through `ON DELETE CASCADE` (the notifications that went
+  too until ADR 21 removed them).
 - **A staff bot for staff decisions.** Migration `0018` inserts one verified staff user,
   `waiter-bot@example.com` (`is_staff` true), with the same password hash as the booking bots,
   when `APP_ENVIRONMENT` is `dev` or `local`; staging and prod never get it, and there its upgrade

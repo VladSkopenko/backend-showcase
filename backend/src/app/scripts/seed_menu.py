@@ -17,15 +17,18 @@ async def seed(directory: Path) -> None:
     try:
         async with get_sessionmaker()() as session:
             count = await DishSeedService(session, storage).run(directory=directory)
-            await session.commit()
     except MenuSeedFileError as error:
         raise SystemExit(error.message) from None
     finally:
         await get_engine().dispose()
-    print(f"Uploaded {count} pictures; {count} dishes in the file upserted.")
+    print(f"Uploaded {count} dish pictures.")
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        raise SystemExit("usage: python -m app.scripts.seed_menu <dir>")
+        raise SystemExit(
+            "usage: python -m app.scripts.seed_menu <dir>\n"
+            "<dir> holds one picture per dish, named after the file name of the dish's image key "
+            "(<slug>.jpg)."
+        )
     asyncio.run(seed(Path(sys.argv[1])))

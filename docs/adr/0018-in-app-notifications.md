@@ -4,6 +4,9 @@ Date: 2026-11-13
 
 ## Status
 
+Superseded by [ADR 21](0021-decisions-by-email-only.md) on 2026-11-18: decisions reach guests by
+email only; the in-app list and its table are removed.
+
 Accepted. Amended 2026-11-13: the automatic rejection of stale requests (ADR 13) notifies like a
 staff rejection; notices are built in one place and the email sender is built without HTTP.
 

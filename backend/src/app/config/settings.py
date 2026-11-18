@@ -19,10 +19,8 @@ Environment = Literal["local", "dev", "staging", "prod"]
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="APP_", env_file=ENV_FILE, extra="ignore")
 
-    name: str = "backend-showcase"
     environment: Environment = "local"
     frontend_url: str = "https://family-rest.vercel.app"
-    backend_url: str = "https://backend-showcase-dev.duckdns.org"
 
 
 class DatabaseSettings(BaseSettings):
@@ -165,7 +163,7 @@ class NotificationSettings(BaseSettings):
         env_prefix="NOTIFICATIONS_", env_file=ENV_FILE, extra="ignore"
     )
 
-    # Bots and test accounts live there; their in-app notifications are still stored.
+    # Addresses there get no decision email; the bots and test accounts live there.
     skip_email_domains: list[str] = ["example.com"]
 
 

@@ -1,4 +1,3 @@
-import hashlib
 import secrets
 import uuid
 from datetime import timedelta
@@ -6,6 +5,7 @@ from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common import clock
+from app.common.hashing import sha256_hex
 from app.config.settings import BookingSettings
 from app.features.core.auth.services.exceptions import NotAuthenticatedError
 from app.features.core.bookings.dto import (
@@ -213,7 +213,7 @@ class ParticipantService:
     async def _find_guest(self, *, guest_token: str | None) -> Guest | None:
         if guest_token is None:
             return None
-        guest = await self._guests.get_by_token_hash(token_hash=self._hash_token(guest_token))
+        guest = await self._guests.get_by_token_hash(token_hash=sha256_hex(guest_token))
         if guest is None or guest.expires_at <= clock.now():
             return None
         return guest
@@ -226,9 +226,6 @@ class ParticipantService:
             guest.expires_at = expires_at
             return guest, guest_token
         token = secrets.token_urlsafe(32)
-        guest = Guest(name=name, token_hash=self._hash_token(token), expires_at=expires_at)
+        guest = Guest(name=name, token_hash=sha256_hex(token), expires_at=expires_at)
         await self._guests.add(guest=guest)
         return guest, token
-
-    def _hash_token(self, token: str) -> str:
-        return hashlib.sha256(token.encode()).hexdigest()

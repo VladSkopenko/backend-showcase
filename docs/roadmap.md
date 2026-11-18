@@ -9,7 +9,7 @@ product, the target stack and the phases. Ticked items are done and verified.
 
 A restaurant app that ends at the pre-order. Guests register, browse the menu, book tables, invite
 friends to the booking, pre-order food for the visit and ask an AI assistant. The restaurant
-decides large-party requests, sends notifications and shows its numbers in a public Grafana.
+decides large-party requests, emails its decisions and shows its numbers in a public Grafana.
 
 | Feature | What makes it interesting |
 |---|---|
@@ -19,7 +19,7 @@ decides large-party requests, sends notifications and shows its numbers in a pub
 | Invites | friends join a booking through a link, also without an account |
 | Pre-order | every participant keeps their own cart and submits it in parts; the owner sees the whole group |
 | Large-party requests | 5 to 8 people send a request that does not hold the table; staff approve or reject, and a request still pending 2 hours before the start is rejected automatically |
-| Notifications | in-app notifications and emails for request decisions |
+| Decision emails | an email to every participant with an account when staff or the automatic rejection decide a request |
 | AI assistant | a chat on the website with streamed answers, tools over the guest's data and the menu, and changes only after the person confirms a card; one daily budget for the whole system |
 | Analytics | a public Grafana reads the dev database: bookings by hour, top dishes, average check, visitors, staff reaction time |
 | Frontend | menu, booking, invites, pre-order and the assistant chat; a separate Next.js repository that reaches this API through its own server-side proxy |
@@ -142,7 +142,7 @@ Each feature starts from its own BMAD spec.
 - [x] Invites: friends join a booking through a link, also without an account
 - [x] Pre-order: every participant's own cart, submitted in parts
 - [x] Large-party requests decided by staff, rejected automatically 2 hours before the start
-- [x] In-app notifications and decision emails
+- [x] Decision emails (the in-app notifications were removed later, ADR 21)
 - [x] n8n simulator on dev: guest bots book, pre-order, cancel and send requests; a waiter bot decides them
 - [x] Business dashboards in a public Grafana on dev data
 - [x] Group pre-order: the booking owner sees every participant's submitted parts

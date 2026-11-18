@@ -100,11 +100,10 @@ async def test_health_reports_unavailable_when_the_ping_exceeds_the_timeout(
     assert [record for record in caplog.records if record.levelno >= logging.ERROR] == []
 
 
-async def test_root_says_service_works(client: httpx2.AsyncClient) -> None:
+async def test_there_is_no_root_route(client: httpx2.AsyncClient) -> None:
     response = await client.get("/")
 
-    assert response.status_code == 200
-    assert response.json() == {"message": "backend-showcase works"}
+    assert response.status_code == 404
 
 
 async def test_openapi_lists_health_schema(client: httpx2.AsyncClient) -> None:

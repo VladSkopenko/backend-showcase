@@ -117,8 +117,11 @@ class BookingSchedule:
         if starts_at <= self.auto_reject_starts_by(now=now):
             raise RequestExpiredError()
 
+    def is_requestable_start(self, *, starts_at: datetime, now: datetime) -> bool:
+        return starts_at > self.auto_reject_starts_by(now=now)
+
     def check_requestable_start(self, *, starts_at: datetime, now: datetime) -> None:
-        if starts_at <= self.auto_reject_starts_by(now=now):
+        if not self.is_requestable_start(starts_at=starts_at, now=now):
             raise RequestTooLateError()
 
     def auto_reject_starts_by(self, *, now: datetime) -> datetime:

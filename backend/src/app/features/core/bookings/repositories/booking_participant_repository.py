@@ -68,14 +68,3 @@ class BookingParticipantRepository:
             )
         )
         return [(booking_id, user) for booking_id, user in rows]
-
-    async def lock_account_holders(self, *, booking_ids: Collection[uuid.UUID]) -> None:
-        holders = select(BookingParticipant.user_id).where(
-            BookingParticipant.booking_id.in_(booking_ids)
-        )
-        await self._session.execute(
-            select(User.id)
-            .where(User.id.in_(holders))
-            .order_by(User.id)
-            .with_for_update(read=True, key_share=True)
-        )

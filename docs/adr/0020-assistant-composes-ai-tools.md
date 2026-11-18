@@ -50,9 +50,11 @@ work that spans features, while a tool is an adapter of one feature for one call
 - **A card goes stale, not wrong.** An action whose card shows values the apply depends on pins
   a "before" snapshot of them in its payload: the booking's start, party size and length for an
   edit, the cart line's quantity and note (or no line) for a cart item, the draft lines and the
-  total for a submit. The applier compares the current state with that snapshot inside the apply
-  savepoint, under the same row lock the route's service takes, and fails with a
-  `*_CHANGED` domain error (`BOOKING_CHANGED`, `CART_CHANGED`) when it differs, so a change made
+  total for a submit. The current state is compared with that snapshot inside the apply
+  savepoint, under the same row locks the route's service takes: for an edit by
+  `BookingService.edit(expected=…)` right after its locked re-read (user, table, booking), for the
+  cart and the submit by the applier. A mismatch fails with a
+  `*_CHANGED` domain error (`BOOKING_CHANGED`, `CART_CHANGED`), so a change made
   on the website after the card is never overwritten. Cancelling a booking and removing a cart
   line act on the identity of the booking or the line, not on values the guest saw, and are
   exempt.

@@ -297,6 +297,77 @@ async def test_search_for_a_large_party_blocks_only_confirmed_starts(
     assert {"starts_at": confirmed.isoformat(), "available": False} in items[0]["slots"]
 
 
+async def test_search_hides_request_starts_inside_the_request_lead(
+    client: httpx2.AsyncClient, venue: Venue, fake_clock: FakeClock
+) -> None:
+    fake_clock.current = at(TODAY, 18)
+
+    large = await client.get(SEARCH, params={"date": str(TODAY), "party_size": 6})
+    small = await client.get(SEARCH, params={"date": str(TODAY), "party_size": 4})
+
+    assert large.status_code == 200, large.text
+    items = large.json()["items"]
+    assert [item["id"] for item in items] == [str(venue.six.id), str(venue.eight.id)]
+    for item in items:
+        assert item["slots"] == [
+            {"starts_at": start.isoformat(), "available": start > at(TODAY, 20)}
+            for start in grid(TODAY)
+        ]
+    assert small.status_code == 200, small.text
+    small_slots = small.json()["items"][0]["slots"]
+    assert {"starts_at": at(TODAY, 18, 30).isoformat(), "available": True} in small_slots
+
+
+async def test_search_at_a_time_inside_the_request_lead_lists_no_request_table(
+    client: httpx2.AsyncClient, venue: Venue, fake_clock: FakeClock
+) -> None:
+    fake_clock.current = at(TODAY, 18)
+
+    inside = await client.get(SEARCH, params={"date": str(TODAY), "party_size": 6, "time": "19:30"})
+    after = await client.get(SEARCH, params={"date": str(TODAY), "party_size": 6, "time": "20:30"})
+
+    assert inside.status_code == 200, inside.text
+    assert (inside.json()["items"], inside.json()["total"]) == ([], 0)
+    assert after.status_code == 200, after.text
+    assert after.json()["total"] == 2
+
+
+async def test_search_tomorrow_is_not_affected_by_the_request_lead(
+    client: httpx2.AsyncClient, venue: Venue, fake_clock: FakeClock
+) -> None:
+    fake_clock.current = at(TODAY, 18)
+
+    response = await client.get(SEARCH, params={"date": str(TOMORROW), "party_size": 6})
+
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    assert [item["id"] for item in items] == [str(venue.six.id), str(venue.eight.id)]
+    for item in items:
+        assert all(slot["available"] for slot in item["slots"])
+
+
+async def test_the_edit_slots_apply_no_request_lead(
+    client: httpx2.AsyncClient,
+    venue: Venue,
+    users: dict[str, User],
+    fake_clock: FakeClock,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    fake_clock.current = at(TODAY, 18)
+    booking = await add_booking(
+        session_factory, user=users[ADA], table=venue.four, starts_at=at(TODAY, 20, 30)
+    )
+    await sign_in(client, ADA)
+
+    response = await client.get(f"{BOOKINGS}/{booking.id}/slots", params={"duration_minutes": 90})
+
+    assert response.status_code == 200, response.text
+    assert response.json() == [
+        {"starts_at": start.isoformat(), "available": start > at(TODAY, 18)}
+        for start in grid(TODAY)
+    ]
+
+
 async def test_a_pending_request_cannot_be_edited(
     client: httpx2.AsyncClient, venue: Venue, users: dict[str, User], connection: AsyncConnection
 ) -> None:

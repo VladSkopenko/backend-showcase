@@ -4,10 +4,13 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from sqlalchemy import func, inspect, select, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionmaker
+from support.migrations import load_revision
 
 from app.common.database import get_session
 from app.features.core.auth.enums import OAuthProvider
@@ -1002,19 +1005,51 @@ async def test_a_preorder_line_is_submitted_exactly_when_it_has_an_id_and_a_time
             await session.flush()
 
 
-async def test_migrated_notifications_table_has_the_expected_shape(
-    connection: AsyncConnection,
-) -> None:
-    def describe(sync_connection: Connection) -> dict[str, Any]:
+async def describe_notifications(connection: AsyncConnection) -> dict[str, Any] | None:
+    def describe(sync_connection: Connection) -> dict[str, Any] | None:
         inspector = inspect(sync_connection)
+        if not inspector.has_table("notifications"):
+            return None
         return {
             "columns": inspector.get_columns("notifications"),
             "foreign_keys": inspector.get_foreign_keys("notifications"),
             "indexes": inspector.get_indexes("notifications"),
         }
 
-    shape = await connection.run_sync(describe)
+    return await connection.run_sync(describe)
 
+
+async def notification_kind_labels(connection: AsyncConnection) -> list[str] | None:
+    labels: list[str] | None = await connection.scalar(
+        text(
+            "SELECT array_agg(enumlabel::text ORDER BY enumsortorder) FROM pg_enum "
+            "JOIN pg_type ON pg_type.oid = pg_enum.enumtypid "
+            "WHERE pg_type.typname = 'notification_kind'"
+        )
+    )
+    return labels
+
+
+async def run_drop_notifications(connection: AsyncConnection, step: str) -> None:
+    revision = load_revision("0025_drop_notifications.py")
+
+    def run(sync_connection: Connection) -> None:
+        with Operations.context(MigrationContext.configure(sync_connection)):
+            getattr(revision, step)()
+
+    await connection.run_sync(run)
+
+
+async def test_the_notifications_table_and_enum_are_gone_and_come_back_on_downgrade(
+    connection: AsyncConnection,
+) -> None:
+    assert await describe_notifications(connection) is None
+    assert await notification_kind_labels(connection) is None
+
+    await run_drop_notifications(connection, "downgrade")
+
+    shape = await describe_notifications(connection)
+    assert shape is not None
     assert {column["name"]: column["nullable"] for column in shape["columns"]} == {
         "id": False,
         "user_id": False,
@@ -1034,9 +1069,12 @@ async def test_migrated_notifications_table_has_the_expected_shape(
         ("ix_notifications_booking_id", ["booking_id"]),
         ("ix_notifications_user_id_created_at_id", ["user_id", "created_at", "id"]),
     ]
+    assert await notification_kind_labels(connection) == [
+        "BOOKING_REQUEST_APPROVED",
+        "BOOKING_REQUEST_REJECTED",
+    ]
 
+    await run_drop_notifications(connection, "upgrade")
 
-async def test_notification_kind_enum_has_both_decisions(connection: AsyncConnection) -> None:
-    labels = await connection.scalar(text("SELECT enum_range(NULL::notification_kind)::text[]"))
-
-    assert labels == ["BOOKING_REQUEST_APPROVED", "BOOKING_REQUEST_REJECTED"]
+    assert await describe_notifications(connection) is None
+    assert await notification_kind_labels(connection) is None
