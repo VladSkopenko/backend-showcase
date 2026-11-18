@@ -17,6 +17,8 @@ dependencies = [
     "authlib>=1.9.5",
     "itsdangerous>=2.2.0",
     "httpx2>=2.16.0",
+    "langchain-openai>=1.8.1",
+    "langchain-core>=1.8.2",
 ]
 
 [build-system]
@@ -43,7 +45,12 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # langsmith (a dependency of langchain-core) calls asyncio.iscoroutinefunction at import on
+    # Python 3.14; nothing in this project does.
+    "ignore:'asyncio.iscoroutinefunction' is deprecated:DeprecationWarning",
+]
 
 # Import rules from docs/adr/0011-feature-sliced-backend-layout.md.
 # `*` matches one module level, `**` any depth; a wildcard that matches nothing passes.
@@ -54,15 +61,21 @@ root_package = "app"
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
+# ai_tools sits beside endpoints as a second adapter over services (ADR 20).
 name = "Feature layers: endpoints > services > repositories > models"
 type = "layers"
 containers = ["app.features.*", "app.features.core.*"]
-layers = ["(endpoints)", "(services)", "(repositories)", "(models)"]
+layers = ["(endpoints) | (ai_tools)", "(services)", "(repositories)", "(models)"]
 
 [[tool.importlinter.contracts]]
 name = "Endpoints never import repositories or models"
 type = "forbidden"
-source_modules = ["app.features.*.endpoints", "app.features.core.*.endpoints"]
+source_modules = [
+    "app.features.*.endpoints",
+    "app.features.*.ai_tools",
+    "app.features.core.*.endpoints",
+    "app.features.core.*.ai_tools",
+]
 forbidden_modules = [
     "app.features.*.repositories",
     "app.features.*.models",
@@ -80,10 +93,12 @@ source_modules = [
     "app.features.*.repositories",
     "app.features.*.models",
     "app.features.*.dto",
+    "app.features.*.ai_tools",
     "app.features.core.*.services",
     "app.features.core.*.repositories",
     "app.features.core.*.models",
     "app.features.core.*.dto",
+    "app.features.core.*.ai_tools",
 ]
 forbidden_modules = ["app.features.*.schemas", "app.features.core.*.schemas"]
 
@@ -96,11 +111,13 @@ source_modules = [
     "app.features.*.models",
     "app.features.*.dto",
     "app.features.*.enums",
+    "app.features.*.ai_tools",
     "app.features.core.*.services",
     "app.features.core.*.repositories",
     "app.features.core.*.models",
     "app.features.core.*.dto",
     "app.features.core.*.enums",
+    "app.features.core.*.ai_tools",
     "app.features.application_services.**",
     "app.infrastructure.background_tasks",
 ]
@@ -118,6 +135,9 @@ ignore_imports = [
     "app.features.** -> app.features.core",
     "app.features.** -> app.features.application_services",
     "app.features.application_services -> app.features.**",
+    # The assistant composes every feature's model-facing tools (ADR 20).
+    "app.features.assistant.** -> app.features.*.ai_tools",
+    "app.features.assistant.** -> app.features.*.ai_tools.**",
 ]
 unmatched_ignore_imports_alerting = "none"
 
@@ -140,6 +160,13 @@ name = "Only regular endpoints and background tasks call application services"
 type = "protected"
 protected_modules = ["app.features.application_services.**"]
 allowed_importers = ["app.features.*.endpoints", "app.infrastructure.background_tasks"]
+
+[[tool.importlinter.contracts]]
+# A feature's ai_tools are adapters for the model; the assistant is their only composition root.
+name = "Only the assistant imports ai_tools"
+type = "protected"
+protected_modules = ["app.features.*.ai_tools", "app.features.core.*.ai_tools"]
+allowed_importers = ["app.features.assistant.**"]
 
 [[tool.importlinter.contracts]]
 # Scripts run from a developer's machine with dev-only dependencies such as boto3; the runtime

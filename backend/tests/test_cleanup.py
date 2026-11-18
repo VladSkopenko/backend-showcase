@@ -15,17 +15,25 @@ from support.bookings import ADA, GRACE, LOGIN, PASSWORD, START, FakeClock
 from support.http import set_cookies
 
 from app.config.settings import Settings, get_settings
+from app.features.assistant.enums import AssistantMessageRole
 from app.features.core.auth.enums import VerificationPurpose
 from app.features.core.auth.repositories import VerificationCodeRepository
 from app.infrastructure.background_tasks import CleanupJob, RequestExpiryJob
 from app.main import create_app
-from app.model_registry import RefreshToken, User, VerificationCode
+from app.model_registry import (
+    AssistantMessage,
+    AssistantSession,
+    RefreshToken,
+    User,
+    VerificationCode,
+)
 
 pytestmark = pytest.mark.anyio
 
 AUTH = "/api/v1/auth"
 DAY = timedelta(days=1)
 CODE_TTL = timedelta(minutes=10)
+SESSION_TTL_DAYS = 7
 JOB_LOGGER = "app.infrastructure.background_tasks.cleanup_job"
 EMAIL = VerificationPurpose.EMAIL_VERIFICATION
 RESET = VerificationPurpose.PASSWORD_RESET
@@ -33,7 +41,7 @@ RESET = VerificationPurpose.PASSWORD_RESET
 
 @pytest.fixture
 def job(session_factory: async_sessionmaker[AsyncSession], fake_clock: FakeClock) -> CleanupJob:
-    return CleanupJob(session_factory)
+    return CleanupJob(session_factory, assistant_session_ttl_days=SESSION_TTL_DAYS)
 
 
 @pytest.fixture
@@ -104,8 +112,36 @@ async def add_code(
     return code.id
 
 
+async def add_session(
+    session_factory: async_sessionmaker[AsyncSession], *, user: User, updated_at: datetime
+) -> tuple[uuid.UUID, uuid.UUID]:
+    chat = AssistantSession(
+        user_id=user.id, title="New chat", created_at=updated_at - DAY, updated_at=updated_at
+    )
+    async with session_factory() as session:
+        session.add(chat)
+        await session.flush()
+        message = AssistantMessage(
+            session_id=chat.id,
+            role=AssistantMessageRole.USER,
+            text="Hello",
+            created_at=updated_at,
+        )
+        session.add(message)
+        await session.commit()
+    return chat.id, message.id
+
+
 async def token_ids(connection: AsyncConnection) -> set[uuid.UUID]:
     return set((await connection.scalars(select(RefreshToken.id))).all())
+
+
+async def session_ids(connection: AsyncConnection) -> set[uuid.UUID]:
+    return set((await connection.scalars(select(AssistantSession.id))).all())
+
+
+async def message_ids(connection: AsyncConnection) -> set[uuid.UUID]:
+    return set((await connection.scalars(select(AssistantMessage.id))).all())
 
 
 async def code_ids(connection: AsyncConnection) -> set[uuid.UUID]:
@@ -379,7 +415,7 @@ async def test_two_codes_of_a_user_and_purpose_created_at_the_same_moment_both_s
     assert await code_ids(connection) == kept
 
 
-async def test_a_run_that_deletes_rows_logs_both_counts_and_an_empty_run_logs_nothing(
+async def test_a_run_that_deletes_rows_logs_three_counts_and_an_empty_run_logs_nothing(
     job: CleanupJob,
     users: dict[str, User],
     session_factory: async_sessionmaker[AsyncSession],
@@ -394,7 +430,33 @@ async def test_a_run_that_deletes_rows_logs_both_counts_and_an_empty_run_logs_no
         await job.run()
         await job.run()
 
-    assert info_lines(caplog) == ["Deleted 3 expired refresh tokens and 2 old verification codes"]
+    assert info_lines(caplog) == [
+        "Deleted 3 expired refresh tokens, 2 old verification codes "
+        "and 0 inactive assistant sessions"
+    ]
+
+
+async def test_sessions_inactive_for_the_ttl_are_deleted_with_their_messages_and_newer_kept(
+    job: CleanupJob,
+    users: dict[str, User],
+    session_factory: async_sessionmaker[AsyncSession],
+    connection: AsyncConnection,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    await add_session(session_factory, user=users[ADA], updated_at=START - SESSION_TTL_DAYS * DAY)
+    kept, kept_message = await add_session(
+        session_factory, user=users[GRACE], updated_at=START - (SESSION_TTL_DAYS - 1) * DAY
+    )
+
+    with caplog.at_level(logging.INFO, logger=JOB_LOGGER):
+        await job.run()
+
+    assert await session_ids(connection) == {kept}
+    assert await message_ids(connection) == {kept_message}
+    assert info_lines(caplog) == [
+        "Deleted 0 expired refresh tokens, 0 old verification codes "
+        "and 1 inactive assistant sessions"
+    ]
 
 
 async def test_a_failing_run_is_rolled_back_and_the_next_run_works(

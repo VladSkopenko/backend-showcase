@@ -55,6 +55,12 @@ FLOWS = {
         ("get", "/api/v1/bookings/{booking_id}/my-pre-order"),
         ("get", "/api/v1/bookings/{booking_id}/group-pre-order"),
     ],
+    "Assistant": [
+        ("post", "/api/v1/assistant/sessions"),
+        ("get", "/api/v1/assistant/sessions"),
+        ("get", "/api/v1/assistant/sessions/{session_id}"),
+        ("post", "/api/v1/assistant/sessions/{session_id}/messages"),
+    ],
     "Staff": [
         ("get", "/api/v1/staff/booking-requests"),
         ("post", "/api/v1/staff/booking-requests/{booking_id}/approve"),
@@ -116,6 +122,18 @@ def test_provider_slug_lists_the_known_providers(schema: dict[str, Any]) -> None
 
         assert parameter["name"] == "provider_slug"
         assert parameter["schema"]["enum"] == ["google"]
+
+
+def test_the_streaming_route_documents_the_event_stream_and_json_refusals(
+    schema: dict[str, Any],
+) -> None:
+    responses = schema["paths"]["/api/v1/assistant/sessions/{session_id}/messages"]["post"][
+        "responses"
+    ]
+
+    assert list(responses["200"]["content"]) == ["text/event-stream"]
+    assert list(responses["404"]["content"]) == ["application/json"]
+    assert list(responses["422"]["content"]) == ["application/json"]
 
 
 @pytest.mark.parametrize(

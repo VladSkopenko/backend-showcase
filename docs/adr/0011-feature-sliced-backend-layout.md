@@ -10,6 +10,8 @@ Amended 2026-11-10: menu and locations are core features, because cart, orders a
 build on them; the menu moved from `features/menu` to `features/core/menu`.
 Amended 2026-11-11: bookings are a core feature, because invites, cart, orders and reviews build on
 them; they live in `features/core/bookings`.
+Amended 2026-11-18: a feature may keep model-facing tools in `ai_tools/` beside `endpoints/`, and
+only the assistant imports them ([ADR 20](0020-assistant-composes-ai-tools.md)).
 
 ## Context
 

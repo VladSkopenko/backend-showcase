@@ -16,6 +16,9 @@ from app.common.error_responses import (
 )
 from app.common.errors import DomainError
 from app.config.settings import Settings, get_settings
+from app.features.assistant.endpoints import ERROR_STATUSES as ASSISTANT_ERROR_STATUSES
+from app.features.assistant.endpoints import AssistantOpenApiTags
+from app.features.assistant.endpoints import router as assistant_router
 from app.features.core.auth.endpoints import ERROR_STATUSES as AUTH_ERROR_STATUSES
 from app.features.core.auth.endpoints import AuthOpenApiTags, oauth_router
 from app.features.core.auth.endpoints import router as auth_router
@@ -53,6 +56,7 @@ ERROR_STATUSES = {
     **NOTIFICATIONS_ERROR_STATUSES,
     **INVITES_ERROR_STATUSES,
     **PREORDER_ERROR_STATUSES,
+    **ASSISTANT_ERROR_STATUSES,
 }
 
 
@@ -73,7 +77,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     cleanup = PeriodicTask(
         name="cleanup",
         interval_seconds=settings.cleanup.interval_seconds,
-        job=CleanupJob(get_sessionmaker()).run,
+        job=CleanupJob(
+            get_sessionmaker(),
+            assistant_session_ttl_days=settings.assistant.session_ttl_days,
+        ).run,
     )
     request_expiry.start()
     cleanup.start()
@@ -97,6 +104,7 @@ def create_app() -> FastAPI:
             *BookingOpenApiTags.METADATA,
             *InvitesOpenApiTags.METADATA,
             *PreorderOpenApiTags.METADATA,
+            *AssistantOpenApiTags.METADATA,
             *BookingOpenApiTags.STAFF_METADATA,
             *NotificationsOpenApiTags.METADATA,
             *HealthOpenApiTags.METADATA,
@@ -122,6 +130,7 @@ def create_app() -> FastAPI:
     app.include_router(bookings_router, prefix="/api/v1")
     app.include_router(invites_router, prefix="/api/v1")
     app.include_router(preorder_router, prefix="/api/v1")
+    app.include_router(assistant_router, prefix="/api/v1")
     app.include_router(staff_router, prefix="/api/v1")
     app.include_router(notifications_router, prefix="/api/v1")
 

@@ -61,6 +61,8 @@ def isolated_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
                 "PREORDER_",
                 "NOTIFICATIONS_",
                 "CLEANUP_",
+                "OPENAI_",
+                "ASSISTANT_",
             )
         ):
             monkeypatch.delenv(name)

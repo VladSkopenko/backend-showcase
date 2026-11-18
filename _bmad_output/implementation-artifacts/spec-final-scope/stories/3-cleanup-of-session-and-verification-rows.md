@@ -2,7 +2,7 @@
 title: 'Cleanup of session and verification rows'
 type: 'feature'
 created: '2026-11-17'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'f2014425c94b36cd7b8bdcd97b18e303f2cac5ba'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -91,6 +91,7 @@ context:
 - Live check, local API on `app` at 0019 (port 8010) with `CLEANUP_INTERVAL_SECONDS=15`, `TOKEN_REFRESH_TTL_DAYS=0` (new tokens expire at once) and `EMAIL_USERNAME=` (emails only logged): registered and verified `cleanup-check@example.com` and logged in (2 expired tokens), requested a password reset for `reset-1794229060@example.com`, whose only reset code was from 2026-11-09. Before the run: 101 tokens (2 expired), 23 codes (1 deletable). 20 s later: 99 tokens (0 expired, the check user has none), 22 codes over 22 user-purpose pairs, the old reset code gone and the new one kept, the same user's single 2026-11-09 email code kept. SIGINT logged "Application shutdown complete". The INFO line does not show in uvicorn output (no logging config); it is covered by the `caplog` test.
 
 - 2026-11-17, parent session after the review patches: 764 tests, ruff, format check, mypy and 10 import contracts clean. Live, local API on port 8010 with `CLEANUP_INTERVAL_SECONDS=15`, `TOKEN_REFRESH_TTL_DAYS=0` and email off: registered, verified and logged in `live3-…@example.com` through the API; read-only counts went from 101 tokens (2 expired) to 99 (0 expired) 11 s later. Codes stayed 23 on 23 user-purpose pairs: the earlier run had already removed the superseded ones, so this run showed no code deletion; the tests cover it.
+- 2026-11-18, on dev: PR #46 merged as 12ec17d on 2026-11-17; the `Delivery` run on that commit (Build image, Deploy platform, Deploy dev) is green and `GET /health` on the dev host answers `{"status":"ok","database":"ok"}`. Dev's refresh tokens live 30 days, so the job has nothing to delete there until about 2026-12-13; the deletion itself was shown on the local API above.
 
 ## Spec Change Log
 
