@@ -63,12 +63,17 @@
   invoke_dev_with: >-
     Figma: a separate file next to the design copy (Claude memory figma-design-file), drawn by
     Claude after the spec is approved; Starter seat with call limits.
-- id: "5"
-  title: "Assistant: confirmed writes"
+- id: "5a"
+  title: "Assistant: confirmed actions and booking a table"
   description: >-
-    Write tools for bookings, the cart and submitting the user's part, through pending actions
-    applied by the person (CAP-7).
+    Pending actions with the card, apply and cancel, the action event, and booking a table as the
+    first action; the frontend task document gains the card (CAP-7, CAP-9).
   spec_checkpoint: true
   done_checkpoint: true
-  invoke_dev_with: >-
-    Extend the frontend task document with the card, apply and cancel.
+- id: "5b"
+  title: "Assistant: the remaining confirmed actions"
+  description: >-
+    Editing and cancelling a booking, adding and removing a dish in the cart, and submitting the
+    user's pre-order part on the mechanism of 5a (CAP-7).
+  spec_checkpoint: true
+  done_checkpoint: true

@@ -35,6 +35,11 @@ class AssistantSessionRepository:
         )
         return chat_session
 
+    async def lock(self, *, session_id: uuid.UUID) -> None:
+        await self._session.execute(
+            select(AssistantSession.id).where(AssistantSession.id == session_id).with_for_update()
+        )
+
     async def touch(self, *, session_id: uuid.UUID, updated_at: datetime) -> None:
         await self._session.execute(
             update(AssistantSession)

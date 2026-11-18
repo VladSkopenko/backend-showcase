@@ -2,7 +2,7 @@
 title: 'Assistant: frontend task document and Figma mockup'
 type: 'chore'
 created: '2026-11-18'
-status: 'draft'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -43,14 +43,16 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `docs/assistant-frontend-task.md` -- the document -- record.
-- [ ] Figma file with the frames above -- design, by Claude in the Figma MCP, outside the subagent's dispatch.
+- [x] `docs/assistant-frontend-task.md` -- the document -- record.
+- [x] Figma file with the frames above -- design, by Claude in the Figma MCP, outside the subagent's dispatch.
 
 **Acceptance Criteria:**
 - Given the document and the local API of 4c, when every route, body, event and error it names is tried with curl, then each matches.
 - Given the Figma file, when Vlad opens it, then the frames are there and the design copy is untouched.
 
 ## Implementation Notes
+
+- 2026-11-18: the task document shipped with #47 and was updated with #49 (rewrite streaming checked on dev, new tools). The Figma mockup was drawn by Claude in a new file in Vlad's Drafts (Claude memory `figma-design-file`; the design copy's project id is unknown, Vlad can move it): conversation with the thinking state, an answer with a pending card, the empty state with the budget and busy notices, and the action card in five statuses as one component. Two `use_figma` calls; the send and close glyphs were redrawn as SVG because Poppins lacks them. The design copy was not touched.
 
 ## Spec Change Log
 

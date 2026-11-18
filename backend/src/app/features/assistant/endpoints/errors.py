@@ -2,6 +2,8 @@ from fastapi import status
 
 from app.common.errors import DomainError
 from app.features.assistant.services.exceptions import (
+    AssistantActionNotFoundError,
+    AssistantActionNotPendingError,
     AssistantBudgetExhaustedError,
     AssistantBusyError,
     AssistantSessionNotFoundError,
@@ -16,6 +18,8 @@ from app.features.core.auth.services.exceptions import (
 ERROR_STATUSES: dict[type[DomainError], int] = {
     AssistantUnavailableError: status.HTTP_503_SERVICE_UNAVAILABLE,
     AssistantSessionNotFoundError: status.HTTP_404_NOT_FOUND,
+    AssistantActionNotFoundError: status.HTTP_404_NOT_FOUND,
+    AssistantActionNotPendingError: status.HTTP_409_CONFLICT,
     AssistantBusyError: status.HTTP_429_TOO_MANY_REQUESTS,
     AssistantBudgetExhaustedError: status.HTTP_429_TOO_MANY_REQUESTS,
 }

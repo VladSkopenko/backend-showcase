@@ -6,6 +6,8 @@ Date: 2026-11-18
 
 Accepted. Amends [ADR 11](0011-feature-sliced-backend-layout.md): a feature may keep a second
 adapter, `ai_tools/`, beside `endpoints/`, and the assistant is the only feature that imports it.
+Amended 2026-11-18 (story 5a): confirmed actions, propose and apply, live in the feature's
+`ai_tools/` next to their tools.
 
 ## Context
 
@@ -35,6 +37,25 @@ work that spans features, while a tool is an adapter of one feature for one call
 - **The context is bound, not passed.** `app.common.ai_tools.AiToolContext` carries the user id
   from the JWT, the sessionmaker and the settings values the tools need. No tool argument names a
   user; the model cannot choose whose data a tool reads.
+- **Actions live next to their tools.** A write the guest must confirm is one module per
+  domain in the feature's `ai_tools/`: a propose tool that runs the route's service in a
+  session that is always rolled back (a dry run) and hands a `Proposal` (kind, pinned payload,
+  card) to the turn's `ProposalSink`, and an applier for that kind that runs the same service
+  with the pinned payload in the `ActionContext` session it is given, never one of its own. The
+  assistant stores the proposal as a pending action, claims it on apply and runs the applier
+  inside a savepoint of its own transaction; `ToolkitBuilder` exposes the tools and a
+  `kind -> applier` registry, so the assistant composes tools and appliers and knows no
+  domain's services. `ProposalSink`, `Card`, `ActionContext` and the `ActionApplier` protocol
+  live in `app.common.ai_tools`.
+- **Expiry is derived on read.** A pending action past `expires_at` is shown as `EXPIRED` by
+  every reader (the action routes, the session read-back, the `action` event, the model's
+  history line); the status is written only when a newer card supersedes it, so a refusing path
+  writes nothing that a rollback would undo.
+- **Apply decides before it streams.** The checks, the claim, the applier and the commit finish
+  before the response starts, so a refusal (404, 409) is plain JSON; the stream carries only
+  the outcome and the assistant's comment on it.
+- **Apply ignores the per-minute cap.** The guest's press is not a new question; only the
+  comment depends on the daily budget, and with the budget spent it is a fixed text.
 - **The contracts enforce it.** `pyproject.toml` adds `ai_tools` to the layers, to the sources of
   the endpoint-level rules (no repositories or models, no schemas, no HTTP), exempts the
   assistant's imports of regular features' `ai_tools` from "Regular features are independent",
@@ -53,6 +74,9 @@ work that spans features, while a tool is an adapter of one feature for one call
 
 ## Consequences
 
+- A new confirmed action is a propose tool and an applier in the feature that owns the rule,
+  and one entry in that feature's `appliers()`; the assistant's action routes and storage stay
+  unchanged.
 - A new tool is a file in the feature it belongs to, next to the service it calls, and one line
   in the assistant's toolkit builder.
 - The `ai_tools` packages depend on `langchain-core`; services, repositories and models do not.
