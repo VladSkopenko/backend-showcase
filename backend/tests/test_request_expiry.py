@@ -31,12 +31,9 @@ from support.bookings import (
     sign_in,
 )
 
-from app.config.settings import Settings, get_settings
+from app.config.settings import NotificationSettings, Settings, get_settings
 from app.features.core.bookings.enums import BookingStatus, ParticipantRole
-from app.features.core.notifications.enums import NotificationKind
-from app.features.core.notifications.services.booking_decision_notifier import (
-    BookingDecisionNotifier,
-)
+from app.features.core.bookings.services.decision_notice_builder import DecisionNoticeBuilder
 from app.infrastructure.background_tasks import PeriodicTask, RequestExpiryJob
 from app.main import create_app
 from app.model_registry import (
@@ -44,7 +41,6 @@ from app.model_registry import (
     BookingParticipant,
     DiningTable,
     Location,
-    Notification,
     User,
 )
 
@@ -52,7 +48,6 @@ pytestmark = pytest.mark.anyio
 
 LINUS = "linus@family.test"
 LEAD = timedelta(minutes=120)
-REJECTED = NotificationKind.BOOKING_REQUEST_REJECTED
 SUBJECT = "Your booking request is rejected"
 
 
@@ -76,6 +71,17 @@ def job(
     fake_clock: FakeClock,
 ) -> RequestExpiryJob:
     return RequestExpiryJob(session_factory, settings=Settings(), email_sender=mailbox)
+
+
+@pytest.fixture
+def unskipped_job(
+    session_factory: async_sessionmaker[AsyncSession],
+    mailbox: FakeEmailSender,
+    fake_clock: FakeClock,
+) -> RequestExpiryJob:
+    # The shared fixture users live at example.com, which is skipped by default.
+    settings = Settings(notifications=NotificationSettings(skip_email_domains=[]))
+    return RequestExpiryJob(session_factory, settings=settings, email_sender=mailbox)
 
 
 @pytest.fixture
@@ -139,22 +145,8 @@ async def stored_decision(
     return row[0], row[1], row[2]
 
 
-async def stored_notifications(
-    connection: AsyncConnection,
-) -> list[tuple[uuid.UUID, NotificationKind, uuid.UUID, datetime]]:
-    rows = await connection.execute(
-        select(
-            Notification.user_id,
-            Notification.kind,
-            Notification.booking_id,
-            Notification.created_at,
-        )
-    )
-    return sorted((row[0], row[1], row[2], row[3]) for row in rows)
-
-
 @pytest.mark.usefixtures("no_locations")
-async def test_the_sweep_rejects_a_pending_request_inside_the_lead_and_notifies_it(
+async def test_the_sweep_rejects_a_pending_request_inside_the_lead_and_emails_it(
     job: RequestExpiryJob,
     venue: Venue,
     users: dict[str, User],
@@ -171,12 +163,6 @@ async def test_the_sweep_rejects_a_pending_request_inside_the_lead_and_notifies_
     await job.run()
 
     assert await stored_decision(connection, booking.id) == (BookingStatus.REJECTED, START, None)
-    assert await stored_notifications(connection) == sorted(
-        [
-            (users[ADA].id, REJECTED, booking.id, START),
-            (linus.id, REJECTED, booking.id, START),
-        ]
-    )
     # Ada lives at example.com, a skipped domain.
     assert mailbox.sent == [(LINUS, SUBJECT)]
 
@@ -203,7 +189,6 @@ async def test_the_sweep_leaves_later_requests_and_confirmed_bookings(
 
     assert await stored_decision(connection, later.id) == (BookingStatus.PENDING, None, None)
     assert await stored_decision(connection, confirmed.id) == (BookingStatus.CONFIRMED, None, None)
-    assert await stored_notifications(connection) == []
     assert mailbox.sent == []
     assert not [r for r in caplog.records if r.name.startswith("app.infrastructure")]
 
@@ -319,16 +304,16 @@ async def test_a_failing_run_is_rolled_back_and_logged_and_the_next_run_works(
     booking = await pending_request(
         session_factory, user=users[ADA], table=venue.six, starts_at=START + timedelta(minutes=90)
     )
-    original_record = BookingDecisionNotifier.record
+    original_build = DecisionNoticeBuilder.build
     calls: list[None] = []
 
-    async def fail_once(self: BookingDecisionNotifier, **kwargs: Any) -> None:
+    async def fail_once(self: DecisionNoticeBuilder, **kwargs: Any) -> Any:
         calls.append(None)
         if len(calls) == 1:
             raise ConnectionError("database went away")
-        await original_record(self, **kwargs)
+        return await original_build(self, **kwargs)
 
-    monkeypatch.setattr(BookingDecisionNotifier, "record", fail_once)
+    monkeypatch.setattr(DecisionNoticeBuilder, "build", fail_once)
     runs: list[None] = []
     second_run_done = asyncio.Event()
 
@@ -354,7 +339,6 @@ async def test_a_failing_run_is_rolled_back_and_logged_and_the_next_run_works(
     assert failures[0].exc_info is not None
     assert "request expiry" in failures[0].getMessage()
     assert await stored_decision(connection, booking.id) == (BookingStatus.REJECTED, START, None)
-    assert await stored_notifications(connection) == [(users[ADA].id, REJECTED, booking.id, START)]
 
 
 @pytest.mark.usefixtures("no_locations")
@@ -372,22 +356,21 @@ async def test_the_sweep_rejects_a_request_whose_start_has_passed(
     await job.run()
 
     assert await stored_decision(connection, booking.id) == (BookingStatus.REJECTED, START, None)
-    assert await stored_notifications(connection) == [(users[ADA].id, REJECTED, booking.id, START)]
 
 
 @pytest.mark.usefixtures("no_locations")
-async def test_one_run_notifies_each_owner_for_their_own_request(
-    job: RequestExpiryJob,
+async def test_one_run_emails_each_owner_for_their_own_request(
+    unskipped_job: RequestExpiryJob,
     venue: Venue,
     users: dict[str, User],
+    mailbox: FakeEmailSender,
     session_factory: async_sessionmaker[AsyncSession],
-    connection: AsyncConnection,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    adas = await pending_request(
+    await pending_request(
         session_factory, user=users[ADA], table=venue.six, starts_at=START + timedelta(minutes=60)
     )
-    graces = await pending_request(
+    await pending_request(
         session_factory,
         user=users[GRACE],
         table=venue.eight,
@@ -395,22 +378,17 @@ async def test_one_run_notifies_each_owner_for_their_own_request(
     )
 
     with caplog.at_level(logging.INFO):
-        await job.run()
+        await unskipped_job.run()
 
-    assert await stored_notifications(connection) == sorted(
-        [
-            (users[ADA].id, REJECTED, adas.id, START),
-            (users[GRACE].id, REJECTED, graces.id, START),
-        ]
-    )
+    assert sorted(mailbox.sent) == [(ADA, SUBJECT), (GRACE, SUBJECT)]
     assert [r.getMessage() for r in caplog.records if r.levelno == logging.INFO] == [
         "Rejected 2 pending requests inside the auto-reject lead"
     ]
 
 
 @pytest.mark.usefixtures("no_locations")
-async def test_the_sweep_notifies_the_owner_but_not_an_accountless_guest(
-    job: RequestExpiryJob,
+async def test_the_sweep_emails_the_owner_but_not_an_accountless_guest(
+    unskipped_job: RequestExpiryJob,
     venue: Venue,
     users: dict[str, User],
     mailbox: FakeEmailSender,
@@ -423,11 +401,10 @@ async def test_the_sweep_notifies_the_owner_but_not_an_accountless_guest(
     guest = await add_guest(session_factory, name="Grace's friend", token="guest-token")
     await add_participant(session_factory, booking_id=booking.id, guest=guest)
 
-    await job.run()
+    await unskipped_job.run()
 
     assert await stored_decision(connection, booking.id) == (BookingStatus.REJECTED, START, None)
-    assert await stored_notifications(connection) == [(users[ADA].id, REJECTED, booking.id, START)]
-    assert mailbox.sent == []
+    assert mailbox.sent == [(ADA, SUBJECT)]
 
 
 @pytest.mark.usefixtures("no_locations")

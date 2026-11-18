@@ -5,9 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.config.settings import Settings
 from app.features.core.bookings.services.request_expiry_service import RequestExpiryService
 from app.features.core.locations.services.location_catalog_service import LocationCatalogService
-from app.features.core.notifications.services.booking_decision_notifier import (
-    BookingDecisionNotifier,
-)
 from app.features.core.notifications.services.decision_email_renderer import (
     DecisionEmailRenderer,
 )
@@ -49,6 +46,5 @@ class RequestExpiryJob:
         return RequestExpiryService(
             session,
             LocationCatalogService(session, public_base_url=self._settings.media.public_base_url),
-            BookingDecisionNotifier(session),
             self._settings.booking,
         )

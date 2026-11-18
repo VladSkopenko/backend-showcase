@@ -180,27 +180,6 @@ class BookingRepository:
         row = (await self._session.execute(statement)).first()
         return None if row is None else (row[0], row[1], row[2], row[3])
 
-    async def list_pending_overlapping_ids(
-        self,
-        *,
-        table_id: uuid.UUID,
-        starts_at: datetime,
-        ends_at: datetime,
-        excluding_booking_id: uuid.UUID,
-    ) -> list[uuid.UUID]:
-        booking_ids = await self._session.scalars(
-            select(Booking.id).where(
-                Booking.table_id == table_id,
-                *self._overlapping(
-                    statuses=(BookingStatus.PENDING,),
-                    starts_at=starts_at,
-                    ends_at=ends_at,
-                    excluding_booking_id=excluding_booking_id,
-                ),
-            )
-        )
-        return list(booking_ids.all())
-
     async def reject_pending_overlapping(
         self,
         *,

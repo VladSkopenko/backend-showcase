@@ -1,10 +1,8 @@
 import uuid
 from collections.abc import Collection, Sequence
-from datetime import datetime
 from typing import Any
 
-from sqlalchemy import UnaryExpression, func, or_, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import UnaryExpression, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.core.menu.enums import DishCategory, DishSort
@@ -12,21 +10,6 @@ from app.features.core.menu.models import Dish
 
 
 class DishRepository:
-    CONTENT_COLUMNS = (
-        "name",
-        "description",
-        "category",
-        "price_cents",
-        "weight_grams",
-        "calories",
-        "protein",
-        "fats",
-        "carbs",
-        "vitamins",
-        "is_available",
-        "prep_minutes",
-        "image_key",
-    )
     ORDERINGS: dict[DishSort, tuple[UnaryExpression[Any], ...]] = {
         DishSort.POPULAR: (Dish.popularity.desc(), Dish.id.asc()),
         DishSort.NEWEST: (Dish.created_at.desc(), Dish.id.asc()),
@@ -36,6 +19,10 @@ class DishRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def list_all(self) -> Sequence[Dish]:
+        dishes = await self._session.scalars(select(Dish).order_by(Dish.slug))
+        return dishes.all()
 
     async def get(self, *, dish_id: uuid.UUID) -> Dish | None:
         return await self._session.get(Dish, dish_id)
@@ -55,25 +42,3 @@ class DishRepository:
             select(Dish).where(*filters).order_by(*self.ORDERINGS[sort]).limit(limit).offset(offset)
         )
         return dishes.all(), total or 0
-
-    async def upsert_by_slug(self, *, rows: Sequence[dict[str, Any]], now: datetime) -> None:
-        if not rows:
-            return
-        statement = insert(Dish).values(list(rows))
-        excluded = statement.excluded
-        await self._session.execute(
-            statement.on_conflict_do_update(
-                index_elements=[Dish.slug],
-                set_={
-                    **{column: excluded[column] for column in self.CONTENT_COLUMNS},
-                    "updated_at": now,
-                },
-                # Rows whose content did not change keep their updated_at.
-                where=or_(
-                    *(
-                        getattr(Dish, column).is_distinct_from(excluded[column])
-                        for column in self.CONTENT_COLUMNS
-                    )
-                ),
-            )
-        )

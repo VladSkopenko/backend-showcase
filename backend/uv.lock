@@ -262,7 +262,6 @@ dependencies = [
 dev = [
     { name = "boto3" },
     { name = "boto3-stubs", extra = ["s3"] },
-    { name = "httpx2" },
     { name = "import-linter" },
     { name = "mypy" },
     { name = "pytest" },
@@ -293,7 +292,6 @@ requires-dist = [
 dev = [
     { name = "boto3", specifier = ">=1.43.126" },
     { name = "boto3-stubs", extras = ["s3"], specifier = ">=1.43.126" },
-    { name = "httpx2", specifier = ">=2.16.0" },
     { name = "import-linter", specifier = ">=2.15" },
     { name = "mypy", specifier = ">=2.4.1" },
     { name = "pytest", specifier = ">=9.2.0" },

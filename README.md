@@ -102,9 +102,10 @@ Each non-obvious choice has a short record in [docs/adr](docs/adr):
 | [15](docs/adr/0015-platform-as-code.md) | Platform as code: a merge to `main` deploys the whole platform |
 | [16](docs/adr/0016-booking-participants-and-guest-identity.md) | Booking participants in core, invites as a regular feature, guests known by a hashed-token cookie |
 | [17](docs/adr/0017-preorder-parts-per-participant.md) | Pre-order drafts per participant submitted into one group, the owner's view of the whole group, live prices, the join window and the booking lock |
-| [18](docs/adr/0018-in-app-notifications.md) | In-app notifications written in the decision's transaction, emails after the commit, skipped domains |
+| [18](docs/adr/0018-in-app-notifications.md) | Superseded by ADR 21. In-app notifications written in the decision's transaction, emails after the commit, skipped domains |
 | [19](docs/adr/0019-public-grafana-reads-dev.md) | Public Grafana reads dev through a role limited to listed columns; the role is the security boundary |
 | [20](docs/adr/0020-assistant-composes-ai-tools.md) | A feature's AI tools live in `ai_tools/` beside its endpoints as a second adapter over its services; the assistant is their only composition root |
+| [21](docs/adr/0021-decisions-by-email-only.md) | Staff decisions reach guests by email only; the in-app notification list is removed |
 
 ## Run it locally
 

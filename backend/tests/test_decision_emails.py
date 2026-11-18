@@ -16,7 +16,6 @@ from support.bookings import (
     STAFF,
     START,
     TOMORROW,
-    TZ,
     FakeClock,
     Venue,
     add_booking,
@@ -31,18 +30,14 @@ from support.bookings import (
 from app.config.settings import NotificationSettings, Settings, get_settings
 from app.features.core.auth.endpoints.dependencies import get_email_sender
 from app.features.core.bookings.enums import BookingStatus
-from app.features.core.notifications.enums import NotificationKind
 from app.main import create_app
-from app.model_registry import Booking, Notification, User
+from app.model_registry import Booking, User
 
 pytestmark = [pytest.mark.anyio, pytest.mark.usefixtures("no_locations")]
 
-NOTIFICATIONS = "/api/v1/notifications"
 REQUESTS = "/api/v1/staff/booking-requests"
 LINUS = "linus@family.test"
 EVENING = at(TOMORROW, 19)
-APPROVED = NotificationKind.BOOKING_REQUEST_APPROVED
-REJECTED = NotificationKind.BOOKING_REQUEST_REJECTED
 
 
 @dataclass
@@ -136,78 +131,25 @@ async def decide(client: httpx2.AsyncClient, booking_id: str | uuid.UUID, action
     return await client.post(f"{REQUESTS}/{booking_id}/{action}")
 
 
-async def stored_notifications(
-    connection: AsyncConnection,
-) -> list[tuple[uuid.UUID, NotificationKind, uuid.UUID, datetime, datetime | None]]:
-    rows = await connection.execute(
-        select(
-            Notification.user_id,
-            Notification.kind,
-            Notification.booking_id,
-            Notification.created_at,
-            Notification.read_at,
-        )
-    )
-    return sorted((row[0], row[1], row[2], row[3], row[4]) for row in rows)
-
-
-async def add_notification(
-    session_factory: async_sessionmaker[AsyncSession],
-    *,
-    user: User,
-    booking: Booking,
-    created_at: datetime,
-    kind: NotificationKind = APPROVED,
-    read_at: datetime | None = None,
-) -> Notification:
-    notification = Notification(
-        user_id=user.id, kind=kind, booking_id=booking.id, created_at=created_at, read_at=read_at
-    )
-    async with session_factory() as session:
-        session.add(notification)
-        await session.commit()
-    return notification
-
-
-def notification_body(notification: Notification) -> dict[str, Any]:
-    return {
-        "id": str(notification.id),
-        "kind": notification.kind.value,
-        "booking_id": str(notification.booking_id),
-        "created_at": notification.created_at.astimezone(TZ).isoformat(),
-        "read_at": None
-        if notification.read_at is None
-        else notification.read_at.astimezone(TZ).isoformat(),
-    }
-
-
-async def test_approving_notifies_the_participants_and_the_rejected_competitors(
+async def test_approving_emails_the_participants_and_the_rejected_competitors(
     client: httpx2.AsyncClient,
     venue: Venue,
     users: dict[str, User],
     staff: User,
     linus: User,
     mailbox: FakeEmailSender,
-    connection: AsyncConnection,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await sign_in(client, ADA)
     approved = await request(client, venue.eight.id, EVENING, party_size=8)
     await add_participant(session_factory, booking_id=approved, user=linus)
     await sign_in(client, GRACE)
-    competitor = await request(client, venue.eight.id, at(TOMORROW, 19, 30))
+    await request(client, venue.eight.id, at(TOMORROW, 19, 30))
     await sign_in(client, STAFF)
 
     response = await decide(client, approved, "approve")
 
     assert response.status_code == 200, response.text
-    assert await stored_notifications(connection) == sorted(
-        [
-            (users[ADA].id, APPROVED, uuid.UUID(approved), START, None),
-            (linus.id, APPROVED, uuid.UUID(approved), START, None),
-            (users[GRACE].id, REJECTED, uuid.UUID(competitor), START, None),
-        ]
-    )
     assert sorted(email.to for email in mailbox.sent) == sorted([ADA, GRACE, LINUS])
     emails = {email.to: email for email in mailbox.sent}
     for address in (ADA, LINUS):
@@ -226,14 +168,13 @@ async def test_approving_notifies_the_participants_and_the_rejected_competitors(
     assert "https://family-rest.vercel.app/reservations" in rejected.text
 
 
-async def test_an_approval_notifies_each_rejected_request_once(
+async def test_an_approval_emails_each_rejected_request_once(
     client: httpx2.AsyncClient,
     venue: Venue,
     users: dict[str, User],
     staff: User,
     linus: User,
     mailbox: FakeEmailSender,
-    connection: AsyncConnection,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     margaret = await add_user(session_factory, email="margaret@family.test", first_name="Margaret")
@@ -263,15 +204,6 @@ async def test_an_approval_notifies_each_rejected_request_once(
     response = await decide(client, approved, "approve")
 
     assert response.status_code == 200, response.text
-    assert await stored_notifications(connection) == sorted(
-        [
-            (users[ADA].id, APPROVED, uuid.UUID(approved), START, None),
-            (users[GRACE].id, REJECTED, later.id, START, None),
-            (linus.id, REJECTED, later.id, START, None),
-            (margaret.id, REJECTED, earlier.id, START, None),
-            (edsger.id, REJECTED, earlier.id, START, None),
-        ]
-    )
     assert sorted(email.to for email in mailbox.sent) == sorted(
         [ADA, GRACE, LINUS, margaret.email, edsger.email]
     )
@@ -293,7 +225,6 @@ async def test_skipped_domains_are_matched_per_recipient(
     staff: User,
     linus: User,
     mailbox: FakeEmailSender,
-    connection: AsyncConnection,
     session_factory: async_sessionmaker[AsyncSession],
     skip_email_domains: list[str] | None,
 ) -> None:
@@ -311,12 +242,6 @@ async def test_skipped_domains_are_matched_per_recipient(
     response = await decide(client, pending, "reject")
 
     assert response.status_code == 200, response.text
-    assert await stored_notifications(connection) == sorted(
-        [
-            (users[ADA].id, REJECTED, uuid.UUID(pending), START, None),
-            (linus.id, REJECTED, uuid.UUID(pending), START, None),
-        ]
-    )
     assert [email.to for email in mailbox.sent] == [LINUS]
 
 
@@ -369,13 +294,12 @@ async def test_names_are_escaped_in_the_html_email(
     assert "<b>" not in email.html
 
 
-async def test_rejecting_notifies_only_participants_with_an_account(
+async def test_rejecting_emails_only_participants_with_an_account(
     client: httpx2.AsyncClient,
     venue: Venue,
     users: dict[str, User],
     staff: User,
     mailbox: FakeEmailSender,
-    connection: AsyncConnection,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await sign_in(client, ADA)
@@ -387,22 +311,18 @@ async def test_rejecting_notifies_only_participants_with_an_account(
     response = await decide(client, pending, "reject")
 
     assert response.status_code == 200, response.text
-    assert await stored_notifications(connection) == [
-        (users[ADA].id, REJECTED, uuid.UUID(pending), START, None)
-    ]
     assert [(email.to, email.subject) for email in mailbox.sent] == [
         (ADA, "Your booking request is rejected")
     ]
 
 
-async def test_skipped_domains_get_the_notification_but_no_email(
+async def test_skipped_domains_get_no_email(
     app: FastAPI,
     client: httpx2.AsyncClient,
     venue: Venue,
     users: dict[str, User],
     staff: User,
     mailbox: FakeEmailSender,
-    connection: AsyncConnection,
 ) -> None:
     settings = Settings()
     app.dependency_overrides[get_settings] = lambda: settings
@@ -413,13 +333,10 @@ async def test_skipped_domains_get_the_notification_but_no_email(
     response = await decide(client, pending, "reject")
 
     assert response.status_code == 200, response.text
-    assert await stored_notifications(connection) == [
-        (users[ADA].id, REJECTED, uuid.UUID(pending), START, None)
-    ]
     assert mailbox.sent == []
 
 
-async def test_a_failing_email_keeps_the_decision_and_its_notifications(
+async def test_a_failing_email_keeps_the_decision(
     app: FastAPI,
     client: httpx2.AsyncClient,
     venue: Venue,
@@ -438,15 +355,12 @@ async def test_a_failing_email_keeps_the_decision_and_its_notifications(
     assert response.status_code == 200, response.text
     status = await connection.scalar(select(Booking.status).where(Booking.id == uuid.UUID(pending)))
     assert status == BookingStatus.CONFIRMED
-    assert await stored_notifications(connection) == [
-        (users[ADA].id, APPROVED, uuid.UUID(pending), START, None)
-    ]
     [record] = [record for record in caplog.records if record.levelno >= logging.ERROR]
     assert ADA in record.getMessage()
     assert record.exc_info is not None
 
 
-async def test_a_failed_decision_notifies_nobody(
+async def test_a_failed_decision_emails_nobody(
     client: httpx2.AsyncClient,
     venue: Venue,
     users: dict[str, User],
@@ -471,7 +385,6 @@ async def test_a_failed_decision_notifies_nobody(
     response = await decide(client, pending, "approve")
 
     assert_error(response, 409, "SLOT_UNAVAILABLE")
-    assert await stored_notifications(connection) == []
     assert mailbox.sent == []
     status = await connection.scalar(
         select(Booking.status).where(Booking.id == uuid.UUID(competitor))
@@ -479,129 +392,10 @@ async def test_a_failed_decision_notifies_nobody(
     assert status == BookingStatus.PENDING
 
 
-async def test_users_list_their_own_notifications_newest_first(
-    client: httpx2.AsyncClient,
-    venue: Venue,
-    users: dict[str, User],
-    session_factory: async_sessionmaker[AsyncSession],
+async def test_the_notification_routes_are_gone(
+    client: httpx2.AsyncClient, users: dict[str, User]
 ) -> None:
-    booking = await add_booking(
-        session_factory, user=users[ADA], table=venue.four, starts_at=EVENING
-    )
-    oldest = await add_notification(
-        session_factory,
-        user=users[ADA],
-        booking=booking,
-        created_at=START - timedelta(hours=2),
-        read_at=START - timedelta(hours=1),
-    )
-    middle = await add_notification(
-        session_factory,
-        user=users[ADA],
-        booking=booking,
-        created_at=START - timedelta(hours=1),
-        kind=REJECTED,
-    )
-    newest = await add_notification(
-        session_factory, user=users[ADA], booking=booking, created_at=START
-    )
-    await add_notification(session_factory, user=users[GRACE], booking=booking, created_at=START)
     await sign_in(client, ADA)
 
-    response = await client.get(NOTIFICATIONS)
-
-    assert response.status_code == 200, response.text
-    assert response.json() == {
-        "items": [notification_body(item) for item in (newest, middle, oldest)],
-        "total": 3,
-        "limit": 20,
-        "offset": 0,
-    }
-    unread = await client.get(NOTIFICATIONS, params={"unread_only": "true"})
-    assert unread.status_code == 200, unread.text
-    assert [item["id"] for item in unread.json()["items"]] == [str(newest.id), str(middle.id)]
-    assert unread.json()["total"] == 2
-    page = await client.get(NOTIFICATIONS, params={"limit": 1, "offset": 1})
-    assert page.status_code == 200, page.text
-    assert [item["id"] for item in page.json()["items"]] == [str(middle.id)]
-    assert (page.json()["total"], page.json()["limit"], page.json()["offset"]) == (3, 1, 1)
-    assert (await client.get(NOTIFICATIONS, params={"limit": 50})).status_code == 200
-    assert (await client.get(NOTIFICATIONS, params={"limit": 51})).status_code == 422
-    assert (await client.get(NOTIFICATIONS, params={"offset": 2**63})).status_code == 422
-
-
-async def test_marking_read_keeps_the_first_read_time(
-    client: httpx2.AsyncClient,
-    venue: Venue,
-    users: dict[str, User],
-    fake_clock: FakeClock,
-    connection: AsyncConnection,
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    booking = await add_booking(
-        session_factory, user=users[ADA], table=venue.four, starts_at=EVENING
-    )
-    notification = await add_notification(
-        session_factory, user=users[ADA], booking=booking, created_at=START - timedelta(hours=1)
-    )
-    await sign_in(client, ADA)
-
-    first = await client.post(f"{NOTIFICATIONS}/{notification.id}/read")
-    fake_clock.advance(minutes=5)
-    second = await client.post(f"{NOTIFICATIONS}/{notification.id}/read")
-
-    assert first.status_code == 200, first.text
-    assert second.status_code == 200, second.text
-    notification.read_at = START
-    assert first.json() == notification_body(notification)
-    assert second.json() == first.json()
-    stored = await connection.scalar(
-        select(Notification.read_at).where(Notification.id == notification.id)
-    )
-    assert stored == START
-
-
-async def test_another_users_or_an_unknown_notification_is_not_found(
-    client: httpx2.AsyncClient,
-    venue: Venue,
-    users: dict[str, User],
-    connection: AsyncConnection,
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    booking = await add_booking(
-        session_factory, user=users[ADA], table=venue.four, starts_at=EVENING
-    )
-    foreign = await add_notification(
-        session_factory, user=users[ADA], booking=booking, created_at=START
-    )
-    await sign_in(client, GRACE)
-
-    assert_error(
-        await client.post(f"{NOTIFICATIONS}/{foreign.id}/read"), 404, "NOTIFICATION_NOT_FOUND"
-    )
-    assert_error(
-        await client.post(f"{NOTIFICATIONS}/{uuid.uuid4()}/read"), 404, "NOTIFICATION_NOT_FOUND"
-    )
-    stored = await connection.scalar(
-        select(Notification.read_at).where(Notification.id == foreign.id)
-    )
-    assert stored is None
-
-
-async def test_anonymous_callers_cannot_list_or_mark_read(
-    client: httpx2.AsyncClient,
-    venue: Venue,
-    users: dict[str, User],
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    booking = await add_booking(
-        session_factory, user=users[ADA], table=venue.four, starts_at=EVENING
-    )
-    notification = await add_notification(
-        session_factory, user=users[ADA], booking=booking, created_at=START
-    )
-
-    assert_error(await client.get(NOTIFICATIONS), 401, "NOT_AUTHENTICATED")
-    assert_error(
-        await client.post(f"{NOTIFICATIONS}/{notification.id}/read"), 401, "NOT_AUTHENTICATED"
-    )
+    assert (await client.get("/api/v1/notifications")).status_code == 404
+    assert (await client.post(f"/api/v1/notifications/{uuid.uuid4()}/read")).status_code == 404

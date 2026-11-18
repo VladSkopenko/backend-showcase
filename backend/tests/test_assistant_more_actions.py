@@ -16,6 +16,7 @@ from support.bookings import (
     ADA,
     BOOKINGS,
     GRACE,
+    START,
     TODAY,
     TOMORROW,
     FakeClock,
@@ -39,8 +40,10 @@ from app.config.settings import (
 )
 from app.features.assistant.endpoints.dependencies import get_chat_model
 from app.features.core.bookings.enums import BookingStatus
+from app.features.core.bookings.repositories import BookableTableRepository, BookingRepository
+from app.features.core.users.repositories import UserRepository
 from app.main import create_app
-from app.model_registry import AssistantAction, Booking, Dish, User
+from app.model_registry import AssistantAction, AssistantModelCall, Booking, Dish, User
 
 pytestmark = [pytest.mark.anyio, pytest.mark.usefixtures("no_locations")]
 
@@ -333,6 +336,92 @@ async def test_an_edit_made_on_the_website_after_the_card_fails_the_apply(
         party_size,
         starts_at + timedelta(minutes=duration_minutes),
     )
+
+
+async def test_an_edit_apply_locks_the_user_then_the_table_then_the_booking(
+    client: httpx2.AsyncClient,
+    models: Models,
+    evening: Booking,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await sign_in(client, ADA)
+    session_id = await create_session(client)
+    action = await propose(client, models, session_id, edit_call(evening, time="20:00"))
+    website = await edit(client, evening.id, EVENING, 3, 90)
+    assert website.status_code == 200, website.text
+    locks: list[str] = []
+
+    def recording(cls: type, name: str, label: str) -> None:
+        original = getattr(cls, name)
+
+        async def record(self: Any, **kwargs: Any) -> Any:
+            if kwargs.get("for_update"):
+                locks.append(label)
+            return await original(self, **kwargs)
+
+        monkeypatch.setattr(cls, name, record)
+
+    recording(UserRepository, "get_by_id", "user")
+    recording(BookableTableRepository, "get", "table")
+    recording(BookingRepository, "get_for_user", "booking")
+
+    applied = await apply(client, models, session_id, action["id"])
+
+    assert applied["status"] == "FAILED"
+    assert applied["error"]["code"] == "BOOKING_CHANGED"
+    assert locks == ["user", "table", "booking"]
+
+
+async def test_an_edit_applied_after_a_website_cancel_fails_like_the_route_edit(
+    client: httpx2.AsyncClient,
+    models: Models,
+    evening: Booking,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await sign_in(client, ADA)
+    session_id = await create_session(client)
+    action = await propose(client, models, session_id, edit_call(evening, time="20:00"))
+    cancelled = await client.post(f"{BOOKINGS}/{evening.id}/cancel")
+    assert cancelled.status_code == 200, cancelled.text
+
+    applied = await apply(client, models, session_id, action["id"])
+
+    assert applied["status"] == "FAILED"
+    assert applied["error"]["code"] == "BOOKING_ALREADY_CANCELLED"
+    stored = await reload(session_factory, evening)
+    assert (stored.status, stored.starts_at) == (BookingStatus.CANCELLED, EVENING)
+
+
+async def test_a_cancel_applied_with_the_budget_spent_is_commented_done(
+    client: httpx2.AsyncClient,
+    models: Models,
+    evening: Booking,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await sign_in(client, ADA)
+    session_id = await create_session(client)
+    action = await propose(client, models, session_id, cancel_call(evening))
+    async with session_factory() as session:
+        session.add(
+            AssistantModelCall(
+                model="gpt-4.1-mini",
+                input_tokens=1000,
+                cached_input_tokens=0,
+                output_tokens=100,
+                cost_micro_usd=1_000_000,
+                created_at=START,
+            )
+        )
+        await session.commit()
+    models.current = models.comment
+
+    response = await client.post(f"{SESSIONS}/{session_id}/actions/{action['id']}/apply")
+
+    assert response.status_code == 200, response.text
+    events = parse_events(response.text)
+    assert events[0][1]["status"] == "APPLIED"
+    assert [data for name, data in events if name == "chunk"] == [{"text": "Done."}]
+    assert models.comment.received == []
 
 
 async def test_an_edit_of_the_party_and_the_length_pins_the_new_and_the_before_values(

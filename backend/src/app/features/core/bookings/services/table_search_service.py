@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import BookingSettings
 from app.features.core.bookings.dto import SlotView, TableCardPage, TableCardView
+from app.features.core.bookings.enums import BookingStatus
 from app.features.core.bookings.models import Booking
 from app.features.core.bookings.repositories import BookableTableRepository, BookingRepository
 from app.features.core.bookings.services.booking_schedule import BookingSchedule
@@ -59,8 +60,11 @@ class TableSearchService:
             None if slot_time is None else self._schedule.start_at(day=day, slot_time=slot_time)
         )
         now = self._schedule.now()
+        is_request = self._schedule.initial_status(party_size=party_size) == BookingStatus.PENDING
         cards = [
-            self._to_card(table, locations[table.location_id], starts, booked[table.id], now)
+            self._to_card(
+                table, locations[table.location_id], starts, booked[table.id], now, is_request
+            )
             for table in tables
         ]
         matching = [card for card in cards if self._is_wanted(card, wanted)]
@@ -78,6 +82,7 @@ class TableSearchService:
         starts: Sequence[datetime],
         bookings: Sequence[Booking],
         now: datetime,
+        is_request: bool,
     ) -> TableCardView:
         return TableCardView(
             id=table.id,
@@ -89,6 +94,10 @@ class TableSearchService:
                     starts_at=start,
                     available=self._schedule.is_free(
                         start=start, duration=self._schedule.duration, bookings=bookings, now=now
+                    )
+                    and (
+                        not is_request
+                        or self._schedule.is_requestable_start(starts_at=start, now=now)
                     ),
                 )
                 for start in starts
