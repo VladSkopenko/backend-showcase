@@ -354,6 +354,122 @@ def test_notification_env_vars_land_in_the_notifications_block(
     assert Settings().notifications.skip_email_domains == ["example.com", "bots.test"]
 
 
+def test_openai_defaults() -> None:
+    openai = Settings().openai
+
+    assert openai.api_key.get_secret_value() == ""
+    assert not openai.is_configured
+    assert openai.model == "gpt-4.1-mini"
+    assert openai.max_output_tokens == 1024
+    assert openai.request_timeout_seconds == 60
+
+
+def test_openai_env_vars_land_in_the_openai_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-secret")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("OPENAI_MAX_OUTPUT_TOKENS", "2048")
+    monkeypatch.setenv("OPENAI_REQUEST_TIMEOUT_SECONDS", "30")
+
+    settings = Settings()
+
+    assert settings.openai.api_key.get_secret_value() == "sk-openai-secret"
+    assert settings.openai.is_configured
+    assert settings.openai.model == "gpt-5-mini"
+    assert settings.openai.max_output_tokens == 2048
+    assert settings.openai.request_timeout_seconds == 30
+    assert "sk-openai-secret" not in repr(settings)
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "valid"),
+    [
+        ("OPENAI_MAX_OUTPUT_TOKENS", "0", False),
+        ("OPENAI_MAX_OUTPUT_TOKENS", "1", True),
+        ("OPENAI_REQUEST_TIMEOUT_SECONDS", "0", False),
+        ("OPENAI_REQUEST_TIMEOUT_SECONDS", "1", True),
+    ],
+)
+def test_openai_limits_are_always_positive(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str, valid: bool
+) -> None:
+    monkeypatch.setenv(name, value)
+    field = name.removeprefix("OPENAI_").lower()
+
+    if valid:
+        assert getattr(Settings().openai, field) == int(value)
+    else:
+        with pytest.raises(ValidationError, match=field):
+            Settings()
+
+
+def test_empty_openai_model_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_MODEL", "")
+
+    with pytest.raises(ValidationError, match="model"):
+        Settings()
+
+
+def test_assistant_defaults() -> None:
+    assistant = Settings().assistant
+
+    assert assistant.session_ttl_days == 7
+    assert assistant.history_messages == 20
+    assert assistant.max_rounds == 5
+    assert assistant.max_tool_calls == 15
+    assert assistant.turn_timeout_seconds == 240
+    assert assistant.tool_result_max_chars == 8000
+
+
+def test_assistant_turn_env_vars_land_in_the_assistant_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ASSISTANT_HISTORY_MESSAGES", "10")
+    monkeypatch.setenv("ASSISTANT_MAX_ROUNDS", "3")
+    monkeypatch.setenv("ASSISTANT_MAX_TOOL_CALLS", "9")
+    monkeypatch.setenv("ASSISTANT_TURN_TIMEOUT_SECONDS", "120")
+    monkeypatch.setenv("ASSISTANT_TOOL_RESULT_MAX_CHARS", "4000")
+
+    assistant = Settings().assistant
+
+    assert assistant.history_messages == 10
+    assert assistant.max_rounds == 3
+    assert assistant.max_tool_calls == 9
+    assert assistant.turn_timeout_seconds == 120
+    assert assistant.tool_result_max_chars == 4000
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "ASSISTANT_HISTORY_MESSAGES",
+        "ASSISTANT_MAX_ROUNDS",
+        "ASSISTANT_MAX_TOOL_CALLS",
+        "ASSISTANT_TURN_TIMEOUT_SECONDS",
+        "ASSISTANT_TOOL_RESULT_MAX_CHARS",
+    ],
+)
+def test_assistant_turn_limits_are_always_positive(
+    monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    monkeypatch.setenv(name, "0")
+
+    with pytest.raises(ValidationError, match=name.removeprefix("ASSISTANT_").lower()):
+        Settings()
+
+
+@pytest.mark.parametrize(("value", "valid"), [("0", False), ("1", True), ("14", True)])
+def test_assistant_session_ttl_env_var_lands_in_the_assistant_block_and_is_always_positive(
+    monkeypatch: pytest.MonkeyPatch, value: str, valid: bool
+) -> None:
+    monkeypatch.setenv("ASSISTANT_SESSION_TTL_DAYS", value)
+
+    if valid:
+        assert Settings().assistant.session_ttl_days == int(value)
+    else:
+        with pytest.raises(ValidationError, match="session_ttl_days"):
+            Settings()
+
+
 def test_cleanup_defaults() -> None:
     assert Settings().cleanup.interval_seconds == 3600
 

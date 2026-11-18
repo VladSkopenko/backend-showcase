@@ -104,6 +104,7 @@ Each non-obvious choice has a short record in [docs/adr](docs/adr):
 | [17](docs/adr/0017-preorder-parts-per-participant.md) | Pre-order drafts per participant submitted into one group, the owner's view of the whole group, live prices, the join window and the booking lock |
 | [18](docs/adr/0018-in-app-notifications.md) | In-app notifications written in the decision's transaction, emails after the commit, skipped domains |
 | [19](docs/adr/0019-public-grafana-reads-dev.md) | Public Grafana reads dev through a role limited to listed columns; the role is the security boundary |
+| [20](docs/adr/0020-assistant-composes-ai-tools.md) | A feature's AI tools live in `ai_tools/` beside its endpoints as a second adapter over its services; the assistant is their only composition root |
 
 ## Run it locally
 

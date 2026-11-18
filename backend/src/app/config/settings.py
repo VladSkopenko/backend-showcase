@@ -176,6 +176,35 @@ class CleanupSettings(BaseSettings):
     interval_seconds: int = Field(default=3600, gt=0)
 
 
+class OpenAISettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="OPENAI_", env_file=ENV_FILE, extra="ignore")
+
+    # Empty means the assistant routes are unavailable; the rest of the API runs.
+    api_key: SecretStr = SecretStr("")
+    model: str = Field(default="gpt-4.1-mini", min_length=1)
+    max_output_tokens: int = Field(default=1024, gt=0)
+    request_timeout_seconds: int = Field(default=60, gt=0)
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.api_key.get_secret_value())
+
+
+class AssistantSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="ASSISTANT_", env_file=ENV_FILE, extra="ignore")
+
+    # A chat session without a new message for this long is deleted by the cleanup job.
+    session_ttl_days: int = Field(default=7, gt=0)
+    # The model sees this many of the session's latest messages, the new one included.
+    history_messages: int = Field(default=20, gt=0)
+    # Caps of one turn: model calls, tool calls across them, and wall-clock time.
+    max_rounds: int = Field(default=5, gt=0)
+    max_tool_calls: int = Field(default=15, gt=0)
+    turn_timeout_seconds: int = Field(default=240, gt=0)
+    # A longer tool result is cut before it reaches the model.
+    tool_result_max_chars: int = Field(default=8000, gt=0)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -191,6 +220,8 @@ class Settings(BaseSettings):
     preorder: PreorderSettings = Field(default_factory=PreorderSettings)
     notifications: NotificationSettings = Field(default_factory=NotificationSettings)
     cleanup: CleanupSettings = Field(default_factory=CleanupSettings)
+    openai: OpenAISettings = Field(default_factory=OpenAISettings)
+    assistant: AssistantSettings = Field(default_factory=AssistantSettings)
 
     @classmethod
     def settings_customise_sources(
