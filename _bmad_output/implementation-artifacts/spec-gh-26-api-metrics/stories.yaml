@@ -1,0 +1,27 @@
+- id: "1"
+  title: The API serves request metrics on a private port
+  description: >-
+    Request count, status and latency per full route template on METRICS_PORT, nothing new on
+    port 8000 (CAP-1).
+  spec_checkpoint: true
+  done_checkpoint: true
+- id: "2"
+  title: Prometheus in the platform stack scrapes dev
+  description: >-
+    The observability network, Prometheus scraping the dev API with env=dev, its UI on the
+    tailnet, and ADR 21 (CAP-2).
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Infrastructure: one file at a time with Vlad, every key checked in the official docs, local
+    dry run first.
+- id: "3"
+  title: The public Grafana shows the API dashboard
+  description: >-
+    Prometheus as a second Grafana data source, the api dashboard, and lowered query limits for
+    anonymous Viewers (CAP-3).
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Infrastructure: one file at a time with Vlad, every key checked in the official docs, local
+    dry run first.

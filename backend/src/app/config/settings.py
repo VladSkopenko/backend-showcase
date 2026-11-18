@@ -215,6 +215,13 @@ class AssistantSettings(BaseSettings):
     action_ttl_hours: int = Field(default=24, gt=0, le=720)
 
 
+class MetricsSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="METRICS_", env_file=ENV_FILE, extra="ignore")
+
+    # Prometheus scrapes this port; Caddy never proxies it (ADR 7).
+    port: int = 9000
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -232,6 +239,7 @@ class Settings(BaseSettings):
     cleanup: CleanupSettings = Field(default_factory=CleanupSettings)
     openai: OpenAISettings = Field(default_factory=OpenAISettings)
     assistant: AssistantSettings = Field(default_factory=AssistantSettings)
+    metrics: MetricsSettings = Field(default_factory=MetricsSettings)
 
     @classmethod
     def settings_customise_sources(

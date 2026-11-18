@@ -584,3 +584,13 @@ def test_cleanup_interval_env_var_lands_in_the_cleanup_block_and_is_always_posit
     else:
         with pytest.raises(ValidationError, match="interval_seconds"):
             Settings()
+
+
+def test_metrics_defaults() -> None:
+    assert Settings().metrics.port == 9000
+
+
+def test_metrics_port_env_var_lands_in_the_metrics_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("METRICS_PORT", "9010")
+
+    assert Settings().metrics.port == 9010
