@@ -38,6 +38,8 @@ for name in list(os.environ):
     if name.startswith("MEDIA_"):
         del os.environ[name]
 os.environ["MEDIA_PUBLIC_BASE_URL"] = TEST_MEDIA_PUBLIC_BASE_URL
+# The cached settings of every app the tests build bind a free port, never the real 9000.
+os.environ["METRICS_PORT"] = "0"
 
 # A developer's backend/.env must never change test behaviour or send mail. Runs at collection,
 # before any test module builds the app and fills the cached get_settings().
@@ -63,6 +65,7 @@ def isolated_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
                 "CLEANUP_",
                 "OPENAI_",
                 "ASSISTANT_",
+                "METRICS_",
             )
         ):
             monkeypatch.delenv(name)

@@ -1,9 +1,10 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from prometheus_client import CollectorRegistry
 from starlette.exceptions import HTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -46,6 +47,7 @@ from app.features.preorder.endpoints import PreorderOpenApiTags
 from app.features.preorder.endpoints import router as preorder_router
 from app.infrastructure.background_tasks import CleanupJob, PeriodicTask, RequestExpiryJob
 from app.infrastructure.email import create_email_sender
+from app.infrastructure.metrics import MetricsServer, RequestMetricsMiddleware, RouteTemplates
 from app.infrastructure.oauth import OAuthClients
 
 ERROR_STATUSES = {
@@ -59,37 +61,58 @@ ERROR_STATUSES = {
     **ASSISTANT_ERROR_STATUSES,
 }
 
+# Included in this order; the metrics middleware takes each route's full template from here.
+ROUTERS: list[tuple[APIRouter, str]] = [
+    (health_router, ""),
+    (auth_router, "/api/v1"),
+    (oauth_router, "/api/v1"),
+    (menu_router, "/api/v1"),
+    (locations_router, "/api/v1"),
+    (bookings_router, "/api/v1"),
+    (invites_router, "/api/v1"),
+    (preorder_router, "/api/v1"),
+    (assistant_router, "/api/v1"),
+    (staff_router, "/api/v1"),
+    (notifications_router, "/api/v1"),
+]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
-    request_expiry = PeriodicTask(
-        name="request expiry",
-        interval_seconds=settings.booking.auto_reject_interval_seconds,
-        job=RequestExpiryJob(
-            get_sessionmaker(),
-            settings=settings,
-            email_sender=create_email_sender(
-                settings=settings.email, environment=settings.app.environment
-            ),
-        ).run,
-    )
-    cleanup = PeriodicTask(
-        name="cleanup",
-        interval_seconds=settings.cleanup.interval_seconds,
-        job=CleanupJob(
-            get_sessionmaker(),
-            assistant_session_ttl_days=settings.assistant.session_ttl_days,
-        ).run,
-    )
-    request_expiry.start()
-    cleanup.start()
+    metrics_server = MetricsServer(port=settings.metrics.port, registry=app.state.metrics_registry)
+    metrics_server.start()
+    app.state.metrics_server = metrics_server
     try:
-        yield
+        request_expiry = PeriodicTask(
+            name="request expiry",
+            interval_seconds=settings.booking.auto_reject_interval_seconds,
+            job=RequestExpiryJob(
+                get_sessionmaker(),
+                settings=settings,
+                email_sender=create_email_sender(
+                    settings=settings.email, environment=settings.app.environment
+                ),
+            ).run,
+        )
+        cleanup = PeriodicTask(
+            name="cleanup",
+            interval_seconds=settings.cleanup.interval_seconds,
+            job=CleanupJob(
+                get_sessionmaker(),
+                assistant_session_ttl_days=settings.assistant.session_ttl_days,
+            ).run,
+        )
+        request_expiry.start()
+        cleanup.start()
+        try:
+            yield
+        finally:
+            await cleanup.stop()
+            await request_expiry.stop()
+            await get_engine().dispose()
     finally:
-        await cleanup.stop()
-        await request_expiry.stop()
-        await get_engine().dispose()
+        metrics_server.stop()
 
 
 def create_app() -> FastAPI:
@@ -122,17 +145,15 @@ def create_app() -> FastAPI:
         same_site="lax",
         https_only=True,
     )
-    app.include_router(health_router)
-    app.include_router(auth_router, prefix="/api/v1")
-    app.include_router(oauth_router, prefix="/api/v1")
-    app.include_router(menu_router, prefix="/api/v1")
-    app.include_router(locations_router, prefix="/api/v1")
-    app.include_router(bookings_router, prefix="/api/v1")
-    app.include_router(invites_router, prefix="/api/v1")
-    app.include_router(preorder_router, prefix="/api/v1")
-    app.include_router(assistant_router, prefix="/api/v1")
-    app.include_router(staff_router, prefix="/api/v1")
-    app.include_router(notifications_router, prefix="/api/v1")
+    app.state.metrics_registry = CollectorRegistry()
+    # Added last, so it is the outermost user middleware and times the whole request.
+    app.add_middleware(
+        RequestMetricsMiddleware,
+        registry=app.state.metrics_registry,
+        route_templates=RouteTemplates(ROUTERS),
+    )
+    for router, prefix in ROUTERS:
+        app.include_router(router, prefix=prefix)
 
     @app.exception_handler(DomainError)
     async def handle_domain_error(request: Request, exc: DomainError) -> JSONResponse:
