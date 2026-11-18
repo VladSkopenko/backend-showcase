@@ -1,4 +1,3 @@
-import dataclasses
 import uuid
 from typing import Any
 
@@ -10,7 +9,6 @@ from app.common.ai_tools import (
     AiToolErrors,
     Card,
     CardField,
-    Proposal,
     dry_run,
     invalid_arguments,
     tool_error,
@@ -165,16 +163,16 @@ class PreorderTools:
         card = Card(
             title="Update your pre-order cart", fields=fields, notice=None, confirm_label="Save"
         )
-        return self._propose(
-            CartSetItemApplier.KIND,
-            {
+        return proposals.propose(
+            kind=CartSetItemApplier.KIND,
+            payload={
                 "booking_id": str(booking_id),
                 "dish_id": str(dish_id),
                 "quantity": quantity,
                 "note": line.note,
                 "before": CartSetItemApplier.snapshot(current),
             },
-            card,
+            card=card,
         )
 
     async def _remove_cart_item(self, booking_id: uuid.UUID, dish_id: uuid.UUID) -> str:
@@ -207,10 +205,10 @@ class PreorderTools:
             notice=None,
             confirm_label="Remove",
         )
-        return self._propose(
-            CartRemoveItemApplier.KIND,
-            {"booking_id": str(booking_id), "dish_id": str(dish_id)},
-            card,
+        return proposals.propose(
+            kind=CartRemoveItemApplier.KIND,
+            payload={"booking_id": str(booking_id), "dish_id": str(dish_id)},
+            card=card,
         )
 
     async def _submit_preorder(self, booking_id: uuid.UUID) -> str:
@@ -236,21 +234,17 @@ class PreorderTools:
             notice="A sent part is final; a new cart can follow.",
             confirm_label="Send",
         )
-        return self._propose(
-            PreorderSubmitApplier.KIND,
-            {
+        return proposals.propose(
+            kind=PreorderSubmitApplier.KIND,
+            payload={
                 "booking_id": str(booking_id),
                 "items": [
                     {"dish_id": str(line.dish.id), "quantity": line.quantity} for line in part.items
                 ],
                 "total_cents": part.total_cents,
             },
-            card,
+            card=card,
         )
-
-    def _propose(self, kind: str, payload: dict[str, Any], card: Card) -> str:
-        self._context.proposals.hold(Proposal(kind=kind, payload=payload, card=card))
-        return tool_result({"status": "awaiting_confirmation", "card": dataclasses.asdict(card)})
 
     @staticmethod
     def _before(line: CartLineView) -> str:

@@ -35,7 +35,7 @@ class AssistantApplyService:
     fixed text and the model is not called. The per-minute cap does not apply.
     """
 
-    APPLIED_TEXT = "Done: it is in your reservations."
+    APPLIED_TEXT = "Done."
     FAILED_TEXT = "That did not work: {message}"
 
     def __init__(

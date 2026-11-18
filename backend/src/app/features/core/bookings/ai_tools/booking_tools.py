@@ -1,4 +1,3 @@
-import dataclasses
 import datetime
 import uuid
 from typing import Any
@@ -13,7 +12,6 @@ from app.common.ai_tools import (
     AiToolErrors,
     Card,
     CardField,
-    Proposal,
     dry_run,
     invalid_arguments,
     tool_error,
@@ -184,18 +182,15 @@ class BookingTools:
                 party_size=party_size,
             )
         card = self._booking_card(booking)
-        proposals.hold(
-            Proposal(
-                kind=BookingCreateApplier.KIND,
-                payload={
-                    "table_id": str(table_id),
-                    "starts_at": starts_at.isoformat(),
-                    "party_size": party_size,
-                },
-                card=card,
-            )
+        return proposals.propose(
+            kind=BookingCreateApplier.KIND,
+            payload={
+                "table_id": str(table_id),
+                "starts_at": starts_at.isoformat(),
+                "party_size": party_size,
+            },
+            card=card,
         )
-        return tool_result({"status": "awaiting_confirmation", "card": dataclasses.asdict(card)})
 
     async def _edit_booking(
         self,
@@ -242,24 +237,21 @@ class BookingTools:
             notice=None,
             confirm_label="Change",
         )
-        proposals.hold(
-            Proposal(
-                kind=BookingEditApplier.KIND,
-                payload={
-                    "booking_id": str(booking_id),
-                    "starts_at": starts_at.isoformat(),
-                    "party_size": new_party_size,
-                    "duration_minutes": new_duration,
-                    "before": {
-                        "starts_at": current_start.isoformat(),
-                        "party_size": current.party_size,
-                        "duration_minutes": current_duration,
-                    },
+        return proposals.propose(
+            kind=BookingEditApplier.KIND,
+            payload={
+                "booking_id": str(booking_id),
+                "starts_at": starts_at.isoformat(),
+                "party_size": new_party_size,
+                "duration_minutes": new_duration,
+                "before": {
+                    "starts_at": current_start.isoformat(),
+                    "party_size": current.party_size,
+                    "duration_minutes": current_duration,
                 },
-                card=card,
-            )
+            },
+            card=card,
         )
-        return tool_result({"status": "awaiting_confirmation", "card": dataclasses.asdict(card)})
 
     async def _cancel_booking(self, booking_id: uuid.UUID) -> str:
         proposals = self._context.proposals
@@ -275,14 +267,11 @@ class BookingTools:
             notice="This cannot be undone.",
             confirm_label="Yes, cancel it",
         )
-        proposals.hold(
-            Proposal(
-                kind=BookingCancelApplier.KIND,
-                payload={"booking_id": str(booking_id)},
-                card=card,
-            )
+        return proposals.propose(
+            kind=BookingCancelApplier.KIND,
+            payload={"booking_id": str(booking_id)},
+            card=card,
         )
-        return tool_result({"status": "awaiting_confirmation", "card": dataclasses.asdict(card)})
 
     def _booking_card(self, booking: BookingView) -> Card:
         notice = (

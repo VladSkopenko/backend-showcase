@@ -84,7 +84,6 @@ DENIED = [
     "SELECT count(*) FROM refresh_tokens",
     "SELECT count(*) FROM verification_codes",
     "SELECT count(*) FROM user_oauth_accounts",
-    "SELECT count(*) FROM notifications",
     "SELECT count(*) FROM alembic_version",
     "INSERT INTO dishes (slug) VALUES ('grafana-reader-write')",
     "UPDATE users SET first_name = 'x'",

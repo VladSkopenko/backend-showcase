@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common import clock
 from app.config.settings import BookingSettings
-from app.features.core.bookings.dto import BookingView, SlotView
+from app.features.core.bookings.dto import BookingView, ExpectedBooking, SlotView
 from app.features.core.bookings.enums import BookingStatus, ParticipantRole
 from app.features.core.bookings.models import Booking, BookingParticipant
 from app.features.core.bookings.repositories import (
@@ -17,6 +17,7 @@ from app.features.core.bookings.repositories import (
 from app.features.core.bookings.services.booking_schedule import BookingSchedule
 from app.features.core.bookings.services.booking_view_builder import BookingViewBuilder
 from app.features.core.bookings.services.exceptions import (
+    BookingChangedError,
     BookingNotFoundError,
     BookingPendingError,
     LargeBookingNotEditableError,
@@ -125,6 +126,7 @@ class BookingService:
         starts_at: datetime,
         party_size: int,
         duration_minutes: int,
+        expected: ExpectedBooking | None = None,
     ) -> BookingView:
         booking, table, _ = await self._get_editable(user_id=user_id, booking_id=booking_id)
         self._schedule.check_party_size(party_size=party_size)
@@ -143,6 +145,8 @@ class BookingService:
         booking, table, owner_id = await self._get_editable(
             user_id=user_id, booking_id=booking_id, for_update=True
         )
+        if expected is not None and not self._matches(booking, expected):
+            raise BookingChangedError()
         if party_size < await self._participants.count(booking_id=booking.id):
             raise PartyBelowParticipantsError()
         if await self._bookings.table_has_confirmed_overlap(
@@ -189,6 +193,14 @@ class BookingService:
             )
             for start in starts
         ]
+
+    @staticmethod
+    def _matches(booking: Booking, expected: ExpectedBooking) -> bool:
+        return (
+            booking.starts_at == expected.starts_at
+            and booking.party_size == expected.party_size
+            and booking.ends_at - booking.starts_at == timedelta(minutes=expected.duration_minutes)
+        )
 
     async def _get_editable(
         self, *, user_id: uuid.UUID, booking_id: uuid.UUID, for_update: bool = False

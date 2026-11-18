@@ -20,6 +20,7 @@ from app.config.settings import Settings, get_settings
 from app.features.assistant.endpoints import ERROR_STATUSES as ASSISTANT_ERROR_STATUSES
 from app.features.assistant.endpoints import AssistantOpenApiTags
 from app.features.assistant.endpoints import router as assistant_router
+from app.features.assistant.endpoints.dependencies import build_chat_model
 from app.features.core.auth.endpoints import ERROR_STATUSES as AUTH_ERROR_STATUSES
 from app.features.core.auth.endpoints import AuthOpenApiTags, oauth_router
 from app.features.core.auth.endpoints import router as auth_router
@@ -34,11 +35,6 @@ from app.features.core.locations.endpoints import router as locations_router
 from app.features.core.menu.endpoints import ERROR_STATUSES as MENU_ERROR_STATUSES
 from app.features.core.menu.endpoints import MenuOpenApiTags
 from app.features.core.menu.endpoints import router as menu_router
-from app.features.core.notifications.endpoints import (
-    ERROR_STATUSES as NOTIFICATIONS_ERROR_STATUSES,
-)
-from app.features.core.notifications.endpoints import NotificationsOpenApiTags
-from app.features.core.notifications.endpoints import router as notifications_router
 from app.features.invites.endpoints import ERROR_STATUSES as INVITES_ERROR_STATUSES
 from app.features.invites.endpoints import InvitesOpenApiTags
 from app.features.invites.endpoints import router as invites_router
@@ -55,7 +51,6 @@ ERROR_STATUSES = {
     **MENU_ERROR_STATUSES,
     **LOCATIONS_ERROR_STATUSES,
     **BOOKINGS_ERROR_STATUSES,
-    **NOTIFICATIONS_ERROR_STATUSES,
     **INVITES_ERROR_STATUSES,
     **PREORDER_ERROR_STATUSES,
     **ASSISTANT_ERROR_STATUSES,
@@ -73,7 +68,6 @@ ROUTERS: list[tuple[APIRouter, str]] = [
     (preorder_router, "/api/v1"),
     (assistant_router, "/api/v1"),
     (staff_router, "/api/v1"),
-    (notifications_router, "/api/v1"),
 ]
 
 
@@ -118,7 +112,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
-        title=settings.app.name,
+        title="backend-showcase",
         lifespan=lifespan,
         openapi_tags=[
             *AuthOpenApiTags.METADATA,
@@ -129,11 +123,11 @@ def create_app() -> FastAPI:
             *PreorderOpenApiTags.METADATA,
             *AssistantOpenApiTags.METADATA,
             *BookingOpenApiTags.STAFF_METADATA,
-            *NotificationsOpenApiTags.METADATA,
             *HealthOpenApiTags.METADATA,
         ],
     )
     app.state.settings = settings
+    app.state.chat_model = build_chat_model(settings.openai)
     app.state.oauth_clients = OAuthClients(google=settings.google)
     # Holds only the OAuth state, nonce and PKCE verifier between /login and /callback.
     app.add_middleware(

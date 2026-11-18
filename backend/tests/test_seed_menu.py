@@ -1,14 +1,11 @@
-import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import func, select, text, update
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionmaker
 
-from app.common import clock
 from app.config.settings import MediaSettings
 from app.features.core.menu.enums import DishCategory
 from app.features.core.menu.services.dish_seed_service import DishSeedService
@@ -19,48 +16,6 @@ from app.model_registry import Dish
 pytestmark = pytest.mark.anyio
 
 NOW = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
-
-
-def entry(slug: str, **overrides: Any) -> dict[str, Any]:
-    values: dict[str, Any] = {
-        "slug": slug,
-        "name": slug.replace("-", " ").title(),
-        "description": f"About {slug}",
-        "category": "DESSERT",
-        "price_cents": 650,
-        "weight_grams": 180,
-        "calories": 420,
-        "protein": "6g",
-        "fats": "22-24g",
-        "carbs": "48g",
-        "vitamins": "A, D",
-        "is_available": True,
-        "popularity": 3,
-        "image": f"{slug}.webp",
-    }
-    values.update(overrides)
-    return values
-
-
-def write_seed(directory: Path, entries: list[dict[str, Any]]) -> Path:
-    directory.mkdir(exist_ok=True)
-    (directory / "dishes.json").write_text(json.dumps(entries))
-    for item in entries:
-        image = item.get("image")
-        if isinstance(image, str):
-            (directory / image).write_bytes(b"picture-bytes")
-    return directory
-
-
-@pytest.fixture
-async def empty_menu(connection: AsyncConnection) -> None:
-    # Migration 0007 fills the menu; these tests build their own dishes.
-    await connection.execute(text("DELETE FROM dishes"))
-
-
-@pytest.fixture(autouse=True)
-def fixed_clock(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(clock, "now", lambda: NOW)
 
 
 @pytest.fixture
@@ -78,219 +33,144 @@ def storage() -> S3FileStorage:
     )
 
 
-async def load_dishes(session_factory: async_sessionmaker[AsyncSession]) -> dict[str, Dish]:
-    async with session_factory() as session:
-        dishes = (await session.scalars(select(Dish))).all()
-    return {dish.slug: dish for dish in dishes}
+@pytest.fixture
+async def empty_menu(connection: AsyncConnection) -> None:
+    # Migration 0007 fills the menu; these tests build their own dishes.
+    await connection.execute(text("DELETE FROM dishes"))
 
 
-async def save_seed(
-    session_factory: async_sessionmaker[AsyncSession], storage: S3FileStorage, directory: Path
-) -> None:
+async def add_dishes(session_factory: async_sessionmaker[AsyncSession], *image_keys: str) -> None:
     async with session_factory() as session:
-        await DishSeedService(session, storage).save(
-            entries=DishSeedService.load(directory=directory)
+        for image_key in image_keys:
+            slug = Path(image_key).stem
+            session.add(
+                Dish(
+                    slug=slug,
+                    name=slug.title(),
+                    description=f"About {slug}",
+                    category=DishCategory.DESSERT,
+                    price_cents=650,
+                    weight_grams=180,
+                    calories=420,
+                    protein="6g",
+                    fats="22g",
+                    carbs="48g",
+                    vitamins="A, D",
+                    is_available=True,
+                    popularity=0,
+                    prep_minutes=10,
+                    image_key=image_key,
+                    created_at=NOW,
+                    updated_at=NOW,
+                )
+            )
+        await session.commit()
+
+
+async def stored_dishes(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> list[tuple[str, str, object]]:
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(Dish.slug, Dish.image_key, Dish.updated_at).order_by(Dish.slug)
         )
-        await session.commit()
+        return [(slug, image_key, updated_at) for slug, image_key, updated_at in rows]
 
 
-def test_load_parses_entries_and_derives_keys_and_content_types(tmp_path: Path) -> None:
-    directory = write_seed(
-        tmp_path / "menu",
-        [
-            entry("lava-cake"),
-            entry("tomato-soup", category="APPETIZER", image="soup.jpg"),
-            entry("steak", category="MAIN_COURSE", image="steak.png"),
-        ],
-    )
-
-    entries = DishSeedService.load(directory=directory)
-
-    assert [item.slug for item in entries] == ["lava-cake", "tomato-soup", "steak"]
-    assert [item.category for item in entries] == [
-        DishCategory.DESSERT,
-        DishCategory.APPETIZER,
-        DishCategory.MAIN_COURSE,
-    ]
-    assert [item.image_key for item in entries] == [
-        "dishes/lava-cake.webp",
-        "dishes/tomato-soup.jpg",
-        "dishes/steak.png",
-    ]
-    assert [item.content_type for item in entries] == ["image/webp", "image/jpeg", "image/png"]
-    assert entries[1].image == "soup.jpg"
+def write_pictures(directory: Path, image_keys: list[str]) -> None:
+    for image_key in image_keys:
+        (directory / Path(image_key).name).write_bytes(f"bytes of {image_key}".encode())
 
 
-@pytest.mark.parametrize(
-    "bad_entry",
-    [
-        entry("bad", category="SOUP"),
-        entry("bad", price_cents=0),
-        entry("bad", weight_grams=-1),
-        entry("bad", prep_minutes=0),
-        entry("bad", image="bad.gif"),
-        entry("Bad Slug"),
-        {key: value for key, value in entry("bad").items() if key != "name"},
-        entry("bad", unexpected="field"),
-    ],
-)
-@pytest.mark.usefixtures("empty_menu")
-async def test_a_bad_entry_fails_before_anything_is_written(
-    tmp_path: Path,
-    storage: S3FileStorage,
-    session_factory: async_sessionmaker[AsyncSession],
-    bad_entry: dict[str, Any],
-) -> None:
-    directory = write_seed(tmp_path / "menu", [entry("good"), bad_entry])
-
-    async with session_factory() as session:
-        with pytest.raises(MenuSeedFileError):
-            await DishSeedService(session, storage).run(directory=directory)
-
-    assert await load_dishes(session_factory) == {}
-
-
-@pytest.mark.parametrize("problem", ["missing_picture", "duplicate_slug", "not_json", "no_file"])
-@pytest.mark.usefixtures("empty_menu")
-async def test_a_bad_file_fails_before_anything_is_written(
-    tmp_path: Path,
-    storage: S3FileStorage,
-    session_factory: async_sessionmaker[AsyncSession],
-    problem: str,
-) -> None:
-    directory = write_seed(tmp_path / "menu", [entry("good"), entry("other")])
-    if problem == "missing_picture":
-        (directory / "other.webp").unlink()
-    elif problem == "duplicate_slug":
-        write_seed(directory, [entry("good"), entry("good", image="other.webp")])
-    elif problem == "not_json":
-        (directory / "dishes.json").write_text("{not json")
-    else:
-        (directory / "dishes.json").unlink()
-
-    async with session_factory() as session:
-        with pytest.raises(MenuSeedFileError):
-            await DishSeedService(session, storage).run(directory=directory)
-
-    assert await load_dishes(session_factory) == {}
-
-
-@pytest.mark.usefixtures("empty_menu")
-async def test_save_inserts_new_dishes_with_created_at_by_file_position(
-    tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
-) -> None:
-    directory = write_seed(
-        tmp_path / "menu", [entry("first", popularity=8), entry("second"), entry("third")]
-    )
-
-    await save_seed(session_factory, storage, directory)
-
-    dishes = await load_dishes(session_factory)
-    assert dishes["first"].created_at == NOW
-    assert dishes["second"].created_at == NOW - timedelta(minutes=1)
-    assert dishes["third"].created_at == NOW - timedelta(minutes=2)
-    assert dishes["first"].popularity == 8
-    assert dishes["first"].image_key == "dishes/first.webp"
-    assert dishes["first"].category is DishCategory.DESSERT
-    assert dishes["first"].price_cents == 650
-    assert dishes["first"].fats == "22-24g"
-
-
-@pytest.mark.usefixtures("empty_menu")
-async def test_save_takes_the_prep_time_of_the_entry_or_of_its_category(
-    tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
-) -> None:
-    directory = write_seed(
-        tmp_path / "menu",
-        [
-            entry("soup", category="APPETIZER"),
-            entry("steak", category="MAIN_COURSE"),
-            entry("cake", category="DESSERT"),
-            entry("stew", category="MAIN_COURSE", prep_minutes=35),
-        ],
-    )
-
-    await save_seed(session_factory, storage, directory)
-
-    dishes = await load_dishes(session_factory)
-    assert {slug: dish.prep_minutes for slug, dish in dishes.items()} == {
-        "soup": 10,
-        "steak": 20,
-        "cake": 10,
-        "stew": 35,
-    }
-
-
-@pytest.mark.usefixtures("empty_menu")
-async def test_saving_again_updates_the_prep_time(
-    tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
-) -> None:
-    directory = write_seed(tmp_path / "menu", [entry("cake")])
-    await save_seed(session_factory, storage, directory)
-
-    write_seed(directory, [entry("cake", prep_minutes=25)])
-    await save_seed(session_factory, storage, directory)
-
-    assert (await load_dishes(session_factory))["cake"].prep_minutes == 25
-
-
-@pytest.mark.usefixtures("empty_menu")
-async def test_saving_twice_updates_content_and_keeps_id_popularity_and_created_at(
-    tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
-) -> None:
-    directory = write_seed(tmp_path / "menu", [entry("cake", popularity=3), entry("pie")])
-    await save_seed(session_factory, storage, directory)
-    before = await load_dishes(session_factory)
-    async with session_factory() as session:
-        await session.execute(update(Dish).where(Dish.slug == "cake").values(popularity=42))
-        await session.commit()
-
-    write_seed(
-        directory,
-        [entry("pie"), entry("cake", name="Honey Cake", price_cents=700, popularity=0)],
-    )
-    await save_seed(session_factory, storage, directory)
-
-    after = await load_dishes(session_factory)
-    assert set(after) == {"cake", "pie"}
-    assert after["cake"].id == before["cake"].id
-    assert after["cake"].popularity == 42
-    assert after["cake"].created_at == before["cake"].created_at
-    assert after["pie"].created_at == before["pie"].created_at
-    assert after["cake"].name == "Honey Cake"
-    assert after["cake"].price_cents == 700
-
-
-@pytest.mark.usefixtures("empty_menu")
-async def test_dishes_missing_from_the_file_stay(
-    tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
-) -> None:
-    directory = write_seed(tmp_path / "menu", [entry("cake"), entry("pie")])
-    await save_seed(session_factory, storage, directory)
-
-    write_seed(directory, [entry("cake")])
-    await save_seed(session_factory, storage, directory)
-
-    async with session_factory() as session:
-        count = await session.scalar(select(func.count()).select_from(Dish))
-    assert count == 2
-
-
-@pytest.mark.usefixtures("empty_menu")
-async def test_saving_again_touches_updated_at_only_for_changed_dishes(
+async def test_the_seed_uploads_the_pictures_named_by_the_dishes_and_writes_nothing(
     tmp_path: Path,
     storage: S3FileStorage,
     session_factory: async_sessionmaker[AsyncSession],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    later = NOW + timedelta(days=1)
-    directory = write_seed(tmp_path / "menu", [entry("cake"), entry("pie")])
-    await save_seed(session_factory, storage, directory)
+    before = await stored_dishes(session_factory)
+    image_keys = [image_key for _, image_key, _ in before]
+    assert image_keys
+    write_pictures(tmp_path, image_keys)
+    uploads: list[tuple[str, bytes, str]] = []
+    monkeypatch.setattr(
+        storage,
+        "put",
+        lambda *, key, content, content_type: uploads.append((key, content, content_type)),
+    )
 
-    monkeypatch.setattr(clock, "now", lambda: later)
-    write_seed(directory, [entry("cake", price_cents=700), entry("pie")])
-    await save_seed(session_factory, storage, directory)
+    async with session_factory() as session:
+        count = await DishSeedService(session, storage).run(directory=tmp_path)
+        assert not (session.new or session.dirty or session.deleted)
 
-    dishes = await load_dishes(session_factory)
-    assert dishes["cake"].updated_at == later
-    assert dishes["pie"].updated_at == NOW
+    assert count == len(image_keys)
+    assert sorted(uploads) == sorted(
+        (image_key, f"bytes of {image_key}".encode(), "image/jpeg") for image_key in image_keys
+    )
+    assert await stored_dishes(session_factory) == before
+
+
+async def test_a_missing_picture_fails_before_any_upload(
+    tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    # The storage points at a closed port, so an upload before the check would fail differently.
+    image_keys = [image_key for _, image_key, _ in await stored_dishes(session_factory)]
+    write_pictures(tmp_path, image_keys[:-1])
+
+    async with session_factory() as session:
+        with pytest.raises(MenuSeedFileError) as raised:
+            await DishSeedService(session, storage).run(directory=tmp_path)
+
+    assert Path(image_keys[-1]).name in raised.value.message
+
+
+@pytest.mark.usefixtures("empty_menu")
+async def test_pictures_get_the_content_type_of_their_suffix(
+    tmp_path: Path,
+    storage: S3FileStorage,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await add_dishes(session_factory, "dishes/cake.webp", "dishes/soup.png", "dishes/stew.jpg")
+    write_pictures(tmp_path, ["dishes/cake.webp", "dishes/soup.png", "dishes/stew.jpg"])
+    uploads: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        storage,
+        "put",
+        lambda *, key, content, content_type: uploads.append((key, content_type)),
+    )
+
+    async with session_factory() as session:
+        await DishSeedService(session, storage).run(directory=tmp_path)
+
+    assert sorted(uploads) == [
+        ("dishes/cake.webp", "image/webp"),
+        ("dishes/soup.png", "image/png"),
+        ("dishes/stew.jpg", "image/jpeg"),
+    ]
+
+
+@pytest.mark.usefixtures("empty_menu")
+async def test_an_unsupported_picture_type_fails_before_any_upload(
+    tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    # Sorted by slug the unsupported picture comes last, after a picture that could be uploaded.
+    await add_dishes(session_factory, "dishes/apple.jpg", "dishes/zest.gif")
+    write_pictures(tmp_path, ["dishes/apple.jpg", "dishes/zest.gif"])
+
+    async with session_factory() as session:
+        with pytest.raises(MenuSeedFileError) as raised:
+            await DishSeedService(session, storage).run(directory=tmp_path)
+
+    assert "zest.gif" in raised.value.message
+
+
+@pytest.mark.usefixtures("empty_menu")
+async def test_an_empty_menu_fails_and_asks_for_the_migrations(
+    tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    async with session_factory() as session:
+        with pytest.raises(MenuSeedFileError) as raised:
+            await DishSeedService(session, storage).run(directory=tmp_path)
+
+    assert "run the migrations first" in raised.value.message

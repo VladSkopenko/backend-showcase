@@ -1,20 +1,10 @@
 from fastapi import APIRouter, Response, status
 
-from app.config.settings import get_settings
 from app.features.core.health.endpoints.dependencies import HealthServiceDep
 from app.features.core.health.endpoints.openapi_tags import HealthOpenApiTags
-from app.features.core.health.schemas import HealthResponse, RootResponse
+from app.features.core.health.schemas import HealthResponse
 
 router = APIRouter(tags=[HealthOpenApiTags.HEALTH])
-
-
-@router.get(
-    "/",
-    response_model=RootResponse,
-    description="Says the service answers; no database check.",
-)
-def root() -> RootResponse:
-    return RootResponse(message=f"{get_settings().app.name} works")
 
 
 @router.get(

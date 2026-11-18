@@ -35,7 +35,7 @@ tfplan
 .idea/
 .vscode/
 
-# Menu seed data (dishes.json and pictures), kept only on the developer machine
+# Menu and location pictures for the seed scripts, kept only on the developer machine
 backend/seed/
 
 # Local n8n state: its database, encryption key and saved credentials

@@ -1,4 +1,3 @@
-import hashlib
 import hmac
 import math
 import secrets
@@ -8,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common import clock
 from app.common.errors import DomainError
+from app.common.hashing import sha256_hex
 from app.config.settings import AuthSettings, Environment
 from app.features.core.auth.dto import IssuedCode
 from app.features.core.auth.enums import VerificationPurpose
@@ -41,7 +41,7 @@ class VerificationCodeService:
             code=VerificationCode(
                 user_id=user.id,
                 purpose=purpose,
-                code_hash=self._hash_code(plain_code),
+                code_hash=sha256_hex(plain_code),
                 created_at=now,
                 expires_at=now + timedelta(minutes=self._auth.verification_code_ttl_minutes),
             )
@@ -82,11 +82,8 @@ class VerificationCodeService:
             return CodeInvalidError()
         return current
 
-    def _hash_code(self, code: str) -> str:
-        return hashlib.sha256(code.encode()).hexdigest()
-
     def _matches(self, code: str, code_hash: str) -> bool:
-        return hmac.compare_digest(self._hash_code(code), code_hash)
+        return hmac.compare_digest(sha256_hex(code), code_hash)
 
     async def _ensure_issue_allowed(
         self, *, user: User, purpose: VerificationPurpose, now: datetime

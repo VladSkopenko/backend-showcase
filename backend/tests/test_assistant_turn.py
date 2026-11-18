@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx2
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
@@ -19,10 +19,11 @@ from support.fake_chat_model import Act, Call, FakeChatModel, Raise, Text, Wait
 from support.sse import parse_events
 
 from app.config.settings import AssistantSettings, OpenAISettings, Settings, get_settings
-from app.features.assistant.endpoints.dependencies import get_chat_model
+from app.features.assistant.endpoints.dependencies import build_chat_model, get_chat_model
 from app.features.assistant.enums import AssistantMessageRole
 from app.features.assistant.repositories import AssistantSessionRepository
 from app.features.assistant.services.assistant_turn_service import AssistantTurnService
+from app.features.assistant.services.exceptions import AssistantUnavailableError
 from app.features.core.menu.dto import DishPage, DishView
 from app.features.core.menu.enums import DishCategory
 from app.features.core.menu.services.dish_catalog_service import DishCatalogService
@@ -577,19 +578,51 @@ async def test_a_failing_final_transaction_ends_the_stream_with_a_server_error(
 
 
 def test_the_chat_model_is_built_from_the_openai_settings() -> None:
-    settings = Settings(
-        openai=OpenAISettings(
+    model = build_chat_model(
+        OpenAISettings(
             api_key=SecretStr("test"), model="m", max_output_tokens=7, request_timeout_seconds=3
         )
     )
-
-    model = get_chat_model(settings)
 
     assert isinstance(model, ChatOpenAI)
     assert model.model_name == "m"
     assert model.max_tokens == 7
     assert model.request_timeout == 3
     assert model.max_retries == 1
+
+
+def test_no_chat_model_is_built_without_a_key() -> None:
+    assert build_chat_model(OpenAISettings()) is None
+
+
+def test_the_app_builds_one_chat_model_and_every_request_gets_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(
+        openai=OpenAISettings(api_key=SecretStr("test"), model="m", max_output_tokens=7)
+    )
+    monkeypatch.setattr("app.main.get_settings", lambda: settings)
+
+    app = create_app()
+
+    model = app.state.chat_model
+    assert isinstance(model, ChatOpenAI)
+    assert (model.model_name, model.max_tokens) == ("m", 7)
+    request = Request({"type": "http", "app": app})
+    assert get_chat_model(request) is model
+    assert get_chat_model(request) is model
+
+
+def test_without_a_chat_model_the_assistant_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(openai=OpenAISettings())
+    monkeypatch.setattr("app.main.get_settings", lambda: settings)
+    app = create_app()
+
+    assert app.state.chat_model is None
+    with pytest.raises(AssistantUnavailableError):
+        get_chat_model(Request({"type": "http", "app": app}))
 
 
 @pytest.mark.parametrize("assistant_overrides", [{"max_tool_calls": 15}])

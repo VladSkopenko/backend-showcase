@@ -1,13 +1,8 @@
-from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common import clock
-from app.features.core.menu.dto import DishSeedEntry
-from app.features.core.menu.enums import DishCategory
 from app.features.core.menu.repositories import DishRepository
 from app.features.core.menu.services.exceptions import MenuSeedFileError
 
@@ -18,76 +13,33 @@ if TYPE_CHECKING:
 
 
 class DishSeedService:
-    FILE_NAME = "dishes.json"
-    ENTRIES = TypeAdapter(list[DishSeedEntry])
-    DEFAULT_PREP_MINUTES = {
-        DishCategory.APPETIZER: 10,
-        DishCategory.MAIN_COURSE: 20,
-        DishCategory.DESSERT: 10,
+    CONTENT_TYPES = {
+        ".webp": "image/webp",
+        ".jpg": "image/jpeg",
+        ".png": "image/png",
     }
 
     def __init__(self, session: AsyncSession, storage: S3FileStorage) -> None:
         self._repository = DishRepository(session)
         self._storage = storage
 
-    @classmethod
-    def load(cls, *, directory: Path) -> list[DishSeedEntry]:
-        try:
-            entries = cls.ENTRIES.validate_json((directory / cls.FILE_NAME).read_bytes())
-        except OSError as error:
-            raise MenuSeedFileError(str(error)) from error
-        except ValidationError as error:
-            raise MenuSeedFileError(str(error)) from error
-        slugs = [entry.slug for entry in entries]
-        duplicates = sorted({slug for slug in slugs if slugs.count(slug) > 1})
-        if duplicates:
-            raise MenuSeedFileError(f"duplicate slugs {duplicates}")
-        missing = [entry.image for entry in entries if not (directory / entry.image).is_file()]
+    async def run(self, *, directory: Path) -> int:
+        pictures = [
+            (dish.image_key, directory / Path(dish.image_key).name)
+            for dish in await self._repository.list_all()
+        ]
+        if not pictures:
+            raise MenuSeedFileError("no dishes in the database; run the migrations first")
+        unsupported = [path.name for _, path in pictures if path.suffix not in self.CONTENT_TYPES]
+        if unsupported:
+            raise MenuSeedFileError(f"unsupported picture types {unsupported}")
+        missing = [path.name for _, path in pictures if not path.is_file()]
         if missing:
             raise MenuSeedFileError(f"missing pictures {missing}")
-        return entries
-
-    async def run(self, *, directory: Path) -> int:
-        entries = self.load(directory=directory)
-        for entry in entries:
+        for image_key, path in pictures:
             self._storage.put(
-                key=entry.image_key,
-                content=(directory / entry.image).read_bytes(),
-                content_type=entry.content_type,
+                key=image_key,
+                content=path.read_bytes(),
+                content_type=self.CONTENT_TYPES[path.suffix],
             )
-        await self.save(entries=entries)
-        return len(entries)
-
-    async def save(self, *, entries: list[DishSeedEntry]) -> None:
-        now = clock.now()
-        await self._repository.upsert_by_slug(
-            rows=[
-                {
-                    "slug": entry.slug,
-                    "name": entry.name,
-                    "description": entry.description,
-                    "category": entry.category,
-                    "price_cents": entry.price_cents,
-                    "weight_grams": entry.weight_grams,
-                    "calories": entry.calories,
-                    "protein": entry.protein,
-                    "fats": entry.fats,
-                    "carbs": entry.carbs,
-                    "vitamins": entry.vitamins,
-                    "is_available": entry.is_available,
-                    "popularity": entry.popularity,
-                    "prep_minutes": self._prep_minutes(entry),
-                    "image_key": entry.image_key,
-                    # The first entry is the newest, so NEWEST follows the file order.
-                    "created_at": now - timedelta(minutes=position),
-                    "updated_at": now,
-                }
-                for position, entry in enumerate(entries)
-            ],
-            now=now,
-        )
-
-    def _prep_minutes(self, entry: DishSeedEntry) -> int:
-        if entry.prep_minutes is not None:
-            return entry.prep_minutes
-        return self.DEFAULT_PREP_MINUTES[entry.category]
+        return len(pictures)

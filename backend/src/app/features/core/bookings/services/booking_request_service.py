@@ -14,11 +14,7 @@ from app.features.core.bookings.dto import (
 )
 from app.features.core.bookings.enums import BookingStatus
 from app.features.core.bookings.models import Booking
-from app.features.core.bookings.repositories import (
-    BookableTableRepository,
-    BookingParticipantRepository,
-    BookingRepository,
-)
+from app.features.core.bookings.repositories import BookableTableRepository, BookingRepository
 from app.features.core.bookings.services.booking_schedule import BookingSchedule
 from app.features.core.bookings.services.decision_notice_builder import DecisionNoticeBuilder
 from app.features.core.bookings.services.exceptions import (
@@ -32,9 +28,6 @@ from app.features.core.locations.models import DiningTable
 from app.features.core.locations.services.location_catalog_service import LocationCatalogService
 from app.features.core.notifications.dto import DecisionNotice
 from app.features.core.notifications.enums import NotificationKind
-from app.features.core.notifications.services.booking_decision_notifier import (
-    BookingDecisionNotifier,
-)
 from app.features.core.users.repositories import UserRepository
 
 
@@ -45,15 +38,12 @@ class BookingRequestService:
         self,
         session: AsyncSession,
         locations: LocationCatalogService,
-        notifier: BookingDecisionNotifier,
         settings: BookingSettings,
     ) -> None:
         self._bookings = BookingRepository(session)
         self._tables = BookableTableRepository(session)
-        self._participants = BookingParticipantRepository(session)
         self._users = UserRepository(session)
         self._locations = locations
-        self._notifier = notifier
         self._notices = DecisionNoticeBuilder(session, locations, settings)
         self._schedule = BookingSchedule(settings)
 
@@ -78,16 +68,7 @@ class BookingRequestService:
 
     async def approve(self, *, staff_id: uuid.UUID, booking_id: uuid.UUID) -> DecisionOutcome:
         await self._check_staff(user_id=staff_id)
-        booking, table = await self._get(booking_id=booking_id)
-        competitor_ids = await self._bookings.list_pending_overlapping_ids(
-            table_id=table.id,
-            starts_at=booking.starts_at,
-            ends_at=booking.ends_at,
-            excluding_booking_id=booking.id,
-        )
-        # Users, then the table, then the request: the lock order of ADR 13. The recipients' user
-        # rows are key-share locked up front, because the notification inserts need them.
-        await self._participants.lock_account_holders(booking_ids=[booking.id, *competitor_ids])
+        _, table = await self._get(booking_id=booking_id)
         await self._tables.get(table_id=table.id, for_update=True)
         booking, table = await self._get(booking_id=booking_id, for_update=True)
         self._check_pending(booking)
@@ -120,11 +101,10 @@ class BookingRequestService:
                 kind=NotificationKind.BOOKING_REQUEST_REJECTED, booking_ids=rejected_ids
             ),
         ]
-        return await self._outcome(booking_id=booking.id, notices=notices, decided_at=now)
+        return await self._outcome(booking_id=booking.id, notices=notices)
 
     async def reject(self, *, staff_id: uuid.UUID, booking_id: uuid.UUID) -> DecisionOutcome:
         await self._check_staff(user_id=staff_id)
-        await self._participants.lock_account_holders(booking_ids=[booking_id])
         booking, _ = await self._get(booking_id=booking_id, for_update=True)
         self._check_pending(booking)
         now = clock.now()
@@ -133,7 +113,7 @@ class BookingRequestService:
         notices = await self._notices.build(
             kind=NotificationKind.BOOKING_REQUEST_REJECTED, booking_ids=[booking.id]
         )
-        return await self._outcome(booking_id=booking.id, notices=notices, decided_at=now)
+        return await self._outcome(booking_id=booking.id, notices=notices)
 
     async def _check_staff(self, *, user_id: uuid.UUID) -> None:
         user = await self._users.get_by_id(user_id=user_id)
@@ -160,9 +140,8 @@ class BookingRequestService:
         booking.decided_by_id = staff_id
 
     async def _outcome(
-        self, *, booking_id: uuid.UUID, notices: list[DecisionNotice], decided_at: datetime
+        self, *, booking_id: uuid.UUID, notices: list[DecisionNotice]
     ) -> DecisionOutcome:
-        await self._notifier.record(notices=notices, created_at=decided_at)
         return DecisionOutcome(view=await self._view(booking_id=booking_id), notices=notices)
 
     async def _view(self, *, booking_id: uuid.UUID) -> BookingRequestView:

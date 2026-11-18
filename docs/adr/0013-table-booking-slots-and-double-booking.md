@@ -14,6 +14,9 @@ Amended 2026-11-13: decisions first key-share lock the user rows of the particip
 (ADR 18), keeping the order user, table, booking.
 Amended 2026-11-13: a request still pending `auto_reject_lead_minutes` before its start is
 rejected automatically by a periodic task in the API process, and approve refuses it from then on.
+Amended 2026-11-18: decisions no longer lock account holders, since there are no notification
+rows (ADR 21); the `decided_by_id` write still key-share locks the staff user row after the table
+and the booking, a known exception. Search hides request starts inside the auto-reject lead.
 
 ## Context
 
@@ -83,14 +86,14 @@ a check in Python alone cannot see a row another transaction is about to insert.
   lead away, it answers `REQUEST_EXPIRED` (the code of a passed start), so staff and the
   automatic rejection never race on one request; reject stays allowed. Creating a request that
   starts inside the lead is refused with `REQUEST_TOO_LATE`, since it could never be approved
-  (instant bookings are not affected). An automatic decision
+  (instant bookings are not affected); search marks those starts unavailable for request parties
+  through the same rule. An automatic decision
   stores `decided_at` and leaves `decided_by_id` `NULL`, which marks it as automatic for the
   staff dashboard. A periodic task inside the API process runs the sweep every
   `auto_reject_interval_seconds` (default 60) from the app's lifespan, in one transaction per run
-  on its own session: it reads the expiring requests, key-share locks the user rows of their
-  participants with an account, then rejects the requests it can lock with
-  `FOR UPDATE SKIP LOCKED` and writes their notifications (ADR 18). A request locked by a
-  concurrent staff decision is skipped and picked up by the next run if it is still pending. A
+  on its own session: it reads the expiring requests, then rejects the ones it can lock with
+  `FOR UPDATE SKIP LOCKED` and emails their participants after the commit (ADR 21). A request
+  locked by a concurrent staff decision is skipped and picked up by the next run if it is still pending. A
   failed run is rolled back and logged, and the loop goes on. One API process per environment
   runs it; a second process would only find the rows already locked or decided.
 - **`REJECTED`.** A rejected request is inactive by the active rule, so it frees the owner's
@@ -134,16 +137,13 @@ a check in Python alone cannot see a row another transaction is about to insert.
 - `alembic check` cannot reflect exclusion constraints, so drift between the model and the
   database is caught only by the `pg_get_constraintdef` test in `tests/test_database.py`.
 - The lock order (user, then table, then booking) is a rule for every write path on bookings;
-  taking the locks in another order risks deadlocks. A decision writes notification rows whose
-  foreign key takes `FOR KEY SHARE` on each recipient's user row, which conflicts with the
-  `FOR UPDATE` that create and edit take on the user. So before any other lock, approve reads the
-  pending requests overlapping the request on its table and key-share locks the user rows of every
-  participant with an account of the request and those competitors, in id order; reject does the
-  same for its request before locking it. Then approve locks the table and the request; the
-  pending requests it rejects are locked last by the update. The automatic rejection key-shares
-  the users first as well and then locks only requests, never tables.
+  taking the locks in another order risks deadlocks. Decisions lock no account holders: approve
+  locks the table and the request, and the pending requests it rejects are locked last by the
+  update; reject locks only its request; the automatic rejection locks only requests, never
+  tables. One known exception: the `decided_by_id` write key-share locks the staff user row
+  through its foreign key after the table and the booking.
 - `decided_by_id` is also `NULL` when the staff user who decided is deleted (`ON DELETE SET NULL`),
   so `NULL` means "automatic" only while staff accounts are kept.
 - The first run after a deploy rejects every older pending request inside the lead, including
-  ones whose start passed long ago, and notifies their participants.
+  ones whose start passed long ago, and emails their participants.
 - Per-location or per-weekday opening hours would replace the single grid in `BookingSettings`.

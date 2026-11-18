@@ -67,8 +67,8 @@ async def list_booking_requests(
         "rejected; the API rejects it on its own shortly after. Refused, and the request stays "
         "pending, when the table already has a confirmed booking at that time. Records when "
         "and by whom it was decided. Every participant with an account of the approved and the "
-        "rejected requests gets an in-app notification and an email, except addresses on "
-        "skipped domains; without a configured mail server the email is only logged. Staff only."
+        "rejected requests gets an email, except addresses on skipped domains; without a "
+        "configured mail server the email is only logged. Staff only."
     ),
 )
 async def approve_booking_request(
@@ -97,8 +97,8 @@ async def approve_booking_request(
     description=(
         "Rejects a pending request: it frees the owner's time, and the owner can no longer "
         "cancel, edit or share it. Records when and by whom it was decided. Every participant "
-        "with an account gets an in-app notification and an email, except addresses on skipped "
-        "domains; without a configured mail server the email is only logged. Staff only."
+        "with an account gets an email, except addresses on skipped domains; without a "
+        "configured mail server the email is only logged. Staff only."
     ),
 )
 async def reject_booking_request(

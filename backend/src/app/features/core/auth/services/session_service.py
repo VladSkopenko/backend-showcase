@@ -1,10 +1,10 @@
-import hashlib
 import secrets
 from datetime import timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common import clock
+from app.common.hashing import sha256_hex
 from app.features.core.auth.dto import IssuedSession, RefreshOutcome
 from app.features.core.auth.models import RefreshToken
 from app.features.core.auth.repositories import RefreshTokenRepository
@@ -29,7 +29,7 @@ class SessionService:
         await self._token_repository.add(
             token=RefreshToken(
                 user_id=user.id,
-                token_hash=self._hash_token(refresh_token),
+                token_hash=sha256_hex(refresh_token),
                 created_at=now,
                 expires_at=now + self._refresh_ttl,
             )
@@ -75,7 +75,7 @@ class SessionService:
         # insert a new token past a mass revocation, and two refreshes of one token serialise.
         if refresh_token is None:
             return None
-        token_hash = self._hash_token(refresh_token)
+        token_hash = sha256_hex(refresh_token)
         token = await self._token_repository.get_by_hash(token_hash=token_hash)
         if token is None:
             return None
@@ -84,7 +84,3 @@ class SessionService:
         if user is None or token is None:
             return None
         return token, user
-
-    def _hash_token(self, token: str) -> str:
-        # The token has 256 random bits, so a plain SHA-256 is enough; Argon2 is for passwords.
-        return hashlib.sha256(token.encode()).hexdigest()

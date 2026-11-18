@@ -8,8 +8,14 @@ from pydantic import ValidationError
 from app.config.settings import DatabaseSettings, MediaSettings, Settings, TokenSettings
 
 
+def test_app_settings_have_no_name_or_backend_url() -> None:
+    fields = Settings().app.model_dump()
+
+    assert "name" not in fields
+    assert "backend_url" not in fields
+
+
 def test_env_vars_land_in_their_domain_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("APP_NAME", "custom-name")
     monkeypatch.setenv("DATABASE_HOST", "db.internal")
     monkeypatch.setenv("DATABASE_PORT", "6543")
     monkeypatch.setenv("DATABASE_USER", "svc")
@@ -30,7 +36,6 @@ def test_env_vars_land_in_their_domain_blocks(monkeypatch: pytest.MonkeyPatch) -
 
     settings = Settings()
 
-    assert settings.app.name == "custom-name"
     assert settings.app.environment == "staging"
     assert settings.app.frontend_url == "https://front.example"
     assert settings.email.smtp_host == "smtp.example.com"

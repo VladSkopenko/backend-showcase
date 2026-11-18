@@ -34,7 +34,8 @@ anyone on the internet may do.
   grants it. The role reads `bookings` (requests are its rows), `booking_participants`,
   `dining_tables`, `locations` and `dishes` in full, `preorder_items` without the free-text
   `note`, and from `users` only `id`, `first_name` and `last_name`. It reads no emails, password
-  hashes, tokens, invite codes, guests, notifications or OAuth accounts, and writes nothing.
+  hashes, tokens, invite codes, guests or OAuth accounts (nor the notifications that ADR 21
+  removed), and writes nothing.
 - **Names are public on purpose.** First and last names of every dev user are readable, real
   people who register on dev included: a visitor may find themselves in the statistics. Names are
   the only personal data the role sees.

@@ -1,3 +1,3 @@
-from app.features.core.health.schemas.health import HealthResponse, RootResponse
+from app.features.core.health.schemas.health import HealthResponse
 
-__all__ = ["HealthResponse", "RootResponse"]
+__all__ = ["HealthResponse"]

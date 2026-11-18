@@ -229,6 +229,27 @@ async def test_find_tables_lists_the_free_start_ranges_of_fitting_tables(
     ] == [(6, True), (8, True)]
 
 
+async def test_find_tables_leaves_out_request_starts_inside_the_request_lead(
+    client: httpx2.AsyncClient,
+    users: dict[str, User],
+    venue: Venue,
+    fake: FakeChatModel,
+    fake_clock: FakeClock,
+) -> None:
+    fake_clock.current = at(TODAY, 18)
+
+    await ask(
+        client, fake, Call("find_tables", {"date": TODAY.isoformat(), "party_size": 6}, "call_1")
+    )
+
+    _, result = only_result(fake)
+    assert [
+        (table["capacity"], table["free_start_ranges"])
+        for location in result["locations"]
+        for table in location["tables"]
+    ] == [(6, ["20:30-21:30"]), (8, ["20:30-21:30"])]
+
+
 async def test_find_tables_at_one_location_lists_only_its_tables(
     client: httpx2.AsyncClient, users: dict[str, User], venue: Venue, fake: FakeChatModel
 ) -> None:
