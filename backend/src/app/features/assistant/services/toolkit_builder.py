@@ -22,4 +22,7 @@ class ToolkitBuilder:
         ]
 
     def appliers(self) -> dict[str, ActionApplier]:
-        return {**BookingTools(self._context).appliers()}
+        return {
+            **BookingTools(self._context).appliers(),
+            **PreorderTools(self._context).appliers(),
+        }

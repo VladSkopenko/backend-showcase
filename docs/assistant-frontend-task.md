@@ -2,8 +2,8 @@
 
 A signed-in guest with a verified email chats with the restaurant's assistant on the website. The
 assistant answers about the menu, the locations, free tables and the guest's own bookings and
-pre-order, and books a table through a confirmation card the guest applies or cancels. Editing
-and cancelling a booking and changing the cart through cards come next, on the same card. This
+pre-order. It books, changes and cancels the guest's bookings, changes the pre-order cart and
+sends the guest's pre-order, each through a confirmation card the guest applies or cancels. This
 document is the contract for the chat and the card.
 
 ## Flow
@@ -88,10 +88,10 @@ again in smaller steps; it arrives as an ordinary `chunk` and `done`.
 
 ## Confirmation cards
 
-The assistant never changes data by itself. When the guest has named a table, a date, a time and
-the party size, the assistant checks every booking rule and proposes the booking as a card. Nothing
-is booked until the guest presses the card's button; the guest may also cancel it or simply ignore
-it. A session has at most one pending card: a newer card makes the older pending one `CANCELLED`.
+The assistant never changes data by itself. When the guest has said what to book or change, the
+assistant checks every rule and proposes the change as a card. Nothing changes until the guest
+presses the card's button; the guest may also cancel it or simply ignore it. A session has at most
+one pending card: a newer card makes the older pending one `CANCELLED`.
 
 Action:
 
@@ -121,14 +121,26 @@ Action:
 
 | Key | Meaning |
 |---|---|
-| `kind` | What the card does. Only `booking.create` today; render every kind the same way from `card`. |
+| `kind` | What the card does, one of the kinds below. Render a card from its fields alone, whatever the kind; never branch on `kind` to lay it out. |
 | `card.title` | The card's heading. |
 | `card.fields` | Label and value pairs, in order. Show them as they are; the text is English and already formatted (times are restaurant time). |
-| `card.notice` | A line under the fields, or `null`. For a large party: "Sent as a request; the restaurant confirms it." |
-| `card.confirm_label` | The text of the main button ("Book"). The second button is "Cancel". |
+| `card.notice` | A line under the fields, or `null`. For example "Sent as a request; the restaurant confirms it." for a large party, or "This cannot be undone." when cancelling a booking. |
+| `card.confirm_label` | The text of the main button ("Book", "Yes, cancel it"). The second button is "Cancel". |
 | `expires_at` | After this moment the card can no longer be applied. |
-| `result` | After a successful apply: `{"booking_id": "…", "status": "CONFIRMED"}` (or `"PENDING"` for a request). Link to the booking. |
-| `error` | After a failed apply: `{"code": "…", "message": "…"}`, e.g. `SLOT_UNAVAILABLE` when someone took the table meanwhile. |
+| `result` | After a successful apply, an object whose shape depends on the kind (below). Every `result` has `booking_id`: link to the booking. |
+| `error` | After a failed apply: `{"code": "…", "message": "…"}`, e.g. `SLOT_UNAVAILABLE` when someone took the table meanwhile, `BOOKING_CHANGED` when the booking was changed elsewhere after the card was made, `CART_CHANGED` when the cart changed after a "Send your pre-order" card was made (nothing is sent). Show `message`. |
+
+Kinds. Money in `result` is a USD string such as `"24.00"`; on the card it is already written as
+`"$24.00"`.
+
+| `kind` | `card.title` | `card.confirm_label` | `result` |
+|---|---|---|---|
+| `booking.create` | Book a table | Book | `{"booking_id", "status"}`, `status` `CONFIRMED` or `PENDING` for a request |
+| `booking.edit` | Change the booking | Change | `{"booking_id", "status"}` |
+| `booking.cancel` | Cancel the booking | Yes, cancel it | `{"booking_id", "status"}`, `status` `CANCELLED` |
+| `cart.set_item` | Update your pre-order cart | Save | `{"booking_id", "cart_total"}` |
+| `cart.remove_item` | Remove from your pre-order cart | Remove | `{"booking_id", "cart_total"}` |
+| `preorder.submit` | Send your pre-order | Send | `{"booking_id", "part_id", "total"}` |
 
 Statuses, with the uppercase label of the Figma file:
 
@@ -289,4 +301,16 @@ every status is shared separately. Follow it and the tokens in `app/globals.css`
 - Leave a card for longer than a day: it shows `EXPIRED`; Book answers 409.
 - Take the table in another tab before pressing Book: the card turns `FAILED` with the reason and
   the assistant comments on it.
+- Ask to move a booking to 20:00: a "Change the booking" card with the new time and the old one
+  under "Before"; after Change the reservations page shows 20:00. Change the booking on the website
+  before pressing Change: the card turns `FAILED` with `BOOKING_CHANGED`.
+- Ask to cancel a booking: a "Cancel the booking" card with its notice; after "Yes, cancel it" the
+  booking is cancelled.
+- Ask to add two portions of a dish to the pre-order: an "Update your pre-order cart" card; after
+  Save the cart page shows them. Ask to send the pre-order: a "Send your pre-order" card with the
+  items and the total; after Send the part is in the pre-order and the cart is empty.
+- Ask to remove a dish from the cart: a "Remove from your pre-order cart" card with its quantity;
+  after Remove the cart page no longer shows it.
+- Get a "Send your pre-order" card, then add a dish on the website before pressing Send: the card
+  turns `FAILED` with `CART_CHANGED`, nothing is sent and the cart keeps every line.
 - Reload after any of these: each card reads back with its status under its message.

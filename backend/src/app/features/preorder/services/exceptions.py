@@ -36,3 +36,10 @@ class CartEmptyError(DomainError):
 
     def __init__(self) -> None:
         super().__init__("Add a dish to your cart before submitting it.")
+
+
+class CartChangedError(DomainError):
+    code = "CART_CHANGED"
+
+    def __init__(self) -> None:
+        super().__init__("The cart changed after this card was made.")

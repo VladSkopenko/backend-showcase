@@ -148,7 +148,7 @@ Each feature starts from its own BMAD spec.
 - [x] Group pre-order: the booking owner sees every participant's submitted parts
 - [x] Cleanup of expired refresh tokens and old verification codes
 - [x] AI assistant: a chat with streamed answers and read tools, under one daily budget for the system
-- [ ] AI assistant actions: booking and cart changes through cards the person confirms
+- [x] AI assistant actions: booking and cart changes through cards the person confirms
 - [ ] Frontend in its own repository: menu, booking, invites, pre-order and the assistant chat
 
 Done when: a guest books a table, invites friends, everyone pre-orders and the owner sees the
