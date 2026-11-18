@@ -2,7 +2,8 @@
 title: 'Assistant: global limits'
 type: 'feature'
 created: '2026-11-18'
-status: 'draft'
+status: 'done'
+baseline_commit: 'c77544ca838ea693dd439f37b3a832fef2a77412'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -58,9 +59,9 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `backend/tests/test_assistant_limits.py`, `backend/tests/test_settings.py` -- one test per matrix row, written first and failing -- contract.
-- [ ] Model, migration 0023, registry, settings, `.env.example`, `UsageLedger`, the turn service, errors -- behaviour.
-- [ ] With Vlad, after the code: `delivery.yml`, then `deploy/app/compose.yml` -- infrastructure, outside the subagent's dispatch.
+- [x] `backend/tests/test_assistant_limits.py`, `backend/tests/test_settings.py` -- one test per matrix row, written first and failing -- contract.
+- [x] Model, migration 0023, registry, settings, `.env.example`, `UsageLedger`, the turn service, errors -- behaviour.
+- [x] With Vlad, after the code: `delivery.yml`, then `deploy/app/compose.yml` -- infrastructure, outside the subagent's dispatch.
 
 **Acceptance Criteria:**
 - Given the full suite, when `uv run pytest` runs, then all pass, and ruff, mypy and `lint-imports` are clean.
@@ -69,12 +70,27 @@ context:
 
 ## Implementation Notes
 
+- 2026-11-18: implemented by a subagent; after the review patches 838 tests, ruff, format check, mypy (332 files) and 11 import contracts clean. `delivery.yml` and `compose.yml` written by Claude with Vlad, one at a time: actionlint clean, the `printf` line dry-run with a fake key, `docker compose config` renders the key and an empty value without it. The local live budget check was skipped on Vlad's word (the limits are not the main feature; the OpenAI hard limit is 5 USD); the tests cover the matrix. Dev is checked after the merge with `curl -N`.
+
 ## Spec Change Log
 
 ## Review Triage Log
 
 | Finding | Verdict | Evidence | Route |
 |---|---|---|---|
+| Code review: a client that disconnects mid-stream leaves the call's input spend unrecorded, so the budget can be bypassed (blind, edge-case) | medium | usage arrives as the last chunk; cancellation stops the read | rejected by Vlad 2026-11-18: accepted as is, bounded by the per-minute cap and the OpenAI monthly hard limit; Design Notes record it |
+| Code review: check-then-insert race lets a burst pass the per-minute cap (blind, edge-case) | medium | READ COMMITTED, no lock; project rule: invariants under a lock | patch: `pg_advisory_xact_lock` in `check()`; concurrency test not possible on the shared test connection |
+| Code review: the global busy query has no index (blind) | low | only `(session_id, created_at, id)` exists | patch: partial index on `created_at WHERE role = 'USER'` in 0023 |
+| Code review: busy `retry_after` with more than N messages untested (blind) | low | the test had exactly N | patch: test with 3 for N=2 |
+| Code review: usage without `cache_read` untested (verification-gap) | medium | langchain-openai omits the key when OpenAI sends none | patch: optional in the fake, test |
+| Code review: budget exhaustion is silent (blind) | low | 429 to everyone until midnight, no log | patch: `logger.warning` per refusal |
+| Code review: `OPENAI_MODEL` above 100 characters breaks every usage insert (edge-case) | low | String(100) column | patch: `max_length=100` |
+| Code review: changing the model alone keeps gpt-4.1-mini prices (blind) | low | prices are separate settings | patch: `.env.example` comment |
+| Code review: the `AIMessage` branch of the chunk conversion is untested (blind) | low | the provider and the fake both stream chunks | rejected |
+| Code review: the provider's model snapshot name is not stored (blind) | low | the configured name is enough for the budget | rejected |
+| Code review: budget and cap are not passed through compose (blind) | false | the spec passes only the key; the defaults are the intended dev values | rejected |
+| Code review: a failing usage insert ends the turn with `SERVER_ERROR` (edge-case) | low | fails closed; only a database error triggers it | rejected |
+| Code review: `cache_read` above `input_tokens` gives a negative term (edge-case) | false | the provider counts cached tokens inside the input | rejected |
 | Spec review: micro-dollar rounding unstated | low | the formula yields fractions | patch: `round()`, a worked row |
 | Spec review: Cyrillic token rate assumed | low | measured 2026-11-18 with o200k_base: Ukrainian 2.3, Russian 3.3, English 3.9 characters per token | patch: measured rate noted, bound kept |
 
@@ -92,6 +108,8 @@ overshoot        <= 40 * $0.17 ≈ $7, on top of the $1 budget, with the default
 ```
 
 A real turn is about three calls of 5k tokens, ≈ $0.01, so the typical overshoot is cents. The bound shrinks with `ASSISTANT_TURNS_PER_MINUTE`, `ASSISTANT_TURN_TIMEOUT_SECONDS`, `ASSISTANT_MAX_ROUNDS` or `ASSISTANT_TOOL_RESULT_MAX_CHARS`; the OpenAI monthly hard limit stays the backstop (assistant.md).
+
+**Unrecorded spend on a cut-off call.** Usage arrives only as the last chunk, so a call cut off by a client disconnect, a timeout or a provider error records nothing although OpenAI billed its input. Accepted by Vlad on 2026-11-18: a verified user who keeps disconnecting can spend past the daily budget, bounded by `ASSISTANT_TURNS_PER_MINUTE` and the OpenAI monthly hard limit. Draining the stream in the background to read the usage was the rejected alternative.
 
 ## Verification
 

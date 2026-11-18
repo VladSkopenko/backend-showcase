@@ -2,6 +2,8 @@ from fastapi import status
 
 from app.common.errors import DomainError
 from app.features.assistant.services.exceptions import (
+    AssistantBudgetExhaustedError,
+    AssistantBusyError,
     AssistantSessionNotFoundError,
     AssistantUnavailableError,
 )
@@ -14,6 +16,8 @@ from app.features.core.auth.services.exceptions import (
 ERROR_STATUSES: dict[type[DomainError], int] = {
     AssistantUnavailableError: status.HTTP_503_SERVICE_UNAVAILABLE,
     AssistantSessionNotFoundError: status.HTTP_404_NOT_FOUND,
+    AssistantBusyError: status.HTTP_429_TOO_MANY_REQUESTS,
+    AssistantBudgetExhaustedError: status.HTTP_429_TOO_MANY_REQUESTS,
 }
 
 # The routes also document the sign-in errors raised by the auth feature they build on.

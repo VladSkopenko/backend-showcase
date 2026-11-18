@@ -18,6 +18,8 @@ from app.features.assistant.schemas import (
     AssistantSessionResponse,
 )
 from app.features.assistant.services.exceptions import (
+    AssistantBudgetExhaustedError,
+    AssistantBusyError,
     AssistantSessionNotFoundError,
     AssistantUnavailableError,
 )
@@ -123,6 +125,8 @@ async def get_session(
             NotAuthenticatedError,
             EmailNotVerifiedError,
             AssistantSessionNotFoundError,
+            AssistantBusyError,
+            AssistantBudgetExhaustedError,
             AssistantUnavailableError,
             statuses=DOCUMENTED_ERROR_STATUSES,
             takes_input=True,
@@ -137,8 +141,12 @@ async def get_session(
         "already set by the question. Error codes: "
         "`ASSISTANT_TIMEOUT` past the turn's time cap, `ASSISTANT_PROVIDER_ERROR` when the "
         "model fails, `SERVER_ERROR` otherwise. A turn is capped in model calls and tool calls; "
-        "past a cap a fixed text answers. The first message names the session. Refusals "
-        "(sign-in, the session, validation) answer plain JSON before the stream starts. A user "
+        "past a cap a fixed text answers. The first message names the session. Two global "
+        "limits refuse a new turn with 429 and `retry_after` (also the `Retry-After` header): "
+        "`ASSISTANT_BUSY` past the turns of the last minute, `ASSISTANT_BUDGET_EXHAUSTED` once "
+        "the day's spend reaches the budget, until the restaurant's next local midnight; a "
+        "turn already running finishes. Refusals (sign-in, the session, validation, the limits) "
+        "answer plain JSON before the stream starts. A user "
         "whose email is not verified is refused. Unavailable when the model provider is not "
         "configured."
     ),

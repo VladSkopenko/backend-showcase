@@ -1,4 +1,5 @@
 from datetime import time
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -402,6 +403,19 @@ def test_openai_limits_are_always_positive(
             Settings()
 
 
+@pytest.mark.parametrize(("length", "valid"), [(100, True), (101, False)])
+def test_openai_model_fits_the_usage_ledger_column(
+    monkeypatch: pytest.MonkeyPatch, length: int, valid: bool
+) -> None:
+    monkeypatch.setenv("OPENAI_MODEL", "m" * length)
+
+    if valid:
+        assert Settings().openai.model == "m" * length
+    else:
+        with pytest.raises(ValidationError, match="model"):
+            Settings()
+
+
 def test_empty_openai_model_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENAI_MODEL", "")
 
@@ -468,6 +482,70 @@ def test_assistant_session_ttl_env_var_lands_in_the_assistant_block_and_is_alway
     else:
         with pytest.raises(ValidationError, match="session_ttl_days"):
             Settings()
+
+
+def test_openai_price_defaults() -> None:
+    openai = Settings().openai
+
+    assert openai.input_price_per_million_usd == Decimal("0.40")
+    assert openai.cached_input_price_per_million_usd == Decimal("0.10")
+    assert openai.output_price_per_million_usd == Decimal("1.60")
+
+
+def test_openai_price_env_vars_land_in_the_openai_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_INPUT_PRICE_PER_MILLION_USD", "2.5")
+    monkeypatch.setenv("OPENAI_CACHED_INPUT_PRICE_PER_MILLION_USD", "1.25")
+    monkeypatch.setenv("OPENAI_OUTPUT_PRICE_PER_MILLION_USD", "10")
+
+    openai = Settings().openai
+
+    assert openai.input_price_per_million_usd == Decimal("2.5")
+    assert openai.cached_input_price_per_million_usd == Decimal("1.25")
+    assert openai.output_price_per_million_usd == Decimal("10")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "OPENAI_INPUT_PRICE_PER_MILLION_USD",
+        "OPENAI_CACHED_INPUT_PRICE_PER_MILLION_USD",
+        "OPENAI_OUTPUT_PRICE_PER_MILLION_USD",
+    ],
+)
+def test_openai_prices_are_never_negative(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+    monkeypatch.setenv(name, "0")
+    assert getattr(Settings().openai, name.removeprefix("OPENAI_").lower()) == Decimal("0")
+
+    monkeypatch.setenv(name, "-0.01")
+    with pytest.raises(ValidationError, match=name.removeprefix("OPENAI_").lower()):
+        Settings()
+
+
+def test_assistant_limit_defaults() -> None:
+    assistant = Settings().assistant
+
+    assert assistant.daily_budget_usd == Decimal("1.0")
+    assert assistant.turns_per_minute == 10
+
+
+def test_assistant_limit_env_vars_land_in_the_assistant_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ASSISTANT_DAILY_BUDGET_USD", "0.25")
+    monkeypatch.setenv("ASSISTANT_TURNS_PER_MINUTE", "3")
+
+    assistant = Settings().assistant
+
+    assert assistant.daily_budget_usd == Decimal("0.25")
+    assert assistant.turns_per_minute == 3
+
+
+@pytest.mark.parametrize("name", ["ASSISTANT_DAILY_BUDGET_USD", "ASSISTANT_TURNS_PER_MINUTE"])
+def test_assistant_limits_are_always_positive(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+    monkeypatch.setenv(name, "0")
+
+    with pytest.raises(ValidationError, match=name.removeprefix("ASSISTANT_").lower()):
+        Settings()
 
 
 def test_cleanup_defaults() -> None:

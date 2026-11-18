@@ -59,7 +59,7 @@ class Menu:
 
 
 @pytest.fixture
-def assistant_overrides() -> dict[str, int]:
+def assistant_overrides() -> dict[str, Any]:
     return {}
 
 
@@ -69,7 +69,7 @@ def fake() -> FakeChatModel:
 
 
 @pytest.fixture
-def app(fake: FakeChatModel, assistant_overrides: dict[str, int]) -> FastAPI:
+def app(fake: FakeChatModel, assistant_overrides: dict[str, Any]) -> FastAPI:
     app = create_app()
     settings = Settings(
         openai=OpenAISettings(api_key=SecretStr("test")),

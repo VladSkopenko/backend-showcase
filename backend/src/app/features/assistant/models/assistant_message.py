@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.common.database import Base
@@ -12,6 +12,12 @@ class AssistantMessage(Base):
     __tablename__ = "assistant_messages"
     __table_args__ = (
         Index("ix_assistant_messages_session_id_created_at_id", "session_id", "created_at", "id"),
+        # The global turns-per-minute count reads only user messages across all sessions.
+        Index(
+            "ix_assistant_messages_user_created_at",
+            "created_at",
+            postgresql_where=text("role = 'USER'"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=func.gen_random_uuid())
