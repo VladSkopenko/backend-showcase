@@ -1,8 +1,8 @@
 # AI assistant chat (frontend task)
 
 A signed-in guest with a verified email chats with the restaurant's assistant on the website. The
-assistant answers about the menu now; tables, the guest's bookings and pre-order come next, then
-changes through confirmation cards. This document is the contract for the read-only chat. The
+assistant answers about the menu, the locations, free tables and the guest's own bookings and
+pre-order; changes through confirmation cards come next. This document is the contract for the read-only chat. The
 backend part is live on dev.
 
 ## Flow
@@ -67,7 +67,7 @@ thinking → chunk … → error                  (the turn failed midway)
 
 | Event | `data` | What to do |
 |---|---|---|
-| `thinking` | `{}` | Show the thinking indicator. It can come again after text, when the assistant checks the menu. |
+| `thinking` | `{}` | Show the thinking indicator. It comes again each time the assistant looks something up: the menu, the locations, free tables, the guest's bookings or pre-order. |
 | `chunk` | `{"text": "…"}` | Append to the answer bubble. Pieces are small, often part of a word. |
 | `done` | `{"message_id": "…", "created_at": "…"}` | The answer is saved. Stop the indicator; give the bubble this id. |
 | `error` | `{"code": "…", "message": "…"}` | The turn ended without a saved answer. Keep any text already shown, mark the bubble as failed and offer to ask again. |
@@ -146,9 +146,10 @@ Rules:
 1. Use `fetch`, not axios, for this handler: axios buffers the whole response.
 2. Never call `response.json()` or `response.text()` on a `200` upstream; return its body as is.
 3. Keep `maxDuration = 300` on this handler. Without it Vercel cuts the stream early.
-4. Do not rely on the `next.config.ts` rewrite fallback for this route. It would forward the path
-   without a handler, but it cannot set `maxDuration`, and whether it streams on Vercel is
-   unchecked.
+4. Keep the handler even though the `next.config.ts` rewrite fallback already forwards this path
+   and streams: on 2026-11-18 a browser `fetch` through the rewrite on dev received the chunks over
+   about a second, not in one piece. Only a handler sets `maxDuration`, and the time limit of a
+   rewrite to an external host is unchecked.
 5. In the browser, call `/api/v1/assistant/sessions/{id}/messages` with `fetch`, pass an
    `AbortController` so closing the panel or switching sessions stops the read, and handle `401`
    by the same single shared refresh `clientApi` uses before retrying once.
@@ -165,6 +166,8 @@ next step. Until then, follow the existing modals and drawers and the tokens in 
 - Ask "What desserts do you have?": thinking, a second thinking, text growing, done; the session
   title becomes the question.
 - Ask a follow-up in the same session: the assistant uses the earlier answer; the title stays.
+- Ask "Is there a table for four on Friday at 19:00?" and "What are my bookings?": the answers
+  match the booking search and the reservations page.
 - Reload: the session lists first and its messages read back in order.
 - Ask in Ukrainian: the answer is in Ukrainian.
 - Close the panel during an answer: the request is aborted, no error toast.

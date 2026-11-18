@@ -72,6 +72,8 @@ context:
 
 - 2026-11-18: implemented by a subagent; after the review patches 838 tests, ruff, format check, mypy (332 files) and 11 import contracts clean. `delivery.yml` and `compose.yml` written by Claude with Vlad, one at a time: actionlint clean, the `printf` line dry-run with a fake key, `docker compose config` renders the key and an empty value without it. The local live budget check was skipped on Vlad's word (the limits are not the main feature; the OpenAI hard limit is 5 USD); the tests cover the matrix. Dev is checked after the merge with `curl -N`.
 
+- 2026-11-18, on dev: PR #48 merged as 76f6e94; `Delivery` green (Build image, Deploy platform, Deploy dev), `/health` ok, `POST /api/v1/assistant/sessions` without a session answers 401 instead of 503, so the key reached the container. Vlad, signed in with Google on the frontend, ran a browser `fetch` through the frontend's rewrite: a session was created, the Ukrainian question about desserts streamed `thinking`, `thinking`, then chunks from 2.7 s to 3.5 s, and the answer named Lemon Basil Sorbet and Pelamushi Grape Pudding at $8, as the menu says.
+
 ## Spec Change Log
 
 ## Review Triage Log

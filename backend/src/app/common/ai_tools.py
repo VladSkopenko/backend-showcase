@@ -3,10 +3,13 @@
 import json
 import uuid
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.config.settings import BookingSettings
 
 if TYPE_CHECKING:
     from pydantic.v1 import ValidationError as ValidationErrorV1
@@ -19,6 +22,8 @@ class AiToolContext:
     user_id: uuid.UUID
     sessionmaker: async_sessionmaker[AsyncSession]
     public_base_url: str
+    booking: BookingSettings
+    max_item_quantity: int
 
 
 class AiToolErrors:
@@ -32,6 +37,10 @@ TRUNCATION_MARKER = " …[truncated]"
 
 def tool_result(payload: Any) -> str:
     return json.dumps(payload)
+
+
+def usd(cents: int) -> str:
+    return f"{Decimal(cents).scaleb(-2):f}"
 
 
 def tool_error(code: str, message: str | None = None) -> str:
