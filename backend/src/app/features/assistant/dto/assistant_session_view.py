@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.features.assistant.models import AssistantMessage
+from app.features.assistant.dto.assistant_message_view import AssistantMessageView
 
 
 @dataclass(frozen=True)
@@ -12,4 +12,4 @@ class AssistantSessionView:
     title: str
     created_at: datetime
     updated_at: datetime
-    messages: Sequence[AssistantMessage]
+    messages: Sequence[AssistantMessageView]

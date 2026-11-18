@@ -60,6 +60,9 @@ FLOWS = {
         ("get", "/api/v1/assistant/sessions"),
         ("get", "/api/v1/assistant/sessions/{session_id}"),
         ("post", "/api/v1/assistant/sessions/{session_id}/messages"),
+        ("get", "/api/v1/assistant/sessions/{session_id}/actions/{action_id}"),
+        ("post", "/api/v1/assistant/sessions/{session_id}/actions/{action_id}/cancel"),
+        ("post", "/api/v1/assistant/sessions/{session_id}/actions/{action_id}/apply"),
     ],
     "Staff": [
         ("get", "/api/v1/staff/booking-requests"),
@@ -134,6 +137,26 @@ def test_the_streaming_route_documents_the_event_stream_and_json_refusals(
     assert list(responses["200"]["content"]) == ["text/event-stream"]
     assert list(responses["404"]["content"]) == ["application/json"]
     assert list(responses["422"]["content"]) == ["application/json"]
+
+
+def test_the_apply_route_documents_the_event_stream_and_json_refusals(
+    schema: dict[str, Any],
+) -> None:
+    responses = schema["paths"][
+        "/api/v1/assistant/sessions/{session_id}/actions/{action_id}/apply"
+    ]["post"]["responses"]
+
+    assert list(responses["200"]["content"]) == ["text/event-stream"]
+    assert list(responses["404"]["content"]) == ["application/json"]
+    assert list(responses["409"]["content"]) == ["application/json"]
+
+
+def test_the_session_detail_documents_the_action_of_each_message(
+    schema: dict[str, Any],
+) -> None:
+    message = schema["components"]["schemas"]["AssistantMessageResponse"]
+
+    assert "action" in message["properties"]
 
 
 @pytest.mark.parametrize(

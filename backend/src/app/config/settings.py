@@ -213,6 +213,8 @@ class AssistantSettings(BaseSettings):
     # day (a running turn finishes) and the user messages of the last minute.
     daily_budget_usd: Decimal = Field(default=Decimal("1.0"), gt=0)
     turns_per_minute: int = Field(default=10, gt=0)
+    # A card the guest neither applied nor cancelled reads as expired after this long.
+    action_ttl_hours: int = Field(default=24, gt=0, le=720)
 
 
 class Settings(BaseSettings):

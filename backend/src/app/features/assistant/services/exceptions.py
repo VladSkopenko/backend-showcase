@@ -15,6 +15,20 @@ class AssistantSessionNotFoundError(DomainError):
         super().__init__("No chat with this id exists.")
 
 
+class AssistantActionNotFoundError(DomainError):
+    code = "ASSISTANT_ACTION_NOT_FOUND"
+
+    def __init__(self) -> None:
+        super().__init__("No card with this id exists in this chat.")
+
+
+class AssistantActionNotPendingError(DomainError):
+    code = "ASSISTANT_ACTION_NOT_PENDING"
+
+    def __init__(self) -> None:
+        super().__init__("This card was already applied, cancelled, failed or expired.")
+
+
 class AssistantBusyError(DomainError):
     code = "ASSISTANT_BUSY"
 

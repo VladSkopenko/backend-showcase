@@ -1,46 +1,40 @@
-import asyncio
 import logging
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Sequence
-from contextlib import asynccontextmanager
-from decimal import Decimal
+from collections.abc import AsyncIterator, Sequence
 from typing import Literal
-from zoneinfo import ZoneInfo
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
-    AIMessage,
     AIMessageChunk,
     BaseMessage,
-    HumanMessage,
     InvalidToolCall,
     SystemMessage,
     ToolCall,
     ToolMessage,
     message_chunk_to_message,
 )
-from langchain_core.messages.ai import UsageMetadata
 from langchain_core.tools import BaseTool
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.common import clock
-from app.common.ai_tools import AiToolErrors, cut_tool_result, tool_error
+from app.common.ai_tools import AiToolErrors, ProposalSink, cut_tool_result, tool_error
 from app.common.errors import DomainError
-from app.features.assistant.dto import AssistantEvent, ModelPrices
+from app.features.assistant.dto import AssistantEvent
 from app.features.assistant.enums import AssistantMessageRole
 from app.features.assistant.models import AssistantMessage
 from app.features.assistant.repositories import (
     AssistantMessageRepository,
     AssistantSessionRepository,
 )
+from app.features.assistant.services.assistant_action_service import AssistantActionService
 from app.features.assistant.services.assistant_session_service import AssistantSessionService
 from app.features.assistant.services.exceptions import (
     AssistantProviderError,
     AssistantSessionNotFoundError,
     AssistantTurnTimeoutError,
 )
+from app.features.assistant.services.model_call_runner import ModelCallRunner
+from app.features.assistant.services.model_history_builder import ModelHistoryBuilder
 from app.features.assistant.services.system_prompt_builder import SystemPromptBuilder
-from app.features.assistant.services.usage_ledger import UsageLedger
 
 logger = logging.getLogger(__name__)
 
@@ -63,53 +57,44 @@ class AssistantTurnService:
 
     def __init__(
         self,
-        sessionmaker: async_sessionmaker[AsyncSession],
+        runner: ModelCallRunner,
         *,
         model: BaseChatModel,
-        model_name: str,
-        prices: ModelPrices,
         tools: Sequence[BaseTool],
+        proposals: ProposalSink,
         prompts: SystemPromptBuilder,
         user_id: uuid.UUID,
         first_name: str,
         history_messages: int,
         max_rounds: int,
         max_tool_calls: int,
-        turn_timeout_seconds: int,
         tool_result_max_chars: int,
-        timezone: ZoneInfo,
-        daily_budget_usd: Decimal,
-        turns_per_minute: int,
+        action_ttl_hours: int,
     ) -> None:
-        self._sessionmaker = sessionmaker
+        self._runner = runner
         self._model = model.bind_tools(tools)
-        self._model_name = model_name
-        self._prices = prices
         self._tools = {tool.name: tool for tool in tools}
+        self._proposals = proposals
         self._prompts = prompts
         self._user_id = user_id
         self._first_name = first_name
         self._history_messages = history_messages
         self._max_rounds = max_rounds
         self._max_tool_calls = max_tool_calls
-        self._turn_timeout_seconds = turn_timeout_seconds
         self._tool_result_max_chars = tool_result_max_chars
-        self._timezone = timezone
-        self._daily_budget_usd = daily_budget_usd
-        self._turns_per_minute = turns_per_minute
+        self._action_ttl_hours = action_ttl_hours
         self._session_id: uuid.UUID | None = None
         self._messages: list[BaseMessage] = []
-        self._deadline = 0.0
 
     async def start(self, *, session_id: uuid.UUID, text: str) -> None:
         now = clock.now()
-        async with self._transaction() as session:
+        async with self._runner.transaction() as session:
             chat_session = await AssistantSessionRepository(session).get_for_user(
                 session_id=session_id, user_id=self._user_id
             )
             if chat_session is None:
                 raise AssistantSessionNotFoundError()
-            await self._ledger(session).check(now=now)
+            await self._runner.ledger(session).check(now=now)
             messages = AssistantMessageRepository(session)
             await messages.add(
                 message=AssistantMessage(
@@ -122,17 +107,17 @@ class AssistantTurnService:
             if chat_session.title == AssistantSessionService.NEW_TITLE:
                 chat_session.title = text[: self.TITLE_MAX_CHARS]
             chat_session.updated_at = now
-            history = await messages.list_last_for_session(
-                session_id=session_id, limit=self._history_messages
-            )
+            history = await ModelHistoryBuilder(
+                session, action_ttl_hours=self._action_ttl_hours
+            ).build(session_id=session_id, limit=self._history_messages, now=now)
         self._session_id = session_id
         self._messages = [
             SystemMessage(self._prompts.build(first_name=self._first_name)),
-            *(self._to_model_message(message) for message in history),
+            *history,
         ]
 
     async def stream(self) -> AsyncIterator[AssistantEvent]:
-        self._deadline = asyncio.get_running_loop().time() + self._turn_timeout_seconds
+        self._runner.start_clock()
         try:
             async for event in self._run():
                 yield event
@@ -140,7 +125,7 @@ class AssistantTurnService:
             logger.warning(
                 "The assistant turn in session %s timed out after %d s",
                 self._session_id,
-                self._turn_timeout_seconds,
+                self._runner.turn_timeout_seconds,
             )
             yield AssistantEvent.error(code=self.TIMEOUT_CODE, message=self.TIMEOUT_MESSAGE)
         except AssistantProviderError:
@@ -163,13 +148,13 @@ class AssistantTurnService:
             yield AssistantEvent.thinking()
             reply = AIMessageChunk(content="")
             chunks = self._model.astream(self._messages)
-            while (chunk := await self._next_chunk(chunks)) is not None:
+            while (chunk := await self._runner.next_chunk(chunks)) is not None:
                 reply = reply + chunk
                 if chunk.text:
                     sent.append(str(chunk.text))
                     yield AssistantEvent.chunk(str(chunk.text))
             if reply.usage_metadata is not None:
-                await self._record(reply.usage_metadata)
+                await self._runner.record(reply.usage_metadata)
             if not reply.tool_calls and not reply.invalid_tool_calls:
                 answered = True
                 break
@@ -185,28 +170,13 @@ class AssistantTurnService:
         if not answered or not "".join(sent):
             sent.append(self.FALLBACK_TEXT)
             yield AssistantEvent.chunk(self.FALLBACK_TEXT)
-        yield await self._finish("".join(sent))
-
-    async def _next_chunk(self, chunks: AsyncIterator[AIMessage]) -> AIMessageChunk | None:
-        try:
-            chunk = await self._before_deadline(anext(chunks, None))
-        except AssistantTurnTimeoutError:
-            raise
-        except Exception as error:
-            raise AssistantProviderError() from error
-        if chunk is None or isinstance(chunk, AIMessageChunk):
-            return chunk
-        return AIMessageChunk(
-            content=chunk.content,
-            tool_calls=chunk.tool_calls,
-            invalid_tool_calls=chunk.invalid_tool_calls,
-            usage_metadata=chunk.usage_metadata,
-        )
+        for event in await self._finish("".join(sent)):
+            yield event
 
     async def _run_tool(self, call: ToolCall) -> ToolMessage:
         call_id = call["id"] or ""
         try:
-            result = await self._before_deadline(self._tools[call["name"]].ainvoke(call))
+            result = await self._runner.before_deadline(self._tools[call["name"]].ainvoke(call))
         except AssistantTurnTimeoutError:
             raise
         except DomainError as error:
@@ -228,30 +198,7 @@ class AssistantTurnService:
             tool_error(AiToolErrors.MALFORMED_CALL, "The arguments are not a JSON object."),
         )
 
-    async def _before_deadline[T](self, awaitable: Awaitable[T]) -> T:
-        timeout = asyncio.timeout_at(self._deadline)
-        try:
-            async with timeout:
-                return await awaitable
-        except TimeoutError:
-            if timeout.expired():
-                raise AssistantTurnTimeoutError() from None
-            raise
-
-    async def _record(self, usage: UsageMetadata) -> None:
-        async with self._transaction() as session:
-            await self._ledger(session).record(usage=usage, model=self._model_name)
-
-    def _ledger(self, session: AsyncSession) -> UsageLedger:
-        return UsageLedger(
-            session,
-            prices=self._prices,
-            timezone=self._timezone,
-            daily_budget_usd=self._daily_budget_usd,
-            turns_per_minute=self._turns_per_minute,
-        )
-
-    async def _finish(self, text: str) -> AssistantEvent:
+    async def _finish(self, text: str) -> list[AssistantEvent]:
         if self._session_id is None:
             raise RuntimeError("stream() needs start() first")
         now = clock.now()
@@ -261,28 +208,26 @@ class AssistantTurnService:
             text=text,
             created_at=now,
         )
-        async with self._transaction() as session:
+        events: list[AssistantEvent] = []
+        async with self._runner.transaction() as session:
             await AssistantMessageRepository(session).add(message=message)
             await AssistantSessionRepository(session).touch(
                 session_id=self._session_id, updated_at=now
             )
-        return AssistantEvent.done(message_id=message.id, created_at=message.created_at)
-
-    @asynccontextmanager
-    async def _transaction(self) -> AsyncIterator[AsyncSession]:
-        async with self._sessionmaker() as session:
-            try:
-                yield session
-            except BaseException:
-                await session.rollback()
-                raise
-            await session.commit()
-
-    @staticmethod
-    def _to_model_message(message: AssistantMessage) -> BaseMessage:
-        if message.role is AssistantMessageRole.USER:
-            return HumanMessage(message.text)
-        return AIMessage(message.text)
+            proposal = self._proposals.proposal
+            if proposal is not None:
+                action = await AssistantActionService(
+                    session, action_ttl_hours=self._action_ttl_hours
+                ).store(
+                    session_id=self._session_id,
+                    message_id=message.id,
+                    user_id=self._user_id,
+                    proposal=proposal,
+                    now=now,
+                )
+                events.append(AssistantEvent.action(action))
+        events.append(AssistantEvent.done(message_id=message.id, created_at=message.created_at))
+        return events
 
     @staticmethod
     def _tool_message(

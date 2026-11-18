@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, status
 
 from app.common.error_responses import error_responses
 from app.features.assistant.endpoints.dependencies import (
+    AssistantActionServiceDep,
+    AssistantApplyServiceDep,
     AssistantSessionServiceDep,
     AssistantTurnServiceDep,
     VerifiedUserDep,
@@ -13,11 +15,14 @@ from app.features.assistant.endpoints.errors import DOCUMENTED_ERROR_STATUSES
 from app.features.assistant.endpoints.event_stream import EventStreamResponse
 from app.features.assistant.endpoints.openapi_tags import AssistantOpenApiTags
 from app.features.assistant.schemas import (
+    AssistantActionResponse,
     AssistantMessageRequest,
     AssistantSessionDetailResponse,
     AssistantSessionResponse,
 )
 from app.features.assistant.services.exceptions import (
+    AssistantActionNotFoundError,
+    AssistantActionNotPendingError,
     AssistantBudgetExhaustedError,
     AssistantBusyError,
     AssistantSessionNotFoundError,
@@ -99,7 +104,9 @@ async def list_sessions(
     ),
     description=(
         "Reads one of the signed-in user's chat sessions with its messages, oldest first; each "
-        "message carries its role, `USER` or `ASSISTANT`. Another user's session or an unknown "
+        "message carries its role, `USER` or `ASSISTANT`, and `action`: the confirmation card "
+        "the assistant proposed with that message, or null; a pending card past its expiry "
+        "reads as `EXPIRED`. Another user's session or an unknown "
         "id is not found. A user whose email is not verified is refused. Unavailable when the "
         "model provider is not configured."
     ),
@@ -135,9 +142,12 @@ async def get_session(
     description=(
         "Sends a message to one of the signed-in user's chat sessions and streams the answer "
         "as Server-Sent Events: `thinking` (`{}`) before every model call, `chunk` "
-        '(`{"text"}`) as the answer arrives, then `done` (`{"message_id","created_at"}`) '
+        '(`{"text"}`) as the answer arrives, `action` (the action object with its card) after '
+        "the last chunk when the assistant proposed a change for the guest to confirm, then "
+        '`done` (`{"message_id","created_at"}`) '
         'once the answer is saved, or `error` (`{"code","message"}`) instead of `done`; '
-        "then the user's message stays and no answer is saved; the title and `updated_at` are "
+        "then the user's message stays and no answer or card is saved; a newer card cancels "
+        "the session's pending one. The title and `updated_at` are "
         "already set by the question. Error codes: "
         "`ASSISTANT_TIMEOUT` past the turn's time cap, `ASSISTANT_PROVIDER_ERROR` when the "
         "model fails, `SERVER_ERROR` otherwise. A turn is capped in model calls and tool calls; "
@@ -156,3 +166,106 @@ async def send_message(
 ) -> EventStreamResponse:
     await turn.start(session_id=session_id, text=body.text)
     return EventStreamResponse(turn.stream())
+
+
+ACTION_PATH = "/sessions/{session_id}/actions/{action_id}"
+
+
+@router.get(
+    ACTION_PATH,
+    response_model=AssistantActionResponse,
+    responses=error_responses(
+        NotAuthenticatedError,
+        EmailNotVerifiedError,
+        AssistantActionNotFoundError,
+        AssistantUnavailableError,
+        statuses=DOCUMENTED_ERROR_STATUSES,
+        takes_input=True,
+    ),
+    description=(
+        "Reads one confirmation card of the signed-in user's chat session: kind, status, card, "
+        "expiry, and the result or error once applied. A pending card past its expiry reads as "
+        "`EXPIRED`. An action outside the caller's session or an unknown id is not found. A "
+        "user whose email is not verified is refused. Unavailable when the model provider is "
+        "not configured."
+    ),
+)
+async def get_action(
+    session_id: uuid.UUID,
+    action_id: uuid.UUID,
+    user: VerifiedUserDep,
+    actions: AssistantActionServiceDep,
+) -> AssistantActionResponse:
+    return AssistantActionResponse.model_validate(
+        await actions.get(user_id=user.id, session_id=session_id, action_id=action_id)
+    )
+
+
+@router.post(
+    f"{ACTION_PATH}/cancel",
+    response_model=AssistantActionResponse,
+    responses=error_responses(
+        NotAuthenticatedError,
+        EmailNotVerifiedError,
+        AssistantActionNotFoundError,
+        AssistantActionNotPendingError,
+        AssistantUnavailableError,
+        statuses=DOCUMENTED_ERROR_STATUSES,
+        takes_input=True,
+    ),
+    description=(
+        "Cancels a pending confirmation card and answers the action as `CANCELLED`; nothing is "
+        "changed. A card already cancelled answers the same again; an applied, failed or "
+        "expired one is refused with 409. An action outside the caller's session or an unknown "
+        "id is not found. A user whose email is not verified is refused. Unavailable when the "
+        "model provider is not configured."
+    ),
+)
+async def cancel_action(
+    session_id: uuid.UUID,
+    action_id: uuid.UUID,
+    user: VerifiedUserDep,
+    actions: AssistantActionServiceDep,
+) -> AssistantActionResponse:
+    return AssistantActionResponse.model_validate(
+        await actions.cancel(user_id=user.id, session_id=session_id, action_id=action_id)
+    )
+
+
+@router.post(
+    f"{ACTION_PATH}/apply",
+    status_code=status.HTTP_200_OK,
+    response_class=EventStreamResponse,
+    responses={
+        status.HTTP_200_OK: {
+            "description": "The outcome and the assistant's comment as Server-Sent Events.",
+            "content": {EventStreamResponse.MEDIA_TYPE: {"schema": {"type": "string"}}},
+        },
+        **error_responses(
+            NotAuthenticatedError,
+            EmailNotVerifiedError,
+            AssistantActionNotFoundError,
+            AssistantActionNotPendingError,
+            AssistantUnavailableError,
+            statuses=DOCUMENTED_ERROR_STATUSES,
+            takes_input=True,
+        ),
+    },
+    description=(
+        "Applies a pending confirmation card: the change runs through the same checks as its "
+        "own route, and the outcome is saved before the stream starts. The stream sends "
+        "`action` (`APPLIED` with `result`, or `FAILED` with `error`), then the assistant's "
+        "comment on it: `thinking`, `chunk`…, `done`, or `error` instead of `done` with the "
+        "outcome unchanged. A card applied before executes nothing and streams only `action` "
+        "and `done` with a null `message_id` and `created_at`. A cancelled, failed or expired "
+        "card is refused with 409 as plain JSON. The turns-per-minute limit does not apply; "
+        "once the day's budget is spent the comment is a fixed text. An action outside the "
+        "caller's session or an unknown id is not found. A user whose email is not verified is "
+        "refused. Unavailable when the model provider is not configured."
+    ),
+)
+async def apply_action(
+    session_id: uuid.UUID, action_id: uuid.UUID, apply: AssistantApplyServiceDep
+) -> EventStreamResponse:
+    await apply.start(session_id=session_id, action_id=action_id)
+    return EventStreamResponse(apply.stream())

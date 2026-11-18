@@ -5,6 +5,7 @@ Alembic's env.py loads this module. Add each new feature's models here.
 
 from app.common.database import Base
 from app.features.assistant.models import (
+    AssistantAction,
     AssistantMessage,
     AssistantModelCall,
     AssistantSession,
@@ -19,6 +20,7 @@ from app.features.invites.models import BookingInvite
 from app.features.preorder.models import PreorderItem
 
 __all__ = [
+    "AssistantAction",
     "AssistantMessage",
     "AssistantModelCall",
     "AssistantSession",

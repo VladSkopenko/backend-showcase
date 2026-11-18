@@ -90,6 +90,17 @@ def moment(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
 
+def action_routes() -> list[tuple[str, str]]:
+    action = f"{SESSIONS}/{uuid.uuid4()}/actions/{uuid.uuid4()}"
+    return [("GET", action), ("POST", f"{action}/cancel"), ("POST", f"{action}/apply")]
+
+
+async def request(
+    client: httpx2.AsyncClient, method: str, path: str, headers: dict[str, str] | None = None
+) -> httpx2.Response:
+    return await client.request(method, path, headers=headers)
+
+
 async def test_a_verified_user_creates_sessions_and_lists_them_latest_activity_first(
     client: httpx2.AsyncClient,
     users: dict[str, User],
@@ -154,8 +165,9 @@ async def test_a_session_reads_back_with_its_messages_oldest_first(
     assert moment(body["created_at"]) == START
     assert moment(body["updated_at"]) == START + 2 * MINUTE
     assert [set(message) for message in body["messages"]] == [
-        {"id", "role", "text", "created_at"}
+        {"id", "role", "text", "created_at", "action"}
     ] * 2
+    assert [message["action"] for message in body["messages"]] == [None, None]
     assert [(m["id"], m["role"], m["text"], moment(m["created_at"])) for m in body["messages"]] == [
         (str(question), "USER", "What is in the khachapuri?", START + MINUTE),
         (str(answer), "ASSISTANT", "Cheese, eggs and butter in a bread boat.", START + 2 * MINUTE),
@@ -173,6 +185,7 @@ async def test_an_unverified_user_is_refused(
         await client.get(SESSIONS),
         await client.get(f"{SESSIONS}/{uuid.uuid4()}"),
         await client.post(f"{SESSIONS}/{uuid.uuid4()}/messages", json={"text": "hi"}),
+        *[await request(client, method, path) for method, path in action_routes()],
     ]
 
     for response in responses:
@@ -195,6 +208,7 @@ async def test_a_guest_or_nobody_is_refused(
         await client.post(
             f"{SESSIONS}/{uuid.uuid4()}/messages", json={"text": "hi"}, headers=headers
         ),
+        *[await request(client, method, path, headers) for method, path in action_routes()],
     ]
 
     for response in responses:
@@ -215,6 +229,7 @@ async def test_without_a_key_every_assistant_route_is_unavailable_and_the_rest_r
         await client.get(SESSIONS),
         await client.get(f"{SESSIONS}/{uuid.uuid4()}"),
         await client.post(f"{SESSIONS}/{uuid.uuid4()}/messages", json={"text": "hi"}),
+        *[await request(client, method, path) for method, path in action_routes()],
     ]
 
     for response in responses:

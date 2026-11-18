@@ -24,3 +24,16 @@ class FindTablesArguments(BaseModel):
 
 class ListMyBookingsArguments(BaseModel):
     pass
+
+
+class CreateBookingArguments(BaseModel):
+    table_id: uuid.UUID = Field(description="The table to book, by the id find_tables returns.")
+    date: datetime.date = Field(
+        description="The day of the visit in the restaurant's timezone, as YYYY-MM-DD."
+    )
+    time: datetime.time = Field(
+        description=(
+            "The start of the visit, as HH:MM in the restaurant's timezone on the slot grid."
+        )
+    )
+    party_size: int = Field(ge=1, description="How many people come, the guest included.")

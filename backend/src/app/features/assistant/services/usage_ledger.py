@@ -54,8 +54,7 @@ class UsageLedger:
     async def check(self, *, now: datetime) -> None:
         await self._calls.lock_for_transaction(key=self.LIMITS_LOCK_KEY)
         local_day = now.astimezone(self._timezone).date()
-        midnight = datetime.combine(local_day, time(), tzinfo=self._timezone)
-        spent_micro_usd = await self._calls.sum_cost_since(since=midnight)
+        spent_micro_usd = await self._spent_today(now=now)
         if spent_micro_usd >= self._daily_budget_micro_usd:
             logger.warning(
                 "The assistant's daily budget is exhausted: spent %d micro-USD of %s",
@@ -74,6 +73,14 @@ class UsageLedger:
             raise AssistantBusyError(
                 retry_after=self._seconds(oldest_counted + self.TURNS_WINDOW - now)
             )
+
+    async def is_budget_exhausted(self, *, now: datetime) -> bool:
+        return await self._spent_today(now=now) >= self._daily_budget_micro_usd
+
+    async def _spent_today(self, *, now: datetime) -> int:
+        local_day = now.astimezone(self._timezone).date()
+        midnight = datetime.combine(local_day, time(), tzinfo=self._timezone)
+        return await self._calls.sum_cost_since(since=midnight)
 
     async def record(self, *, usage: UsageMetadata, model: str) -> None:
         input_tokens = usage["input_tokens"]

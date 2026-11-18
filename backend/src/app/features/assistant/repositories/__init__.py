@@ -1,3 +1,6 @@
+from app.features.assistant.repositories.assistant_action_repository import (
+    AssistantActionRepository,
+)
 from app.features.assistant.repositories.assistant_message_repository import (
     AssistantMessageRepository,
 )
@@ -9,6 +12,7 @@ from app.features.assistant.repositories.assistant_session_repository import (
 )
 
 __all__ = [
+    "AssistantActionRepository",
     "AssistantMessageRepository",
     "AssistantModelCallRepository",
     "AssistantSessionRepository",

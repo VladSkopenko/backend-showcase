@@ -432,6 +432,7 @@ def test_assistant_defaults() -> None:
     assert assistant.max_tool_calls == 15
     assert assistant.turn_timeout_seconds == 240
     assert assistant.tool_result_max_chars == 8000
+    assert assistant.action_ttl_hours == 24
 
 
 def test_assistant_turn_env_vars_land_in_the_assistant_block(
@@ -546,6 +547,21 @@ def test_assistant_limits_are_always_positive(monkeypatch: pytest.MonkeyPatch, n
 
     with pytest.raises(ValidationError, match=name.removeprefix("ASSISTANT_").lower()):
         Settings()
+
+
+@pytest.mark.parametrize(
+    ("value", "valid"), [("0", False), ("1", True), ("48", True), ("720", True), ("721", False)]
+)
+def test_assistant_action_ttl_env_var_lands_in_the_assistant_block_and_stays_in_range(
+    monkeypatch: pytest.MonkeyPatch, value: str, valid: bool
+) -> None:
+    monkeypatch.setenv("ASSISTANT_ACTION_TTL_HOURS", value)
+
+    if valid:
+        assert Settings().assistant.action_ttl_hours == int(value)
+    else:
+        with pytest.raises(ValidationError, match="action_ttl_hours"):
+            Settings()
 
 
 def test_cleanup_defaults() -> None:

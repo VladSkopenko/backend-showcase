@@ -578,7 +578,7 @@ async def test_the_prompt_carries_the_booking_rules_from_the_settings(
         "and a change keeps the booking on the same day",
         "the pre-order can be changed until 50 minutes before the start",
         "call find_tables and read the free starts across the tables",
-        "You can only read: you cannot book, change or cancel a booking or edit the cart",
+        "editing or cancelling a booking and changing the cart are not available yet",
     ):
         assert rule in prompt, rule
     local = START.astimezone(TZ)
@@ -589,6 +589,7 @@ async def test_the_prompt_carries_the_booking_rules_from_the_settings(
         "list_locations",
         "find_tables",
         "list_my_bookings",
+        "create_booking",
         "get_my_preorder",
     }
 

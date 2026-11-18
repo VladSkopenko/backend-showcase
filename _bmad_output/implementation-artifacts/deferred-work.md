@@ -197,3 +197,15 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-final-scope/stories/4b-assistant-streamed-turn.md`
   summary: Build the `ChatOpenAI` client once per process (as `app.state.oauth_clients`) instead of one per request in `get_chat_model`, so the provider connection is reused and the httpx client is closed on shutdown.
   evidence: `get_chat_model` constructs `ChatOpenAI`, an `openai.AsyncOpenAI` and its httpx client on every turn and never closes them; at the global cap of ten turns a minute the cost is small, so it was not patched in the story.
+
+## Deferred from: discussion of the frontend notifications task (2026-11-18)
+
+- source_spec: `_bmad_output/implementation-artifacts/spec-restaurant-simulation/stories/3-request-decision-notifications.md`
+  summary: At the end of the project, remove the in-app notifications and keep only the decision emails. A new migration drops the `notifications` table (its migration is merged, so it is not edited); the `GET /notifications` and `POST /notifications/{id}/read` routes, the `Notification` model, its repository, `NotificationService` and `BookingDecisionNotifier` with its calls in `BookingRequestService` and `RequestExpiryService` go; `DecisionNotice`, `DecisionEmailService` and its renderer stay. Record it in an ADR that supersedes ADR 18.
+  evidence: The frontend will not build a notifications list: the email with its `/reservations` link and the booking card status already tell the guest about the decision, and realtime delivery (WebSocket or SSE) is not worth it for one rare one-way event. Until removal the rows accumulate without cleanup, the simulator bots on dev included. The frontend copy in `BookingConfirmedModal` ("a notification and an email") must change to the email only.
+
+## Deferred from: review of 5a-assistant-confirmed-booking (2026-11-18)
+
+- source_spec: `_bmad_output/implementation-artifacts/spec-final-scope/stories/5a-assistant-confirmed-booking.md`
+  summary: Concurrency tests for the confirmation mechanism: two parallel applies of one card (one booking), a turn superseding a card while it is applied, and two turns storing cards in one session (one pending).
+  evidence: The test fixture binds every session to one connection inside a rolled-back transaction, so real parallel transactions need a separate engine fixture that commits; the guards are single conditional UPDATE statements and a partial unique index.

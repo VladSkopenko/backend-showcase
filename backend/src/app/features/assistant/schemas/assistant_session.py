@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from app.features.assistant.enums import AssistantMessageRole
+from app.features.assistant.schemas.assistant_action import AssistantActionResponse
 
 
 class AssistantSessionResponse(BaseModel):
@@ -22,6 +23,7 @@ class AssistantMessageResponse(BaseModel):
     role: AssistantMessageRole
     text: str
     created_at: datetime
+    action: AssistantActionResponse | None
 
 
 class AssistantSessionDetailResponse(AssistantSessionResponse):
