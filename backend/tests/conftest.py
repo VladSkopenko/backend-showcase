@@ -22,7 +22,7 @@ from app.config import settings as settings_module
 from app.config.settings import get_settings
 
 pytest.register_assert_rewrite("support")
-pytest_plugins = ["support.booking_fixtures"]
+pytest_plugins = ["support.booking_fixtures", "support.preorder_fixtures"]
 
 TEST_DATABASE_NAME = "app_test"
 

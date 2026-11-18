@@ -7,7 +7,7 @@ Date: 2026-11-18
 Accepted. Amends [ADR 11](0011-feature-sliced-backend-layout.md): a feature may keep a second
 adapter, `ai_tools/`, beside `endpoints/`, and the assistant is the only feature that imports it.
 Amended 2026-11-18 (story 5a): confirmed actions, propose and apply, live in the feature's
-`ai_tools/` next to their tools.
+`ai_tools/` next to their tools. Amended 2026-11-18 (story 5b): stale cards fail on apply.
 
 ## Context
 
@@ -47,6 +47,15 @@ work that spans features, while a tool is an adapter of one feature for one call
   `kind -> applier` registry, so the assistant composes tools and appliers and knows no
   domain's services. `ProposalSink`, `Card`, `ActionContext` and the `ActionApplier` protocol
   live in `app.common.ai_tools`.
+- **A card goes stale, not wrong.** An action whose card shows values the apply depends on pins
+  a "before" snapshot of them in its payload: the booking's start, party size and length for an
+  edit, the cart line's quantity and note (or no line) for a cart item, the draft lines and the
+  total for a submit. The applier compares the current state with that snapshot inside the apply
+  savepoint, under the same row lock the route's service takes, and fails with a
+  `*_CHANGED` domain error (`BOOKING_CHANGED`, `CART_CHANGED`) when it differs, so a change made
+  on the website after the card is never overwritten. Cancelling a booking and removing a cart
+  line act on the identity of the booking or the line, not on values the guest saw, and are
+  exempt.
 - **Expiry is derived on read.** A pending action past `expires_at` is shown as `EXPIRED` by
   every reader (the action routes, the session read-back, the `action` event, the model's
   history line); the status is written only when a newer card supersedes it, so a refusing path

@@ -793,7 +793,6 @@ async def test_the_prompt_says_the_card_is_the_confirmation(
         "find_tables result; to filter by a location the guest named, look its id up first",
         "the card is the confirmation",
         "nothing is booked until the guest applies the card",
-        "editing or cancelling a booking and changing the cart are not available yet",
     ):
         assert rule in prompt, rule
     assert "create_booking" in {tool.name for tool in models.turn.bound_tools}

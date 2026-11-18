@@ -180,3 +180,10 @@ class RequestExpiredError(DomainError):
         super().__init__(
             "This request starts too soon or has started, so it can no longer be approved."
         )
+
+
+class BookingChangedError(DomainError):
+    code = "BOOKING_CHANGED"
+
+    def __init__(self) -> None:
+        super().__init__("The booking changed after this card was made.")
