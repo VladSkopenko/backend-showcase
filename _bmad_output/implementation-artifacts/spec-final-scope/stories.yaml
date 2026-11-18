@@ -22,18 +22,47 @@
     any more (CAP-3).
   spec_checkpoint: true
   done_checkpoint: true
-- id: "4"
-  title: "Assistant: conversation and read tools"
+- id: "4a"
+  title: "Assistant: sessions"
   description: >-
-    Sessions with their 7-day cleanup, the streamed turn, read tools and the global limits, with
-    the frontend task document and the Figma mockup (CAP-4, CAP-5, CAP-6, CAP-8, CAP-9, CAP-10).
+    Sessions and messages in Postgres, the create, list and read routes for verified users, the
+    7-day cleanup, the provider settings (CAP-4, first half).
+  spec_checkpoint: true
+  done_checkpoint: true
+- id: "4b"
+  title: "Assistant: the streamed turn"
+  description: >-
+    The message route streaming over SSE through the tool loop on OpenAI via LangChain, the menu's
+    two read tools as the first ai_tools package, the ADR and the import contracts (CAP-4).
+  spec_checkpoint: true
+  done_checkpoint: true
+- id: "4c"
+  title: "Assistant: global limits"
+  description: >-
+    Usage rows per model call, the daily budget and the turns-per-minute cap refused before the
+    stream, the worst-case overshoot in dollars, the key on dev (CAP-6).
   spec_checkpoint: true
   done_checkpoint: true
   invoke_dev_with: >-
     Infrastructure: OPENAI_API_KEY in delivery.yml and deploy/app/compose.yml, one file at a time
-    with Vlad, every key explained with a doc link. Figma: draw only after Vlad approves this
-    story's spec, in a separate file next to the design copy (Claude memory figma-design-file). The
-    live check includes Ukrainian and Russian conversations with the real key.
+    with Vlad, every key explained with a doc link.
+- id: "4d"
+  title: "Assistant: read tools and languages"
+  description: >-
+    Locations, free tables, my bookings and my pre-order as tools, the restaurant's rules as prompt
+    facts, the live check in English, Ukrainian and Russian (CAP-5, CAP-8).
+  spec_checkpoint: true
+  done_checkpoint: true
+- id: "4e"
+  title: "Assistant: frontend task document and Figma mockup"
+  description: >-
+    The task document for the frontend developer and the chat mockup in Figma (CAP-9 for the read
+    part, CAP-10).
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Figma: a separate file next to the design copy (Claude memory figma-design-file), drawn by
+    Claude after the spec is approved; Starter seat with call limits.
 - id: "5"
   title: "Assistant: confirmed writes"
   description: >-

@@ -185,3 +185,15 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-final-scope/stories/3-cleanup-of-session-and-verification-rows.md`
   summary: Test that the app lifespan passes each periodic task its own interval setting (`CLEANUP_INTERVAL_SECONDS`, `BOOKING_AUTO_REJECT_INTERVAL_SECONDS`), for both tasks at once.
   evidence: The lifespan test asserts only task names; passing the wrong setting or a literal in `main.py` passes every test. The request-expiry wiring had the same gap before this story.
+
+## Deferred from: review of 4a-assistant-sessions (2026-11-18)
+
+- source_spec: `_bmad_output/implementation-artifacts/spec-final-scope/stories/4a-assistant-sessions.md`
+  summary: Test that the app lifespan passes `ASSISTANT_SESSION_TTL_DAYS` to `CleanupJob`, together with the two interval settings deferred from story 3.
+  evidence: The lifespan test asserts only task names; a literal `7` in `main.py` passes every test. Closing it means capturing the job's constructor arguments in the lifespan test, a new pattern for all three settings at once.
+
+## Deferred from: review of 4b-assistant-streamed-turn (2026-11-18)
+
+- source_spec: `_bmad_output/implementation-artifacts/spec-final-scope/stories/4b-assistant-streamed-turn.md`
+  summary: Build the `ChatOpenAI` client once per process (as `app.state.oauth_clients`) instead of one per request in `get_chat_model`, so the provider connection is reused and the httpx client is closed on shutdown.
+  evidence: `get_chat_model` constructs `ChatOpenAI`, an `openai.AsyncOpenAI` and its httpx client on every turn and never closes them; at the global cap of ten turns a minute the cost is small, so it was not patched in the story.
