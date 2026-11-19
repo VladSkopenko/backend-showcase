@@ -34,7 +34,8 @@ refresh-токенів, групове передзамовлення і AI-ас
 | Дашборди (Grafana, без облікового запису) | https://backend-showcase-grafana.duckdns.org |
 | Якість коду (SonarCloud) | https://sonarcloud.io/summary/overall?id=VladSkopenko_backend-showcase |
 
-Для staging і production уже є гілки (`rc`, `prod`) і домени. Вони запрацюють із першим релізом.
+Проєкт працює в одному середовищі, dev, і на ньому завершується
+([ADR 24](docs/adr/0024-the-project-ends-on-dev.md)).
 
 ## Що вже зроблено
 
@@ -81,10 +82,6 @@ flowchart LR
 4. Entrypoint перевіряє, що коміт є в `main`, завантажує образ, виконує `alembic upgrade head` і
    запускає API, чекаючи на його healthcheck.
 
-Staging і production отримуватимуть той самий образ за digest через pull requests з `main` у `rc`
-і з `rc` у `prod` ([ADR 4](docs/adr/0004-image-identity-and-promotion.md)). Їхні jobs деплою
-з'являться з першим релізом.
-
 ## Будова бекенду
 
 - Python 3.14, FastAPI, Pydantic v2, SQLAlchemy 2 async, Alembic, uv.
@@ -109,10 +106,10 @@ Staging і production отримуватимуть той самий образ 
 |---|---|
 | [2](docs/adr/0002-ci-access-through-tailscale.md) | CI дістається сервера лише через Tailscale |
 | [3](docs/adr/0003-deploy-entrypoint-verifies-commit.md) | Entrypoint деплою приймає коміт і перевіряє його |
-| [4](docs/adr/0004-image-identity-and-promotion.md) | Образи ідентифікуються хешем дерева й просуваються за digest |
-| [5](docs/adr/0005-migration-rollback-with-alembic.md) | Невдалий деплой відкочує міграції через Alembic |
-| [6](docs/adr/0006-data-stack-per-environment.md) | Кожне середовище має власні PostgreSQL і Redis |
-| [7](docs/adr/0007-single-vm-platform-and-app-stacks.md) | Одна VM запускає platform-стек і app-стек для кожного середовища |
+| [4](docs/adr/0004-image-identity-and-promotion.md) | Образи ідентифікуються хешем дерева й розгортаються за digest; змінено ADR 24: лише dev |
+| [5](docs/adr/0005-migration-rollback-with-alembic.md) | Замінено ADR 24. Невдалий деплой відкочує міграції через Alembic |
+| [6](docs/adr/0006-data-stack-per-environment.md) | Кожне середовище має власну PostgreSQL; змінено ADR 24: лише dev, без Redis |
+| [7](docs/adr/0007-single-vm-platform-and-app-stacks.md) | Одна VM запускає platform-стек і app-стек; змінено ADR 24: один app-стек, dev |
 | [8](docs/adr/0008-terraform-and-immutable-server.md) | Terraform з самого початку, сервер незмінний |
 | [9](docs/adr/0009-alerting-from-outside-the-vm.md) | Замінено ADR 23. Алерти мають працювати, навіть коли VM не працює |
 | [10](docs/adr/0010-frontend-in-a-separate-repository.md) | Фронтенд живе в окремому репозиторії |
@@ -129,6 +126,7 @@ Staging і production отримуватимуть той самий образ 
 | [21](docs/adr/0021-decisions-by-email-only.md) | Рішення персоналу доходять до гостей лише листом; список сповіщень у застосунку прибрано |
 | [22](docs/adr/0022-prometheus-scrapes-dev.md) | Prometheus у platform-стеку збирає метрики dev з `env` із власного конфігу, UI у tailnet; межею порту метрик є Caddy |
 | [23](docs/adr/0023-observability-ends-with-logs.md) | Спостережуваність завершується логами: без алертів, watchdog, трейсів і Redis exporter |
+| [24](docs/adr/0024-the-project-ends-on-dev.md) | Проєкт завершується на dev: без staging і production, відкату міграцій, Redis, бекапів і навантажувальних тестів |
 
 ## Запуск локально
 
@@ -149,7 +147,7 @@ uv run pytest
 | Сервер | Oracle Cloud Always Free, одна VM Ampere A1 (Arm) |
 | CI/CD і реєстр | GitHub Actions і GHCR у публічному репозиторії |
 | Домени й HTTPS | Піддомени DuckDNS, Caddy з Let's Encrypt |
-| State, бекапи, фото | OCI Object Storage |
+| State Terraform, фото | OCI Object Storage |
 | Приватний доступ | Tailscale |
 
 ## Як це зроблено
@@ -172,10 +170,10 @@ uv run pytest
 - Інфраструктуру я опанував на цьому проєкті, будуючи її разом з агентом: CI/CD, Docker, Terraform,
   Tailscale, Prometheus і Grafana.
 
-## Що далі
+## Що залишилося
 
-- Спостережуваність: метрики сервера й бази dev, далі логи у VictoriaLogs
-- Живі staging і production з відкатом міграцій при невдалому деплої
-- Навантажувальні тести k6 з опублікованими цифрами
+- Метрики PostgreSQL на dev, далі логи у VictoriaLogs. Після цього проєкт завершено
+  ([ADR 23](docs/adr/0023-observability-ends-with-logs.md),
+  [ADR 24](docs/adr/0024-the-project-ends-on-dev.md)).
 
-Повний план у [docs/roadmap.md](docs/roadmap.md).
+План, зокрема що зроблено і від чого відмовилися, у [docs/roadmap.md](docs/roadmap.md).

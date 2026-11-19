@@ -10,7 +10,8 @@ production, and every environment's PostgreSQL joins an analytics network of its
 so Caddy, which never proxies it, is its boundary. Amended by
 [ADR 23](0023-observability-ends-with-logs.md): no Alertmanager, Tempo or `redis_exporter`,
 postgres_exporter for dev only, node_exporter in the platform stack, and no alerting from outside
-the VM.
+the VM. Amended by [ADR 24](0024-the-project-ends-on-dev.md): one app stack, dev, beside the
+platform stack.
 
 ## Context
 

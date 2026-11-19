@@ -4,6 +4,9 @@ Date: 2026-10-28
 
 ## Status
 
+Superseded by [ADR 24](0024-the-project-ends-on-dev.md) on 2026-11-20: deploys migrate forward
+only, and a failed migration or start on dev is fixed forward with a new commit.
+
 Accepted
 
 ## Context

@@ -9,7 +9,8 @@ Amends the architecture spine's Metrics convention: the API's metrics port is re
 `edge` as well as `observability`, and Caddy is its boundary. Amended 2026-11-19: the public
 Grafana reads Prometheus through a second data source, and every query is bounded. Amended
 2026-11-19 again, following [ADR 23](0023-observability-ends-with-logs.md): Prometheus also
-scrapes the host's node exporter.
+scrapes the host's node exporter. Amended by [ADR 24](0024-the-project-ends-on-dev.md): there are
+no staging or production targets to add.
 
 ## Context
 

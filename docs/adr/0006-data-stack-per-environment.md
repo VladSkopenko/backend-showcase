@@ -4,7 +4,8 @@ Date: 2026-10-28
 
 ## Status
 
-Accepted
+Accepted. Amended by [ADR 24](0024-the-project-ends-on-dev.md) on 2026-11-20: one app project,
+dev, with its own PostgreSQL; Redis was never deployed and is dropped.
 
 ## Context
 

@@ -4,7 +4,8 @@ Date: 2026-10-28
 
 ## Status
 
-Accepted
+Accepted. Amended by [ADR 24](0024-the-project-ends-on-dev.md) on 2026-11-20: images keep the
+tree-hash identity and reach dev by digest; there is no promotion to staging or production.
 
 ## Context
 

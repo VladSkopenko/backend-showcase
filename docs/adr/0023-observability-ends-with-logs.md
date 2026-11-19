@@ -7,7 +7,8 @@ Date: 2026-11-19
 Accepted. Tracked in [issue #26](https://github.com/VladSkopenko/backend-showcase/issues/26).
 Supersedes [ADR 9](0009-alerting-from-outside-the-vm.md). Amends
 [ADR 7](0007-single-vm-platform-and-app-stacks.md), [ADR 15](0015-platform-as-code.md) and the
-architecture spine, as listed below.
+architecture spine, as listed below. Amended by [ADR 24](0024-the-project-ends-on-dev.md): no
+staging or production API targets follow, since those environments are dropped.
 
 ## Context
 
