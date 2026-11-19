@@ -98,7 +98,7 @@ Each non-obvious choice has a short record in [docs/adr](docs/adr):
 | [6](docs/adr/0006-data-stack-per-environment.md) | Each environment runs its own PostgreSQL and Redis |
 | [7](docs/adr/0007-single-vm-platform-and-app-stacks.md) | One VM runs a platform stack and an app stack per environment |
 | [8](docs/adr/0008-terraform-and-immutable-server.md) | Terraform from the start, and the server is immutable |
-| [9](docs/adr/0009-alerting-from-outside-the-vm.md) | Alerting must work when the VM does not |
+| [9](docs/adr/0009-alerting-from-outside-the-vm.md) | Superseded by ADR 23. Alerting must work when the VM does not |
 | [10](docs/adr/0010-frontend-in-a-separate-repository.md) | The frontend lives in a separate repository |
 | [11](docs/adr/0011-feature-sliced-backend-layout.md) | Feature-sliced backend layout |
 | [12](docs/adr/0012-unified-error-response.md) | One error response format for the whole API |
@@ -112,6 +112,7 @@ Each non-obvious choice has a short record in [docs/adr](docs/adr):
 | [20](docs/adr/0020-assistant-composes-ai-tools.md) | A feature's AI tools live in `ai_tools/` beside its endpoints as a second adapter over its services; the assistant is their only composition root |
 | [21](docs/adr/0021-decisions-by-email-only.md) | Staff decisions reach guests by email only; the in-app notification list is removed |
 | [22](docs/adr/0022-prometheus-scrapes-dev.md) | Prometheus in the platform stack scrapes dev with `env` from its config, UI on the tailnet; Caddy is the metrics port's boundary |
+| [23](docs/adr/0023-observability-ends-with-logs.md) | Observability ends with logs: no alerting, watchdog, traces or Redis exporter |
 
 ## Run it locally
 
@@ -145,7 +146,7 @@ written by hand.
 
 ## What is next
 
-- Observability: metrics, dashboards, logs and alerts to Telegram
+- Observability: server and dev database metrics, then logs in VictoriaLogs
 - Staging and production live, with migration rollback on a failed deploy
 - Load tests with k6 and published numbers
 

@@ -58,10 +58,9 @@ guests' tables ([ADR 14](adr/0014-booking-simulator-on-dev.md)). Workflows are e
 | Containers | multi-stage Dockerfile for `linux/arm64`, non-root user, healthcheck; docker compose per layer and environment |
 | CI | GitHub Actions on every pull request: lint, types, tests with Postgres and Redis services, coverage |
 | CD | build each tree once, Trivy scan, push to GHCR, promote the same digest through dev, staging and production |
-| Metrics | one Prometheus for all environments, labelled by `env`; app, node, Postgres and Redis exporters |
+| Metrics | one Prometheus for all environments, labelled by `env`; app, node and Postgres exporters |
 | Dashboards | Grafana provisioned from the repo: technical metrics plus business analytics from PostgreSQL |
-| Logs and traces | VictoriaLogs, lighter than Loki, decided in an ADR; OpenTelemetry traces in Tempo |
-| Alerts | Alertmanager to a Telegram bot, Watchdog to healthchecks.io as a dead-man switch |
+| Logs | VictoriaLogs, lighter than Loki, decided in an ADR; no traces or alerts ([ADR 23](adr/0023-observability-ends-with-logs.md)) |
 | Automation | n8n workflows that simulate guests and a waiter on dev through the REST API |
 | Private access | Tailscale for Prometheus, VictoriaLogs, n8n and CI deploys |
 | Infrastructure | Terraform for the Oracle Cloud VM, network, firewall and data volume; cloud-init for the base OS; Caddy with automatic HTTPS |
@@ -111,15 +110,17 @@ after two pull requests and one approval.
 ### Phase 4. Observability and platform
 Tracked step by step in [issue #26](https://github.com/VladSkopenko/backend-showcase/issues/26),
 following [ADR 15](adr/0015-platform-as-code.md).
-- [ ] `/metrics` with request rate, errors and latency per endpoint
-- [ ] Platform stack deployed separately from the app stacks
-- [ ] Prometheus scraping all three environments and the exporters
-- [ ] Grafana dashboards provisioned from the repo, with an environment selector
-- [ ] Structured JSON logs in VictoriaLogs, traces in Tempo, linked from Grafana
-- [ ] Alert rules with Alertmanager sending to Telegram, a dead-man switch on healthchecks.io
+- [x] `/metrics` with request rate, errors and latency per endpoint
+- [x] Platform stack deployed separately from the app stacks
+- [ ] Prometheus scraping dev with node and Postgres exporters
+- [ ] Staging and prod targets with their go-live (Phase 3, [ADR 22](adr/0022-prometheus-scrapes-dev.md))
+- [x] Grafana dashboards provisioned from the repo, with an environment selector
+- [ ] Structured JSON logs in VictoriaLogs
 - [ ] n8n in the platform stack; Prometheus, VictoriaLogs and n8n reachable only through Tailscale
 
-Done when: a broken production deploy raises an alert in Telegram within minutes.
+The phase ends with logs: no traces and no alerting ([ADR 23](adr/0023-observability-ends-with-logs.md)).
+
+Done when: a visitor sees the dev API's metrics and the server's health on the public Grafana, and the logs land in VictoriaLogs. The staging and prod targets follow their go-live in Phase 3.
 
 ### Phase 5. Infrastructure as code
 - [ ] Server replacement with `terraform apply -replace`, data reattached from the block volume

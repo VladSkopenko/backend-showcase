@@ -4,6 +4,9 @@ Date: 2026-10-28
 
 ## Status
 
+Superseded by [ADR 23](0023-observability-ends-with-logs.md) on 2026-11-19: no Alertmanager,
+Telegram, healthchecks.io watchdog, n8n probe or oldest-order gauge.
+
 Accepted
 
 ## Context
