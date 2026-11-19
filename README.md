@@ -8,9 +8,21 @@ English | [Українська](README.uk.md)
 [![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=VladSkopenko_backend-showcase&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=VladSkopenko_backend-showcase)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=VladSkopenko_backend-showcase&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=VladSkopenko_backend-showcase)
 
-A REST API for a restaurant chain, built to show delivery engineering end to end: quality gates in
-CI, images built once and promoted by digest, infrastructure as code and a real server, all on free
-tiers.
+A REST API for a restaurant chain: table booking that holds under concurrent requests, sessions with
+refresh-token rotation, group pre-orders and an AI assistant that acts through confirmed cards. It is
+shipped the way production services are: quality gates in CI, images built once and promoted by
+digest, infrastructure as code and a real server, all on free tiers. The restaurant is the domain;
+the point is the whole path from a pull request to a monitored server.
+
+## Start here
+
+| What to look at | Where |
+|---|---|
+| Double booking under concurrent requests: the user row, then the table row are locked, and an exclusion constraint backs them up ([ADR 13](docs/adr/0013-table-booking-slots-and-double-booking.md)) | `BookingService.create` and `edit` in [booking_service.py](backend/src/app/features/core/bookings/services/booking_service.py) |
+| A test that races two real transactions against those locks | [test_booking_concurrency.py](backend/tests/test_booking_concurrency.py) |
+| Refresh-token rotation: two refreshes of one token run one after the other, and a reused token revokes every session of the user | `SessionService.refresh` in [session_service.py](backend/src/app/features/core/auth/services/session_service.py) |
+| Database constraint violations mapped to domain errors by constraint name | [constraint_errors.py](backend/src/app/common/constraint_errors.py) |
+| Layer and feature rules enforced in CI | `[tool.importlinter]` in [pyproject.toml](backend/pyproject.toml), [ADR 11](docs/adr/0011-feature-sliced-backend-layout.md) |
 
 ## Try it
 
@@ -84,6 +96,11 @@ deploy jobs come with the first release.
 - Reference data such as the menu and the locations ships as migrations, so every environment gets
   it without access to the server.
 - Swagger groups routes by user flow (Registration, Session, Menu, Locations, Booking, Invites, Pre-order) rather than by module.
+- Tests run against a real PostgreSQL, each rolled back through a savepoint, because the rules that
+  matter live in row locks and constraints that a mocked session cannot check.
+- Login locks an account after repeated wrong passwords. There is no per-IP limit on purpose: the
+  frontend sends login through its Next.js server on Vercel, so the API sees Vercel's addresses,
+  not the guests'.
 
 ## Decisions
 
@@ -136,13 +153,26 @@ uv run pytest
 | State, backups, pictures | OCI Object Storage |
 | Private access | Tailscale |
 
-## Built with AI agents
+## How it is built
 
-The repository is built with Claude Code and the BMAD method, and the setup is part of the showcase.
-`CLAUDE.md` and `.claude/rules/` define the workflow: spec first, tests first, independent reviews,
-then a live check. `.claude/settings.json` adds guardrails: git changes and migrations ask first,
-and secrets are never read. Every feature starts from a spec in `_bmad_output/`. Infrastructure is
-written by hand.
+I design the system and make the decisions; Claude Code writes most of the code under rules I set,
+and I review every change before it merges.
+
+- **The decisions are mine:** the feature-sliced layers and their import-linter contracts, the
+  object-oriented style, one error format for the API, tests on a real database, the locking and
+  token design. Product rules are signed in the specs as "Decisions (Vlad, date)" in
+  [`_bmad_output/`](_bmad_output/implementation-artifacts).
+- **The agent works inside guardrails I wrote:** [`CLAUDE.md`](CLAUDE.md) and
+  [`.claude/rules/`](.claude/rules) (spec first, failing tests first, every config key checked
+  against the official docs) and [`.claude/settings.json`](.claude/settings.json) (git changes and
+  migrations ask first, secrets are never read).
+- **I overrule it when it is wrong:** it proposed accepting real SonarCloud findings instead of fixing
+  them ([6469d44](https://github.com/VladSkopenko/backend-showcase/commit/6469d443e3d70c825addd68847c85af33775926f)
+  fixed them all), and it
+  replaced the assistant's event names with magic strings to silence a rule
+  ([#58](https://github.com/VladSkopenko/backend-showcase/pull/58) made them an enum instead).
+- I learned the infrastructure on this project, building it together with the agent: CI/CD, Docker,
+  Terraform, Tailscale, Prometheus and Grafana.
 
 ## What is next
 

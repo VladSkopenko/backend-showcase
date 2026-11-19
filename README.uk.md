@@ -8,9 +8,21 @@
 [![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=VladSkopenko_backend-showcase&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=VladSkopenko_backend-showcase)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=VladSkopenko_backend-showcase&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=VladSkopenko_backend-showcase)
 
-REST API для мережі ресторанів. Проєкт показує повний цикл поставки: перевірки якості в CI, образи,
-що збираються один раз і просуваються за digest, інфраструктуру як код і реальний сервер. Усе працює
-на безкоштовних тарифах.
+REST API для мережі ресторанів: бронювання столиків, яке витримує паралельні запити, сесії з ротацією
+refresh-токенів, групове передзамовлення і AI-асистент, що діє через картки з підтвердженням. Його
+постачено так, як постачають продакшн-сервіси: перевірки якості в CI, образи, що збираються один раз і
+просуваються за digest, інфраструктура як код і реальний сервер, усе на безкоштовних тарифах. Ресторан —
+це предметна область; мета — весь шлях від pull request до сервера під моніторингом.
+
+## З чого почати
+
+| На що подивитися | Де |
+|---|---|
+| Подвійне бронювання за паралельних запитів: блокується рядок користувача, потім рядок столу, а exclusion constraint їх підстраховує ([ADR 13](docs/adr/0013-table-booking-slots-and-double-booking.md)) | `BookingService.create` і `edit` у [booking_service.py](backend/src/app/features/core/bookings/services/booking_service.py) |
+| Тест, що зіштовхує дві справжні транзакції з цими блокуваннями | [test_booking_concurrency.py](backend/tests/test_booking_concurrency.py) |
+| Ротація refresh-токенів: два оновлення одного токена йдуть по черзі, а повторно використаний токен відкликає всі сесії користувача | `SessionService.refresh` у [session_service.py](backend/src/app/features/core/auth/services/session_service.py) |
+| Порушення обмежень бази перетворюються на доменні помилки за назвою обмеження | [constraint_errors.py](backend/src/app/common/constraint_errors.py) |
+| Правила шарів і фіч, які перевіряє CI | `[tool.importlinter]` у [pyproject.toml](backend/pyproject.toml), [ADR 11](docs/adr/0011-feature-sliced-backend-layout.md) |
 
 ## Спробувати
 
@@ -84,6 +96,10 @@ Staging і production отримуватимуть той самий образ 
   доступу до сервера.
 - Swagger групує маршрути за сценаріями користувача (Registration, Session, Menu, Locations, Booking,
   Invites, Pre-order), а не за модулями.
+- Тести працюють зі справжньою PostgreSQL, кожен відкочується через savepoint, бо важливі правила
+  тримаються на блокуваннях рядків і обмеженнях, які мок сесії перевірити не може.
+- Вхід блокує акаунт після кількох неправильних паролів. Ліміту за IP навмисно немає: фронтенд
+  надсилає вхід через свій сервер Next.js на Vercel, тож API бачить адреси Vercel, а не гостей.
 
 ## Рішення
 
@@ -136,13 +152,25 @@ uv run pytest
 | State, бекапи, фото | OCI Object Storage |
 | Приватний доступ | Tailscale |
 
-## Розробка з AI-агентами
+## Як це зроблено
 
-Репозиторій створено з Claude Code і методом BMAD, і це налаштування теж частина проєкту. `CLAUDE.md`
-і `.claude/rules/` задають процес: спершу специфікація, потім тести, незалежні рев'ю і перевірка
-наживо. `.claude/settings.json` додає запобіжники: зміни в git і міграції потребують підтвердження,
-секрети ніколи не читаються. Кожна фіча починається зі специфікації в `_bmad_output/`.
-Інфраструктуру написано вручну.
+Систему проєктую і рішення ухвалюю я; більшу частину коду пише Claude Code за правилами, які я задав,
+а кожну зміну я переглядаю перед злиттям.
+
+- **Рішення мої:** feature-sliced шари та їхні контракти import-linter, об'єктно-орієнтований стиль,
+  один формат помилок для всього API, тести на справжній базі, дизайн блокувань і токенів.
+  Продуктові правила підписані в специфікаціях як "Decisions (Vlad, дата)" у
+  [`_bmad_output/`](_bmad_output/implementation-artifacts).
+- **Агент працює в межах правил, які написав я:** [`CLAUDE.md`](CLAUDE.md) і
+  [`.claude/rules/`](.claude/rules) (спершу специфікація, спершу тести, що падають, кожен ключ
+  конфігурації звіряється з офіційною документацією) та [`.claude/settings.json`](.claude/settings.json)
+  (зміни в git і міграції потребують підтвердження, секрети ніколи не читаються).
+- **Я виправляю агента, коли він помиляється:** він пропонував прийняти справжні знахідки SonarCloud
+  замість того, щоб виправити їх ([6469d44](https://github.com/VladSkopenko/backend-showcase/commit/6469d443e3d70c825addd68847c85af33775926f)
+  виправив усі), і замінив назви подій асистента на «магічні рядки», щоб заглушити правило
+  ([#58](https://github.com/VladSkopenko/backend-showcase/pull/58) зробив їх enum).
+- Інфраструктуру я опанував на цьому проєкті, будуючи її разом з агентом: CI/CD, Docker, Terraform,
+  Tailscale, Prometheus і Grafana.
 
 ## Що далі
 
