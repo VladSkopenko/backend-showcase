@@ -98,7 +98,7 @@ Staging і production отримуватимуть той самий образ 
 | [6](docs/adr/0006-data-stack-per-environment.md) | Кожне середовище має власні PostgreSQL і Redis |
 | [7](docs/adr/0007-single-vm-platform-and-app-stacks.md) | Одна VM запускає platform-стек і app-стек для кожного середовища |
 | [8](docs/adr/0008-terraform-and-immutable-server.md) | Terraform з самого початку, сервер незмінний |
-| [9](docs/adr/0009-alerting-from-outside-the-vm.md) | Алерти мають працювати, навіть коли VM не працює |
+| [9](docs/adr/0009-alerting-from-outside-the-vm.md) | Замінено ADR 23. Алерти мають працювати, навіть коли VM не працює |
 | [10](docs/adr/0010-frontend-in-a-separate-repository.md) | Фронтенд живе в окремому репозиторії |
 | [11](docs/adr/0011-feature-sliced-backend-layout.md) | Feature-sliced структура бекенду |
 | [12](docs/adr/0012-unified-error-response.md) | Один формат відповіді з помилкою для всього API |
@@ -112,6 +112,7 @@ Staging і production отримуватимуть той самий образ 
 | [20](docs/adr/0020-assistant-composes-ai-tools.md) | AI-інструменти фічі живуть в `ai_tools/` поряд з її endpoints як другий адаптер над її сервісами; асистент є їхнім єдиним місцем збирання |
 | [21](docs/adr/0021-decisions-by-email-only.md) | Рішення персоналу доходять до гостей лише листом; список сповіщень у застосунку прибрано |
 | [22](docs/adr/0022-prometheus-scrapes-dev.md) | Prometheus у platform-стеку збирає метрики dev з `env` із власного конфігу, UI у tailnet; межею порту метрик є Caddy |
+| [23](docs/adr/0023-observability-ends-with-logs.md) | Спостережуваність завершується логами: без алертів, watchdog, трейсів і Redis exporter |
 
 ## Запуск локально
 
@@ -145,7 +146,7 @@ uv run pytest
 
 ## Що далі
 
-- Спостережуваність: метрики, дашборди, логи й алерти в Telegram
+- Спостережуваність: метрики сервера й бази dev, далі логи у VictoriaLogs
 - Живі staging і production з відкатом міграцій при невдалому деплої
 - Навантажувальні тести k6 з опублікованими цифрами
 

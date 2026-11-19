@@ -6,6 +6,7 @@ Date: 2026-11-11
 
 Accepted. Tracked in [issue #26](https://github.com/VladSkopenko/backend-showcase/issues/26).
 Amends [ADR 3](0003-deploy-entrypoint-verifies-commit.md): the platform deploys from `main`.
+Amended by [ADR 23](0023-observability-ends-with-logs.md): no Alertmanager or Tempo.
 
 ## Context
 

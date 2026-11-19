@@ -7,7 +7,10 @@ Date: 2026-10-28
 Accepted. Amended by [ADR 19](0019-public-grafana-reads-dev.md): Grafana reads dev, not
 production, and every environment's PostgreSQL joins an analytics network of its own. Amended by
 [ADR 22](0022-prometheus-scrapes-dev.md): the API's metrics port is also reachable over `edge`,
-so Caddy, which never proxies it, is its boundary.
+so Caddy, which never proxies it, is its boundary. Amended by
+[ADR 23](0023-observability-ends-with-logs.md): no Alertmanager, Tempo or `redis_exporter`,
+postgres_exporter for dev only, node_exporter in the platform stack, and no alerting from outside
+the VM.
 
 ## Context
 
