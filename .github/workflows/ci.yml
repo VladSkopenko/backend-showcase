@@ -42,9 +42,9 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: "3.14"
           enable-cache: true
@@ -52,35 +52,35 @@ jobs:
 
       - name: Install dependencies
         id: install
-        run: uv sync --locked
+        run: uv sync --locked --no-build
 
       - name: Run lint
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: uv run ruff check .
+        run: uv run --locked --no-build ruff check .
 
       - name: Run format
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: uv run ruff format --check .
+        run: uv run --locked --no-build ruff format --check .
 
       - name: Run type check
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: uv run mypy src tests
+        run: uv run --locked --no-build mypy src tests
 
       - name: Run architecture linter
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: uv run lint-imports
+        run: uv run --locked --no-build lint-imports
 
       # Every migration must downgrade cleanly (ADR 5). `head`, not `heads`: a second head fails here.
       - name: Run migration round-trip
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
-          uv run alembic upgrade head
-          uv run alembic downgrade base
-          uv run alembic upgrade head
-          uv run alembic check
+          uv run --locked --no-build alembic upgrade head
+          uv run --locked --no-build alembic downgrade base
+          uv run --locked --no-build alembic upgrade head
+          uv run --locked --no-build alembic check
 
       - name: Run tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: uv run pytest
+        run: uv run --locked --no-build pytest
 
 

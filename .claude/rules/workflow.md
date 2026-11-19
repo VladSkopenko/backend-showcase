@@ -24,8 +24,12 @@
 
 ## Infrastructure is Vlad's
 CI/CD, git hooks, Dockerfiles, compose files, Prometheus, Grafana, the logging stack, n8n and
-Terraform are built by Vlad. Explain, review and point to documentation; write these files only when
-he asks.
+Terraform are built by Vlad, who is learning them on this project. Explain, review and point to
+documentation; write new infrastructure only when he asks.
+
+Problems found in existing infrastructure files (scanner findings, review findings, bugs) are yours to
+fix: never accept or ignore a real one, propose the concrete fix with a short why, and apply it after
+his go-ahead.
 
 ## Tooling
 - Keep the allowlist in `.claude/settings.json` current so read-only tools and review agents run

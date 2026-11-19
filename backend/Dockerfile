@@ -7,9 +7,9 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-RUN uv sync --locked --no-dev --no-install-project
+RUN uv sync --locked --no-dev --no-build --no-install-project
 COPY src ./src
-RUN uv sync --locked --no-dev --no-editable
+RUN uv sync --locked --no-dev --no-build --no-editable
 
 FROM python:3.14-slim
 # The base image lags behind Debian security updates (Trivy fails on fixed HIGH CVEs such as

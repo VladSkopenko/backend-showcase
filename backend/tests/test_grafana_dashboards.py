@@ -11,6 +11,9 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection
 from support.migrations import run_revision
 
+from app.infrastructure.metrics import RouteTemplates
+from app.main import ROUTERS
+
 pytestmark = pytest.mark.anyio
 
 PLATFORM = Path(__file__).resolve().parents[2] / "deploy" / "platform"
@@ -66,6 +69,30 @@ EMPTY_WITHOUT_BOOKINGS = {
     "checks": "Revenue per day",
     "visitors": "Top visitors by bookings",
     "staff": "Requests per day",
+}
+
+API_UID = "api"
+PROMETHEUS = {"type": "prometheus", "uid": "prometheus"}
+PROMETHEUS_SOURCE = PLATFORM / "grafana" / "provisioning" / "datasources" / "prometheus.yaml"
+REQUESTS_TITLE = "Requests per second by route"
+ERROR_SHARE_TITLE = "5xx share"
+LATENCY_TITLE = "Latency p50 and p95 by route"
+STATUS_TITLE = "Responses by status"
+API_PANEL_TITLES = [REQUESTS_TITLE, ERROR_SHARE_TITLE, LATENCY_TITLE, STATUS_TITLE]
+ROUTES_WITHOUT_LATENCY = [
+    "/health",
+    "/api/v1/assistant/sessions/{session_id}/messages",
+    "/api/v1/assistant/sessions/{session_id}/actions/{action_id}/apply",
+]
+API_MAX_DATA_POINTS = 500
+SELECTOR = r'[A-Za-z_:][A-Za-z0-9_:]*\{(?:[^}"]|"(?:[^"\\]|\\.)*")*\}'
+API_METRICS = {
+    "http_requests_total",
+    "http_requests_created",
+    "http_request_duration_seconds_bucket",
+    "http_request_duration_seconds_sum",
+    "http_request_duration_seconds_count",
+    "http_request_duration_seconds_created",
 }
 
 NOW = datetime.now(UTC)
@@ -245,10 +272,10 @@ async def reader(connection: AsyncConnection, monkeypatch: pytest.MonkeyPatch) -
     return connection
 
 
-def test_the_directory_holds_exactly_the_five_dashboards() -> None:
-    assert sorted(path.name for path in DASHBOARDS.glob("*.json")) == [
-        f"{uid}.json" for uid in UIDS
-    ]
+def test_the_directory_holds_the_five_sql_dashboards_and_the_api_dashboard() -> None:
+    assert sorted(path.name for path in DASHBOARDS.glob("*.json")) == sorted(
+        f"{uid}.json" for uid in [*UIDS, API_UID]
+    )
 
 
 def test_the_start_page_is_a_dashboard_in_the_directory_the_provider_reads() -> None:
@@ -420,3 +447,156 @@ async def test_the_staff_panels_tell_the_outcomes_of_requests_apart(
     assert results["Approval rate"].value("Approval rate") == pytest.approx(2 / 3)
     assert results["Auto-rejected share"].value("Auto-rejected share") == pytest.approx(1 / 5)
     assert results["Pending requests now"].value("Pending") == 1
+
+
+def api_targets(*titles: str) -> list[tuple[str, str]]:
+    return [
+        (panel["title"], target["expr"])
+        for panel in load(API_UID)["panels"]
+        if not titles or panel["title"] in titles
+        for target in panel["targets"]
+    ]
+
+
+def bare(expr: str) -> str:
+    without_literals = re.sub(r'"(?:[^"\\]|\\.)*"', '""', expr)
+    return re.sub(r"\s+", "", without_literals)
+
+
+def test_the_api_dashboard_is_provisioned_read_only_next_to_the_restaurant_dashboards() -> None:
+    dashboard = load(API_UID)
+
+    assert dashboard["uid"] == API_UID
+    assert dashboard["editable"] is False
+    assert dashboard["timezone"] == "Asia/Tbilisi"
+    assert dashboard["time"] == {"from": "now-3h", "to": "now"}
+    assert dashboard["refresh"] == "30s"
+    assert dashboard["tags"] == [SHARED_TAG]
+    assert [
+        (link["type"], link["tags"], link["includeVars"], link["keepTime"])
+        for link in dashboard["links"]
+    ] == [("dashboards", [SHARED_TAG], True, False)]
+
+
+def test_the_api_dashboard_has_exactly_its_four_panels() -> None:
+    titles = [panel["title"] for panel in load(API_UID)["panels"]]
+
+    assert sorted(titles) == sorted(API_PANEL_TITLES)
+
+
+def test_the_api_dashboard_reads_only_prometheus() -> None:
+    dashboard = load(API_UID)
+
+    assert {
+        json.dumps(source, sort_keys=True)
+        for panel in dashboard["panels"]
+        for source in [panel["datasource"], *(target["datasource"] for target in panel["targets"])]
+    } == {json.dumps(PROMETHEUS, sort_keys=True)}
+    assert variables_of(dashboard)["env"]["datasource"] == PROMETHEUS
+
+
+def test_the_env_variable_lists_the_environments_with_dev_by_default() -> None:
+    variables = variables_of(load(API_UID))
+    env = variables["env"]
+    query = env["query"]["query"] if isinstance(env["query"], dict) else env["query"]
+
+    assert sorted(variables) == ["env"]
+    assert bare(query) == "label_values(http_requests_total,env)"
+    assert env["current"]["value"] == "dev"
+
+
+def test_every_api_panel_pins_the_data_points_the_query_limit_was_sized_on() -> None:
+    assert {panel.get("maxDataPoints") for panel in load(API_UID)["panels"]} == {
+        API_MAX_DATA_POINTS
+    }
+
+
+def test_every_api_selector_reads_the_chosen_environment() -> None:
+    assert api_targets()
+    for title, expr in api_targets():
+        selectors = re.findall(SELECTOR, expr)
+
+        assert selectors, title
+        for selector in selectors:
+            assert 'env="$env"' in selector, (title, selector)
+
+
+def test_every_api_range_selector_is_the_rate_interval() -> None:
+    for title, expr in api_targets():
+        windows = re.findall(r"\[([^\]]*)\]", bare(expr))
+
+        assert windows, title
+        assert set(windows) == {"$__rate_interval"}, title
+
+
+def test_api_targets_read_only_the_api_metrics() -> None:
+    for title, expr in api_targets():
+        metrics = set(re.findall(r"([A-Za-z_:][A-Za-z0-9_:]*)\{", bare(expr)))
+
+        assert metrics, title
+        assert metrics <= API_METRICS, title
+
+
+def test_the_latency_panel_shows_p50_and_p95_by_route_without_health_and_the_streams() -> None:
+    expressions = [expr for _, expr in api_targets(LATENCY_TITLE)]
+
+    assert len(expressions) == 2
+    assert "histogram_quantile(0.5," in bare(expressions[0])
+    assert "histogram_quantile(0.95," in bare(expressions[1])
+    for expr in expressions:
+        assert "by(le,route)" in bare(expr)
+        for route in ROUTES_WITHOUT_LATENCY:
+            assert f'route!="{route}"' in expr
+
+
+def test_the_routes_left_out_of_latency_are_routes_the_api_serves() -> None:
+    assert set(ROUTES_WITHOUT_LATENCY) <= RouteTemplates(ROUTERS).templates
+
+
+def test_rate_and_status_panels_count_every_route() -> None:
+    targets = api_targets(REQUESTS_TITLE, ERROR_SHARE_TITLE, STATUS_TITLE)
+
+    assert targets
+    for title, expr in targets:
+        assert not re.search(r"route\s*(!=|!~|=~)", expr), title
+
+
+def test_the_5xx_share_is_zero_rather_than_empty_without_errors() -> None:
+    ((_, expr),) = api_targets(ERROR_SHARE_TITLE)
+
+    assert 'status=~"5.."' in expr
+    assert "orvector(0))/" in bare(expr)
+
+
+def test_the_prometheus_data_source_is_provisioned_read_only_and_not_default() -> None:
+    source = PROMETHEUS_SOURCE.read_text()
+    lines = source.splitlines()
+    (json_data,) = [index for index, line in enumerate(lines) if line.strip() == "jsonData:"]
+    indent = len(lines[json_data]) - len(lines[json_data].lstrip())
+    nested = []
+    for line in lines[json_data + 1 :]:
+        if line.strip() and len(line) - len(line.lstrip()) <= indent:
+            break
+        nested.append(line.strip())
+
+    for key, value in [
+        ("uid", "prometheus"),
+        ("type", "prometheus"),
+        ("access", "proxy"),
+        ("url", "http://prometheus:9090"),
+        ("isDefault", "false"),
+        ("editable", "false"),
+    ]:
+        assert re.search(rf"^\s+-?\s*{key}:\s*{re.escape(value)}\s*(#.*)?$", source, re.MULTILINE)
+    assert "timeInterval: 15s" in nested
+
+
+def test_prometheus_bounds_every_query_within_its_memory_limit() -> None:
+    compose = (PLATFORM / "compose.yml").read_text()
+    (service,) = re.findall(
+        r"^  prometheus:\n(.*?)(?=^  \S|^\S)", compose, re.MULTILINE | re.DOTALL
+    )
+
+    assert re.search(r"^\s+mem_limit: 512m$", service, re.MULTILINE)
+    for flag in ["--query.timeout=10s", "--query.max-concurrency=4", "--query.max-samples=1000000"]:
+        assert f"- {flag}\n" in service
