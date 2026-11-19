@@ -63,6 +63,10 @@ services:
       edge:
         aliases:
           - app-${APP_ENV:?APP_ENV is written by deploy.sh}-api
+      # Prometheus scrapes the metrics port as app-<env>-api:9000 (ADR 22).
+      observability:
+        aliases:
+          - app-${APP_ENV:?APP_ENV is written by deploy.sh}-api
 
 networks:
   edge:
@@ -71,4 +75,7 @@ networks:
   # every attribute except name on an external network, so "internal" cannot be declared here.
   analytics:
     name: analytics-${APP_ENV:?APP_ENV is written by deploy.sh}
+    external: true
+  # One network shared by every environment, created as an internal network by both deploy scripts.
+  observability:
     external: true

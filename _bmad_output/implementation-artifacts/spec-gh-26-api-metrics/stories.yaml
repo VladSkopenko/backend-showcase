@@ -9,7 +9,7 @@
   title: Prometheus in the platform stack scrapes dev
   description: >-
     The observability network, Prometheus scraping the dev API with env=dev, its UI on the
-    tailnet, and ADR 21 (CAP-2).
+    tailnet, and ADR 22 (CAP-2).
   spec_checkpoint: true
   done_checkpoint: true
   invoke_dev_with: >-

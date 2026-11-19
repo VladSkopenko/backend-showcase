@@ -20,6 +20,7 @@ services:
         install -d -o 0     -g 0     -m 700 /data/tailscale
         install -d -o 1000  -g 1000  -m 700 /data/n8n
         install -d -o 472   -g 0     -m 700 /data/grafana
+        install -d -o 65534 -g 65534 -m 700 /data/prometheus
 
   caddy:
     image: caddy:2.11
@@ -159,9 +160,44 @@ services:
       - edge
       - analytics-dev
 
+  # Scrapes the dev API's metrics port; UI only through the tailscale service on
+  # https://<PLATFORM_HOST>:9090 (ADR 22).
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    restart: unless-stopped
+    # Measured idle in a local dry run: about 43 MB.
+    mem_limit: 256m
+    # Replaces the image's default arguments, so both paths are repeated here. No
+    # --web.enable-lifecycle: deploy.sh reloads with SIGHUP, and nothing over HTTP can stop it.
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    volumes:
+      # A directory, not the file, like Caddy's: git replaces files on checkout.
+      - ./prometheus:/etc/prometheus:ro
+      # The image declares VOLUME /prometheus; the bind mount keeps the TSDB on the data volume.
+      - /srv/data/platform/prometheus:/prometheus
+    healthcheck:
+      # 200 once Prometheus is ready to answer queries.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    networks:
+      # Listing any network drops the implicit default, where the tailscale service reaches the UI.
+      - default
+      # The APIs are here as app-<env>-api.
+      - observability
+
 networks:
   edge:
     external: true
   # Internal, created by the deploy scripts (ADR 19).
   analytics-dev:
+    external: true
+  # Internal, created by both deploy scripts (ADR 22).
+  observability:
     external: true

@@ -24,6 +24,9 @@ docker network inspect edge > /dev/null 2>&1 || docker network create edge > /de
 # Internal: the network itself gives no route outside the host. The platform deploy creates
 # analytics-dev the same way, so whichever deploy runs first makes it (ADR 19).
 docker network inspect "analytics-$env" > /dev/null 2>&1 || docker network create --internal "analytics-$env" > /dev/null
+# Every environment's API joins it, so Prometheus can scrape it (ADR 22). Internal, and also
+# created by the platform deploy: whichever deploy runs first makes it.
+docker network inspect observability > /dev/null 2>&1 || docker network create --internal observability > /dev/null
 compose=(docker compose --project-name "$project" --file deploy/app/compose.yml --env-file "$dir/.env")
 # Postgres first; an unchanged postgres service is left running on redeploys.
 "${compose[@]}" up --detach --wait --wait-timeout 120 postgres
