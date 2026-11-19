@@ -50,7 +50,8 @@ paths:
   Background tasks open their own session and transaction.
 - Enum members use the same uppercase string for name and value (`VERIFIED = "VERIFIED"`), so the
   database label, the API JSON and the code always read the same. PostgreSQL enum labels and
-  `server_default` values are these uppercase strings.
+  `server_default` values are these uppercase strings. The one exception is a wire protocol that
+  fixes its own spelling: `AssistantEventName` values are the lowercase SSE event names.
 - A second foreign key to the same table needs an explicit `foreign_keys=` on both sides of every
   relationship between those two tables.
 - Merged or deployed migrations are never edited; a schema fix to them is always a new revision. A

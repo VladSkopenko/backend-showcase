@@ -22,4 +22,4 @@ class EventStreamResponse(StreamingResponse):
     @staticmethod
     async def _encode(events: AsyncIterator[AssistantEvent]) -> AsyncIterator[str]:
         async for event in events:
-            yield f"event: {event.name}\ndata: {to_json(event.data).decode()}\n\n"
+            yield f"event: {event.name.value}\ndata: {to_json(event.data).decode()}\n\n"
