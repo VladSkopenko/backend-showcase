@@ -3,6 +3,10 @@
 English | [Українська](README.uk.md)
 
 [![CI](https://github.com/VladSkopenko/backend-showcase/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/VladSkopenko/backend-showcase/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=VladSkopenko_backend-showcase&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=VladSkopenko_backend-showcase)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=VladSkopenko_backend-showcase&metric=bugs)](https://sonarcloud.io/summary/new_code?id=VladSkopenko_backend-showcase)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=VladSkopenko_backend-showcase&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=VladSkopenko_backend-showcase)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=VladSkopenko_backend-showcase&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=VladSkopenko_backend-showcase)
 
 A REST API for a restaurant chain, built to show delivery engineering end to end: quality gates in
 CI, images built once and promoted by digest, infrastructure as code and a real server, all on free

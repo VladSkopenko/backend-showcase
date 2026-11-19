@@ -3,6 +3,10 @@
 [English](README.md) | Українська
 
 [![CI](https://github.com/VladSkopenko/backend-showcase/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/VladSkopenko/backend-showcase/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=VladSkopenko_backend-showcase&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=VladSkopenko_backend-showcase)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=VladSkopenko_backend-showcase&metric=bugs)](https://sonarcloud.io/summary/new_code?id=VladSkopenko_backend-showcase)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=VladSkopenko_backend-showcase&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=VladSkopenko_backend-showcase)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=VladSkopenko_backend-showcase&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=VladSkopenko_backend-showcase)
 
 REST API для мережі ресторанів. Проєкт показує повний цикл поставки: перевірки якості в CI, образи,
 що збираються один раз і просуваються за digest, інфраструктуру як код і реальний сервер. Усе працює
