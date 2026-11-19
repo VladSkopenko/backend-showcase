@@ -10,6 +10,7 @@ from app.common.email_addresses import normalize_email
 
 class User(Base):
     __tablename__ = "users"
+    EMAIL_UNIQUE = "uq_users_email"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=func.gen_random_uuid())
     first_name: Mapped[str] = mapped_column(String(100))

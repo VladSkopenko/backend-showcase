@@ -165,6 +165,3 @@ def create_app() -> FastAPI:
         return server_error_response()
 
     return app
-
-
-app = create_app()

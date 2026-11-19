@@ -22,11 +22,12 @@ from app.features.core.bookings.enums import BookingStatus, ParticipantRole
 
 class Booking(Base):
     __tablename__ = "bookings"
+    TABLE_PERIOD_EXCLUSION = "ex_bookings_table_id_period"
     __table_args__ = (
         ExcludeConstraint(
             (column("table_id"), "="),
             (func.tstzrange(column("starts_at"), column("ends_at")), "&&"),
-            name="ex_bookings_table_id_period",
+            name=TABLE_PERIOD_EXCLUSION,
             using="gist",
             where=text("status = 'CONFIRMED'"),
         ),

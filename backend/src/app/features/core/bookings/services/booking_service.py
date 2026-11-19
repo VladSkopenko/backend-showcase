@@ -1,10 +1,10 @@
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common import clock
+from app.common.constraint_errors import ConstraintErrors
 from app.config.settings import BookingSettings
 from app.features.core.bookings.dto import BookingView, ExpectedBooking, SlotView
 from app.features.core.bookings.enums import BookingStatus, ParticipantRole
@@ -34,8 +34,6 @@ from app.features.core.users.repositories import UserRepository
 
 
 class BookingService:
-    EXCLUSION_CONSTRAINT = "ex_bookings_table_id_period"
-
     def __init__(
         self, session: AsyncSession, locations: LocationCatalogService, settings: BookingSettings
     ) -> None:
@@ -82,12 +80,8 @@ class BookingService:
             ends_at=end,
             status=self._schedule.initial_status(party_size=party_size),
         )
-        try:
+        with ConstraintErrors({Booking.TABLE_PERIOD_EXCLUSION: SlotUnavailableError}):
             await self._bookings.add(booking=booking)
-        except IntegrityError as exc:
-            if self.EXCLUSION_CONSTRAINT in str(exc.orig):
-                raise SlotUnavailableError() from exc
-            raise
         owner = BookingParticipant(
             booking_id=booking.id,
             user_id=user_id,
@@ -159,12 +153,8 @@ class BookingService:
         booking.starts_at = start
         booking.ends_at = end
         booking.party_size = party_size
-        try:
+        with ConstraintErrors({Booking.TABLE_PERIOD_EXCLUSION: SlotUnavailableError}):
             await self._bookings.flush()
-        except IntegrityError as exc:
-            if self.EXCLUSION_CONSTRAINT in str(exc.orig):
-                raise SlotUnavailableError() from exc
-            raise
         return await self._views.one(
             booking=booking, table=table, role=ParticipantRole.OWNER, participant_id=owner_id
         )

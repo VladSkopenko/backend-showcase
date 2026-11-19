@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionmaker
 from support.migrations import load_revision
 
+from app.common.constraint_errors import ConstraintErrors
 from app.common.database import get_session
 from app.features.core.auth.enums import OAuthProvider
 from app.features.core.bookings.enums import BookingStatus, ParticipantRole
@@ -73,6 +74,49 @@ async def test_duplicate_email_fails_on_the_unique_constraint(
 
         with pytest.raises(IntegrityError, match="uq_users_email"):
             await session.flush()
+
+
+class EmailTaken(Exception):
+    pass
+
+
+async def test_constraint_errors_raises_the_error_mapped_to_the_violated_constraint(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        session.add(User(first_name="Ada", last_name="Lovelace", email="dup@example.com"))
+        await session.flush()
+        session.add(User(first_name="Grace", last_name="Hopper", email="dup@example.com"))
+
+        with pytest.raises(EmailTaken), ConstraintErrors({User.EMAIL_UNIQUE: EmailTaken}):
+            await session.flush()
+
+
+async def test_constraint_errors_lets_a_violation_of_an_unmapped_constraint_through(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        session.add(User(first_name="Ada", last_name="Lovelace", email="dup@example.com"))
+        await session.flush()
+        session.add(User(first_name="Grace", last_name="Hopper", email="dup@example.com"))
+
+        with (
+            pytest.raises(IntegrityError, match="uq_users_email"),
+            ConstraintErrors({Booking.TABLE_PERIOD_EXCLUSION: EmailTaken}),
+        ):
+            await session.flush()
+
+
+def test_the_model_constants_name_the_constraints_in_the_schema() -> None:
+    tables = Booking.metadata.tables
+    constraint_names = {
+        constraint.name
+        for table in (tables[Booking.__tablename__], tables[User.__tablename__])
+        for constraint in table.constraints
+    }
+
+    assert Booking.TABLE_PERIOD_EXCLUSION in constraint_names
+    assert User.EMAIL_UNIQUE in constraint_names
 
 
 async def test_migrated_users_table_has_the_expected_columns(
