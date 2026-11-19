@@ -41,3 +41,7 @@ backend/seed/
 
 # Local n8n state: its database, encryption key and saved credentials
 n8n/data/
+
+# The BMAD method install (installer-managed); the specs it produces stay in _bmad_output/
+_bmad/
+.claude/skills/
