@@ -17,6 +17,7 @@ __pycache__/
 .import_linter_cache/
 .coverage
 .coverage.*
+coverage.xml
 htmlcov/
 *.egg-info/
 dist/
