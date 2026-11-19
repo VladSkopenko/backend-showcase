@@ -590,3 +590,21 @@ def test_prometheus_bounds_every_query_within_its_memory_limit() -> None:
     assert re.search(r"^\s+mem_limit: 512m$", service, re.MULTILINE)
     for flag in ["--query.timeout=10s", "--query.max-concurrency=4", "--query.max-samples=1000000"]:
         assert f"- {flag}\n" in service
+
+
+def test_node_exporter_runs_only_the_collectors_the_dashboard_needs() -> None:
+    compose = (PLATFORM / "compose.yml").read_text()
+    (service,) = re.findall(
+        r"^  node-exporter:\n(.*?)(?=^  \S|^\S)", compose, re.MULTILINE | re.DOTALL
+    )
+    flags = set(re.findall(r"^\s+- (--[a-z.-]+)", service, re.MULTILINE))
+
+    assert {flag for flag in flags if flag.startswith("--collector.")} == {
+        "--collector.disable-defaults",
+        "--collector.cpu",
+        "--collector.meminfo",
+        "--collector.loadavg",
+        "--collector.filesystem",
+        "--collector.diskstats",
+    }
+    assert "--web.disable-exporter-metrics" in flags

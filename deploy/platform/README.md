@@ -29,10 +29,11 @@ Running it again without arguments is safe: existing secrets, including `N8N_ENC
 
 ## Adding a service
 
-1. A service in `compose.yml`: pinned image, `mem_limit`, healthcheck, `depends_on` init, data under
-   `/srv/data/platform/<service>`, config from `deploy/platform/<service>/` mounted read-only as a
-   directory.
-2. One line in the init service: the data directory with the uid:gid the image runs as.
+1. A service in `compose.yml`: pinned image, `mem_limit`, healthcheck, config from
+   `deploy/platform/<service>/` mounted read-only as a directory. If it keeps data: `depends_on`
+   init and data under `/srv/data/platform/<service>`.
+2. If it keeps data: one line in the init service, the data directory with the uid:gid the image
+   runs as.
 3. If it has a private UI: a port in `tailscale/serve.json` and the same port in the tailnet policy grant.
    If it is public: the `edge` network, a site block in `caddy/Caddyfile` and its DuckDNS name in
    `deploy/terraform/cloud-init.yaml.tftpl`. Check what the service lets an anonymous visitor read

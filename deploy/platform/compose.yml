@@ -1,7 +1,7 @@
 # Platform stack, deployed once and changed only by its own deploys (AD-1).
 services:
   # One-shot: creates every service's data directory with the owner that service runs as (ADR 15).
-  # A new service adds one line here and depends on init like the others.
+  # A new service with a data directory adds one line here and depends on init like the others.
   init:
     image: busybox:1.38.0
     # Must not restart: up --wait treats it as done only while it sits exited with code 0.
@@ -101,7 +101,8 @@ services:
       # SQLite database and n8n's settings file.
       - /srv/data/platform/n8n:/home/node/.n8n
     healthcheck:
-      # Readiness, not liveness: 200 only once the database is connected and migrated (ADR 9).
+      # Readiness, not liveness: 200 only once the database is connected and migrated; ADR 23
+      # keeps this healthcheck.
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5678/healthz/readiness"]
       interval: 10s
       timeout: 3s
@@ -162,8 +163,8 @@ services:
       - analytics-dev
       - observability
 
-  # Scrapes the dev API's metrics port; UI only through the tailscale service on
-  # https://<PLATFORM_HOST>:9090 (ADR 22).
+  # Scrapes the dev API's metrics port and the host's node exporter; UI only through the tailscale
+  # service on https://<PLATFORM_HOST>:9090 (ADR 22).
   prometheus:
     image: prom/prometheus:v3.15.1
     restart: unless-stopped
@@ -200,7 +201,40 @@ services:
     networks:
       # Listing any network drops the implicit default, where the tailscale service reaches the UI.
       - default
-      # The APIs are here as app-<env>-api.
+      # The APIs are here as app-<env>-api, the node exporter as node-exporter.
+      - observability
+
+  # The VM's CPU, memory, load and disks for Prometheus, read through the host's root (ADR 22, 23).
+  # No host network or pid namespace, so no network traffic metrics; no data directory.
+  node-exporter:
+    image: prom/node-exporter:v1.13.1
+    restart: unless-stopped
+    # Measured in a local dry run while Prometheus scraped it every 15 s: about 8 MB.
+    mem_limit: 32m
+    command:
+      # The host's filesystems are read under /host; mountpoints are reported without the prefix.
+      - --path.rootfs=/host
+      # Anonymous Grafana Viewers can query every stored series (ADR 22), so only what the
+      # dashboard needs: no uname, os, network or process collectors.
+      - --collector.disable-defaults
+      - --collector.cpu
+      - --collector.meminfo
+      - --collector.loadavg
+      - --collector.filesystem
+      - --collector.diskstats
+      # Drops the exporter's own Go and process metrics; its build info stays.
+      - --web.disable-exporter-metrics
+    volumes:
+      # Read-only, as the node_exporter README mounts it; rslave passes on mounts the host makes later.
+      - /:/host:ro,rslave
+    healthcheck:
+      # The landing page answers 200 without running the collectors.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9100/"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    networks:
+      # Prometheus reaches it here by service name; never edge, no published port.
       - observability
 
 networks:

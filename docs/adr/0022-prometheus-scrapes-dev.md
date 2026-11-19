@@ -7,7 +7,9 @@ Date: 2026-11-19
 Accepted. Tracked in [issue #26](https://github.com/VladSkopenko/backend-showcase/issues/26).
 Amends the architecture spine's Metrics convention: the API's metrics port is reachable over
 `edge` as well as `observability`, and Caddy is its boundary. Amended 2026-11-19: the public
-Grafana reads Prometheus through a second data source, and every query is bounded.
+Grafana reads Prometheus through a second data source, and every query is bounded. Amended
+2026-11-19 again, following [ADR 23](0023-observability-ends-with-logs.md): Prometheus also
+scrapes the host's node exporter.
 
 ## Context
 
@@ -25,8 +27,8 @@ container joins.
 ## Decision
 
 - **One Prometheus in the platform stack, scraping dev.** Image `prom/prometheus:v3.15.1`, one
-  scrape job `api` with the static target `app-dev-api:9000` every 15 seconds. Staging and
-  production get targets when they go live.
+  scrape job `api` with the static target `app-dev-api:9000` every 15 seconds, plus job `node`
+  for the host (below). Staging and production get API targets when they go live.
 - **`env` comes from the scrape config.** The job sets `env: dev` on its target. The application
   never sets it, because one image is promoted by digest across environments
   ([ADR 4](0004-image-identity-and-promotion.md)).
@@ -42,8 +44,16 @@ container joins.
   `/metrics` is not served on any public host. Over `edge`, Caddy, Grafana and the other
   environments' APIs can reach port 9000, as they already reach port 8000; the series hold no
   ids, paths or personal data.
-- **API counters only.** Prometheus scrapes nothing else, itself included. Once Grafana reads it,
-  an anonymous Viewer can send any PromQL to it, as with SQL in ADR 19.
+- **API and host series only.** Prometheus scrapes the dev API (job `api`) and the host's node
+  exporter (job `node`), nothing else, itself included. Once Grafana reads it, an anonymous Viewer
+  can send any PromQL to it, as with SQL in ADR 19.
+- **The host through node_exporter.** `prom/node-exporter:v1.13.1` in the platform stack, on
+  `observability` only, reads the host's root mounted read-only at `/host`. Only the `cpu`,
+  `meminfo`, `loadavg`, `filesystem` and `diskstats` collectors run, and the exporter's own Go and
+  process metrics are off. No host network, so no network traffic metrics. The target carries no
+  `env`: one VM serves every environment. The data source keeps its name "API metrics
+  (Prometheus)": renaming a provisioned source with the same uid stops Grafana at its next start,
+  and provisioning is read only at start.
 - **Config reloads by signal.** `prometheus.yml` is mounted read-only from the repository. The
   platform deploy checks it with `promtool` in a throwaway container before `up`, so a bad file
   fails the deploy before anything changes, and sends `SIGHUP` after `up`, because compose does
@@ -100,7 +110,7 @@ container joins.
 - Metrics retention, left open in the spine's deferred list, is settled here; log retention stays
   open.
 - Through the data source an anonymous visitor reads Prometheus's exact version, its whole
-  configuration, its flags and its targets (`app-dev-api:9000`), on both
+  configuration, its flags and its targets (`app-dev-api:9000`, `node-exporter:9100`), on both
   `/api/datasources/proxy/uid/prometheus/` and `/api/datasources/uid/prometheus/resources/`. ADR 19
   hides Grafana's own version; Prometheus's is disclosed here. None of it is secret.
 - One load of the dashboard sends five range queries and the variable query, more than the four
@@ -112,3 +122,8 @@ container joins.
   again. Changing the panels' 500 data points has the same effect.
 - `rate` needs two samples, so the first request of a new series, such as a route's first 5xx,
   never shows; on a quiet dev rare errors can be missed.
+- An anonymous visitor reads the node exporter's version (`node_exporter_build_info`), the host's
+  and the exporter container's mountpoints and filesystem types, and the disk device names. Disk
+  models and serials stay empty: the exporter has no udev data.
+- node-exporter:9100 answers without authentication to every container on `observability`,
+  every environment's API included.

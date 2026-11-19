@@ -42,7 +42,7 @@ A vision to realize and a scope to close. Prometheus and the public Grafana show
 - `env` comes from the scrape config (ADR 22); the node target carries none.
 - Collectors are minimal: node_exporter with default collectors disabled and only `cpu`, `meminfo`, `loadavg`, `filesystem`, `diskstats`; postgres_exporter with the `wal` collector off and no statement statistics.
 - The new ADR also amends AD-13 and ADR 7: postgres_exporter on dev only, node_exporter from the platform stack on `observability`, no `redis_exporter`.
-- ADR 22 is amended: Prometheus holds API, host and dev Postgres series; the data source is renamed from "API metrics"; the disclosures accepted for anonymous Viewers are listed (exporter build info and the PostgreSQL version, database, role and table names, sizes, mountpoints).
+- ADR 22 is amended: Prometheus holds API, host and dev Postgres series; the data source keeps its name (a rename crash-loops Grafana without a restart deploy.sh does not do); the disclosures accepted for anonymous Viewers are listed (exporter build info and the PostgreSQL version, database, role and table names, sizes, host and container mountpoints).
 - Images pinned by registry and tag, non-distroless for the `wget` healthcheck: `prom/node-exporter:v1.13.1`, `quay.io/prometheuscommunity/postgres-exporter:v0.21.1`.
 - Platform service shape per issue #26: `mem_limit`, healthcheck, read-only config from the repository; new jobs go into `deploy/platform/prometheus/prometheus.yml`, reloaded by `deploy.sh`.
 - Infrastructure files are written one per step with Vlad, every key checked in the official docs with a link, after a local dry run in throwaway containers.

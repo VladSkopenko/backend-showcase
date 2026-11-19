@@ -4,9 +4,11 @@ Found by the independent spec review of 2026-11-19, checked against the reposito
 
 ## node_exporter (CAP-1)
 
-- The local Docker Desktop is a VM: the host view (filesystems, `rslave` mount propagation) cannot be reproduced locally. Mount the root as `/:/host:ro` with `--path.rootfs=/host`; check `/` and `/srv/data` on the VM after the deploy.
+- The local Docker Desktop is a VM: the host view (filesystems, `rslave` mount propagation) cannot be reproduced locally. The repository mounts `/:/host:ro,rslave` with `--path.rootfs=/host` (Ubuntu's `/` is shared on the VM); the local dry run mounts `/:/host:ro`, because `rslave` fails on Docker Desktop. Check `/` and `/srv/data` on the VM after the deploy; locally `/` is overlay and excluded.
+- diskstats logs `Failed to open directory, disabling udev device properties` (`/run/udev/data`) on every start. Harmless, and it keeps disk model and serial out of `node_disk_info`: do not add `--path.udev.data`.
+- Renaming the provisioned data source with the same uid crash-loops Grafana on its next start unless `deleteDatasources` removes the old name; provisioning is read only at start. The name stays.
 - `--collector.disable-defaults` is required: `uname`, `os` and `dmi` are on by default. `node_exporter_build_info` with versions stays even with `--web.disable-exporter-metrics`; it is an accepted disclosure.
-- Filesystem series include stray container mountpoints (`/etc/hostname`, `/etc/hosts`): panels select `mountpoint` `/` and `/srv/data` explicitly.
+- Filesystem series include container mountpoints (`/etc/hostname`, `/etc/hosts`, `/etc/resolv.conf`) and host tmpfs such as `/run`: panels select `mountpoint` `/` and `/srv/data` explicitly.
 - `prom/node-exporter:v1.13.1` exists on Docker Hub; the GitHub release v1.13.0 has no image. Runs as `nobody`; busybox `wget` is present.
 
 ## postgres_exporter (CAP-2)
