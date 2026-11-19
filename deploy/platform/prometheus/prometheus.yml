@@ -13,7 +13,7 @@ storage:
       size: 1GB
 
 scrape_configs:
-  # API counters only: Grafana's anonymous Viewers can query everything stored here (ADR 22).
+  # Grafana's anonymous Viewers can query everything stored here: API and host series only (ADR 22).
   - job_name: api
     static_configs:
       # The dev API's metrics port over the observability network; metrics_path defaults to /metrics.
@@ -21,3 +21,8 @@ scrape_configs:
         # The app never sets env: one image is promoted by digest across environments.
         labels:
           env: dev
+
+  # The VM's node exporter over the observability network; no env label, one host serves them all.
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
