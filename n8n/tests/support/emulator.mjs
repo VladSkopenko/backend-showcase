@@ -7,7 +7,7 @@ const render = (template, json) =>
   template.startsWith('=')
     ? template
         .slice(1)
-        .replace(/\{\{(.*?)\}\}/g, (_, expression) =>
+        .replace(/\{\{((?:[^}]|\}(?!\}))*)\}\}/g, (_, expression) =>
           String(vm.runInNewContext(expression, { $json: json, JSON })),
         )
     : template;

@@ -1,0 +1,9 @@
+# Dependabot opens pull requests that bump the commit SHAs the workflows pin their actions to.
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot
+version: 2
+updates:
+  # "/" makes Dependabot scan the workflow files in .github/workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

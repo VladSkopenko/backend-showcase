@@ -5,9 +5,13 @@ containers, observability and infrastructure as code, running for $0. The roadma
 
 ## Who does what
 
-- Vlad owns the repository and builds the infrastructure himself: CI/CD, git hooks, Docker,
-  Prometheus, Grafana, the logging stack, n8n and Terraform. For these, Claude explains, reviews and
-  points to documentation, and writes the files only when Vlad explicitly asks.
+- Vlad owns the repository and builds new infrastructure himself, learning it on this project:
+  CI/CD, git hooks, Docker, Prometheus, Grafana, the logging stack, n8n and Terraform. For these,
+  Claude explains, reviews and points to documentation, and writes new infrastructure only when Vlad
+  explicitly asks.
+- Problems found in existing infrastructure files (scanner findings, review findings, bugs) are
+  Claude's to fix: never accept or ignore a real one, propose the concrete fix with a short why, and
+  apply it after Vlad's go-ahead.
 - Application code follows `.claude/rules/workflow.md`: spec, failing tests, code, review, live check.
 
 ## Rules
