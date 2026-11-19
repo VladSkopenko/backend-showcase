@@ -20,7 +20,6 @@ NOW = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
 
 @pytest.fixture
 def storage() -> S3FileStorage:
-    # Real storage pointed at a closed local port: any upload attempt fails loudly.
     return S3FileStorage(
         MediaSettings(
             s3_endpoint_url="http://127.0.0.1:9",
@@ -35,7 +34,6 @@ def storage() -> S3FileStorage:
 
 @pytest.fixture
 async def empty_menu(connection: AsyncConnection) -> None:
-    # Migration 0007 fills the menu; these tests build their own dishes.
     await connection.execute(text("DELETE FROM dishes"))
 
 
@@ -113,7 +111,6 @@ async def test_the_seed_uploads_the_pictures_named_by_the_dishes_and_writes_noth
 async def test_a_missing_picture_fails_before_any_upload(
     tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    # The storage points at a closed port, so an upload before the check would fail differently.
     image_keys = [image_key for _, image_key, _ in await stored_dishes(session_factory)]
     write_pictures(tmp_path, image_keys[:-1])
 
@@ -154,7 +151,6 @@ async def test_pictures_get_the_content_type_of_their_suffix(
 async def test_an_unsupported_picture_type_fails_before_any_upload(
     tmp_path: Path, storage: S3FileStorage, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    # Sorted by slug the unsupported picture comes last, after a picture that could be uploaded.
     await add_dishes(session_factory, "dishes/apple.jpg", "dishes/zest.gif")
     write_pictures(tmp_path, ["dishes/apple.jpg", "dishes/zest.gif"])
 

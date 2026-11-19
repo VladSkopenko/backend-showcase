@@ -6,8 +6,6 @@ from app.features.preorder.ai_tools.preorder_services import PreorderServices
 
 
 class CartRemoveItemApplier:
-    """Applies a confirmed `cart.remove_item` card through the route's own service."""
-
     KIND = "cart.remove_item"
 
     def __init__(self, context: AiToolContext) -> None:

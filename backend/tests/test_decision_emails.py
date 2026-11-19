@@ -69,7 +69,6 @@ def mailbox() -> FakeEmailSender:
 @pytest.fixture
 def app(mailbox: FakeEmailSender) -> FastAPI:
     app = create_app()
-    # The shared fixture users live at example.com, which is skipped by default.
     settings = Settings(notifications=NotificationSettings(skip_email_domains=[]))
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_email_sender] = lambda: mailbox

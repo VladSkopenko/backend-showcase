@@ -9,8 +9,6 @@ from app.features.core.locations.services.location_catalog_service import Locati
 
 
 class BookingEditApplier:
-    """Applies a confirmed `booking.edit` card, unless the booking changed since the card."""
-
     KIND = "booking.edit"
 
     def __init__(self, context: AiToolContext) -> None:

@@ -27,5 +27,4 @@ class User(Base):
 
     @validates("email")
     def _normalize_email(self, key: str, email: str) -> str:
-        # Every write is trimmed and lowercased, so uq_users_email is effectively case-insensitive.
         return normalize_email(email)

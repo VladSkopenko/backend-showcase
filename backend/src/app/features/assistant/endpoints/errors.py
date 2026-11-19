@@ -24,7 +24,6 @@ ERROR_STATUSES: dict[type[DomainError], int] = {
     AssistantBudgetExhaustedError: status.HTTP_429_TOO_MANY_REQUESTS,
 }
 
-# The routes also document the sign-in errors raised by the auth feature they build on.
 DOCUMENTED_ERROR_STATUSES: dict[type[DomainError], int] = {
     **ERROR_STATUSES,
     NotAuthenticatedError: AUTH_ERROR_STATUSES[NotAuthenticatedError],

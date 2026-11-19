@@ -140,7 +140,6 @@ async def test_staff_list_future_pending_requests_by_start_then_creation(
         status=pending,
         party_size=8,
     )
-    # Inside the auto-reject lead and exactly at it: approve refuses both, so the list hides them.
     for starts_at in (at(TODAY, 15), START + timedelta(minutes=120)):
         await add_booking(
             session_factory,
@@ -305,7 +304,6 @@ async def test_approve_maps_a_concurrent_exclusion_violation_to_slot_unavailable
     async def no_overlap(*args: Any, **kwargs: Any) -> bool:
         return False
 
-    # Simulates a parallel write that confirmed an overlap after this approve's check.
     monkeypatch.setattr(BookingRepository, "table_has_confirmed_overlap", no_overlap)
     response = await decide(client, pending, "approve")
 

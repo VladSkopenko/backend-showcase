@@ -41,8 +41,6 @@ CLAIMS: dict[str, Any] = {
 
 @dataclass
 class FakeOAuthClients:
-    """Stands in for OAuthClients: no network, but it writes request.session like authlib."""
-
     claims: dict[str, Any] = field(default_factory=lambda: dict(CLAIMS))
     failure: OAuthExchangeError | None = None
     redirect_uris: list[str] = field(default_factory=list)
@@ -201,7 +199,6 @@ async def count(connection: AsyncConnection, model: type[Any]) -> int:
 
 
 async def count_users(connection: AsyncConnection) -> int:
-    # The local migrations seed the staff bot; every other user comes from the test itself.
     value = await connection.scalar(
         select(func.count()).select_from(User).where(User.email != WAITER_BOT)
     )

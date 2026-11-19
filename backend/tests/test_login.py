@@ -92,7 +92,6 @@ async def register(client: httpx2.AsyncClient) -> str:
 
 
 async def create_verified_user(client: httpx2.AsyncClient) -> None:
-    """Registers and verifies Ada; verification starts a session, which stays active in the DB."""
     code = await register(client)
     response = await client.post(f"{AUTH}/verify-email", json={"email": EMAIL, "code": code})
     assert response.status_code == 200, response.text
@@ -424,7 +423,6 @@ async def test_me_without_a_valid_session_returns_401(
     connection: AsyncConnection,
     build_token: Callable[[str], str | None],
 ) -> None:
-    # Built for a real user, so each token fails for its own defect, not at the user lookup.
     await create_verified_user(client)
     sub = str((await get_user(connection)).id)
     assert (await me(client, Cookie=f"access_token={access_token(sub=sub)}")).status_code == 200
@@ -592,7 +590,6 @@ async def test_logout_with_a_rotated_token_revokes_every_session(
 
 
 async def log_in_out_and_in_again(client: httpx2.AsyncClient) -> tuple[str, str]:
-    """Returns a logged-out refresh token and the newer session's token, with an empty jar."""
     await create_verified_user(client)
     logged_out = set_cookies(await log_in(client))["refresh_token"]["value"]
     assert (await log_out(client)).status_code == 204

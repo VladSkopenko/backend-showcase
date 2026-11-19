@@ -17,8 +17,6 @@ def get_database_engine() -> AsyncEngine:
 EngineDep = Annotated[AsyncEngine, Depends(get_database_engine)]
 
 
-# The probe gets the engine, never the request session: get_session would commit after a failed
-# query and turn the 503 into a 500.
 def get_health_service(engine: EngineDep, settings: SettingsDep) -> HealthService:
     return HealthService(engine, timeout_seconds=settings.database.probe_timeout_seconds)
 

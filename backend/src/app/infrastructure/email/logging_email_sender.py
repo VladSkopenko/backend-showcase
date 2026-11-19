@@ -6,8 +6,6 @@ logger = logging.getLogger(__name__)
 
 
 class LoggingEmailSender:
-    # Logs only the recipient and subject: the body carries codes.
-
     def __init__(self, environment: Environment) -> None:
         self._level = logging.WARNING if environment == "local" else logging.ERROR
 

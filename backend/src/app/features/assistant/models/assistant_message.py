@@ -12,7 +12,6 @@ class AssistantMessage(Base):
     __tablename__ = "assistant_messages"
     __table_args__ = (
         Index("ix_assistant_messages_session_id_created_at_id", "session_id", "created_at", "id"),
-        # The global turns-per-minute count reads only user messages across all sessions.
         Index(
             "ix_assistant_messages_user_created_at",
             "created_at",

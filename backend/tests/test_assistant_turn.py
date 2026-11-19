@@ -117,7 +117,6 @@ def make_dish(
 async def menu(
     connection: AsyncConnection, session_factory: async_sessionmaker[AsyncSession]
 ) -> Menu:
-    # Migration 0007 fills the menu; these tests build their own dishes.
     await connection.execute(text("DELETE FROM dishes"))
     menu = Menu(
         soup=make_dish("test-soup", DishCategory.APPETIZER, 850, 10, 1),

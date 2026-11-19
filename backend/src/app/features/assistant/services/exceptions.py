@@ -45,8 +45,6 @@ class AssistantBudgetExhaustedError(DomainError):
         self.retry_after = retry_after
 
 
-# Raised inside a running stream, where no HTTP status applies: the turn service turns them into
-# `error` events and owns their codes.
 class AssistantTurnTimeoutError(Exception):
     pass
 

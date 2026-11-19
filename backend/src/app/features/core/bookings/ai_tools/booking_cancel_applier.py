@@ -7,8 +7,6 @@ from app.features.core.locations.services.location_catalog_service import Locati
 
 
 class BookingCancelApplier:
-    """Applies a confirmed `booking.cancel` card through the route's own service."""
-
     KIND = "booking.cancel"
 
     def __init__(self, context: AiToolContext) -> None:

@@ -50,7 +50,6 @@ def get_assistant_action_service(
 
 
 def get_model_call_runner(settings: SettingsDep) -> ModelCallRunner:
-    # The turn and the apply open their own short transactions, so they take the sessionmaker.
     return ModelCallRunner(
         database.get_sessionmaker(),
         model_name=settings.openai.model,
@@ -67,7 +66,6 @@ def get_model_call_runner(settings: SettingsDep) -> ModelCallRunner:
 
 
 def build_chat_model(openai: OpenAISettings) -> ChatOpenAI | None:
-    # Built once per process; langchain-openai shares one cached httpx pool across instances.
     if not openai.is_configured:
         return None
     return ChatOpenAI(

@@ -7,9 +7,6 @@ from app.features.preorder.services.exceptions import CartChangedError
 
 
 class PreorderSubmitApplier:
-    """Applies a confirmed `preorder.submit` card; a cart that differs from the card's draft
-    raises inside the apply savepoint, so nothing is submitted."""
-
     KIND = "preorder.submit"
 
     def __init__(self, context: AiToolContext) -> None:

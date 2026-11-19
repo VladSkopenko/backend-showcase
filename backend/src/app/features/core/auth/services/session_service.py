@@ -40,7 +40,6 @@ class SessionService:
         )
 
     async def refresh(self, *, refresh_token: str | None) -> RefreshOutcome:
-        # Failures are returned, not raised: raising would roll back a reuse revocation.
         stored = await self._lock_token(refresh_token=refresh_token)
         if stored is None:
             return RefreshOutcome(error=SessionInvalidError())
@@ -71,8 +70,6 @@ class SessionService:
         await self._token_repository.revoke_all_active(user_id=user.id, now=clock.now())
 
     async def _lock_token(self, *, refresh_token: str | None) -> tuple[RefreshToken, User] | None:
-        # The user row is locked before the token is re-read, so a concurrent rotation cannot
-        # insert a new token past a mass revocation, and two refreshes of one token serialise.
         if refresh_token is None:
             return None
         token_hash = sha256_hex(refresh_token)

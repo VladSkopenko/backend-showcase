@@ -24,8 +24,6 @@ class AccessTokenCodec:
 
     def decode(self, *, token: str) -> uuid.UUID:
         try:
-            # PyJWT checks exp and iat against the real clock; expiry is checked below against
-            # app.common.clock instead, so tests can move time.
             claims = jwt.decode(
                 token,
                 self._secret_key,

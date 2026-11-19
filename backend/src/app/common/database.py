@@ -36,11 +36,6 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
-    """One transaction per request: commit on success, roll back on error.
-
-    Use as `Depends(get_session, scope="function")`, so the commit finishes before the response is
-    sent. Repositories only flush.
-    """
     async with get_sessionmaker()() as session:
         try:
             yield session

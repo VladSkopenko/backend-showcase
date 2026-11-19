@@ -107,11 +107,6 @@ SEEDED_DISH_PRICES = (
     "SELECT sum(price_cents) AS cents FROM (SELECT price_cents FROM dishes ORDER BY id LIMIT 3) d"
 )
 
-# One booking of every kind the panels tell apart, on one table, inside the default range by start
-# and by creation: a visit, a cancellation, and requests that were approved, rejected by the
-# competing approval, rejected by staff, rejected automatically, left pending, cancelled before a
-# decision and cancelled after their approval. Every confirmed booking orders three dishes twice
-# and keeps a draft; every cancelled one keeps a submitted item that no panel may count.
 SEED = """
 WITH visitor AS (
     INSERT INTO users (first_name, last_name, email)
@@ -202,7 +197,6 @@ def panel_queries(dashboard: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def expand(sql: str, *, time_range: tuple[datetime, datetime], variables: dict[str, str]) -> str:
-    """Replaces what Grafana replaces before PostgreSQL sees the query."""
     time_from, time_to = (f"'{moment:%Y-%m-%dT%H:%M:%S.000Z}'" for moment in time_range)
     sql = re.sub(r"\$__timeFilter\(([^()]+)\)", rf"\1 BETWEEN {time_from} AND {time_to}", sql)
     sql = sql.replace("$__timeFrom()", time_from).replace("$__timeTo()", time_to)
@@ -227,7 +221,6 @@ async def run(connection: AsyncConnection, *, source: str, sql: str) -> Result:
 async def variable_values(
     connection: AsyncConnection, *, uid: str, dashboard: dict[str, Any], locations: str
 ) -> dict[str, str]:
-    """Options of a multi-value query variable, quoted as Grafana quotes them for SQL."""
     seeded = (await run(connection, source="seeded location", sql=SEEDED_LOCATION)).rows[0][0]
     values = {}
     for name, variable in variables_of(dashboard).items():
@@ -258,8 +251,6 @@ async def panel_results(
     }
 
 
-# The outer test transaction is rolled back afterwards, so neither the role nor the rows outlive
-# a test.
 @pytest.fixture
 async def reader(connection: AsyncConnection, monkeypatch: pytest.MonkeyPatch) -> AsyncConnection:
     await connection.exec_driver_sql(SEED)
@@ -267,7 +258,6 @@ async def reader(connection: AsyncConnection, monkeypatch: pytest.MonkeyPatch) -
         connection, monkeypatch, file_name=GRAFANA_READER, step="upgrade", environment="dev"
     )
     await connection.execute(text(f"SET LOCAL ROLE {ROLE}"))
-    # SET ROLE does not apply the role's own settings, so its timeout is repeated here.
     await connection.execute(text("SET LOCAL statement_timeout = '5s'"))
     return connection
 

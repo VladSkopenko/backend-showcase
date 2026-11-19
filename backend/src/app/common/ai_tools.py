@@ -1,5 +1,3 @@
-"""What every feature's ai_tools package shares; imports nothing from features (ADR 20)."""
-
 import dataclasses
 import json
 import uuid
@@ -26,8 +24,6 @@ class CardField:
 
 @dataclass(frozen=True)
 class Card:
-    """What the guest confirms; English only, the same shape for every action."""
-
     title: str
     fields: list[CardField]
     notice: str | None
@@ -36,16 +32,12 @@ class Card:
 
 @dataclass(frozen=True)
 class Proposal:
-    """A write a tool checked and the guest still has to confirm: pinned values and the card."""
-
     kind: str
     payload: dict[str, Any]
     card: Card
 
 
 class ProposalSink:
-    """Holds the one proposal of a turn; the turn stores it with the assistant message."""
-
     def __init__(self) -> None:
         self.proposal: Proposal | None = None
 
@@ -62,8 +54,6 @@ class ProposalSink:
 
 @dataclass(frozen=True)
 class AiToolContext:
-    """Bound per request: the user comes from the JWT, never from a tool argument."""
-
     user_id: uuid.UUID
     sessionmaker: async_sessionmaker[AsyncSession]
     public_base_url: str
@@ -74,8 +64,6 @@ class AiToolContext:
 
 @dataclass(frozen=True)
 class ActionContext:
-    """What an applier gets: the caller's session, so the claim and the write commit together."""
-
     session: AsyncSession
     user_id: uuid.UUID
     payload: Mapping[str, Any]
@@ -87,8 +75,6 @@ class ActionApplier(Protocol):
 
 @asynccontextmanager
 async def dry_run(sessionmaker: async_sessionmaker[AsyncSession]) -> AsyncIterator[AsyncSession]:
-    """A session whose work is always rolled back, so a proposal runs the real checks and writes
-    nothing."""
     async with sessionmaker() as session:
         try:
             yield session

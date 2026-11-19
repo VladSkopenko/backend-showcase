@@ -64,7 +64,6 @@ async def failing_client() -> AsyncIterator[httpx2.AsyncClient]:
     async def raise_teapot() -> None:
         raise HTTPException(status_code=418, detail="Internal details that must not leak.")
 
-    # Starlette re-raises an unhandled exception after sending the 500, as uvicorn expects.
     transport = httpx2.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx2.AsyncClient(transport=transport, base_url="https://test") as client:
         yield client
@@ -302,7 +301,6 @@ async def test_unhandled_exception_is_a_generic_500(
 
     assert response.status_code == 500
     assert response.json() == SERVER_ERROR
-    # The server logs the re-raised exception; the app must not log it a second time.
     assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
 
 

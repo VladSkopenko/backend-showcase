@@ -32,8 +32,6 @@ class PasswordResetService:
         return await self._code_service.issue(user=user, purpose=self.PURPOSE)
 
     async def verify_code(self, *, email: str, code: str) -> DomainError | None:
-        # A wrong or expired code is returned, not raised: raising would roll back the counted
-        # attempt together with the request.
         user = await self._lock_user(email=email)
         return await self._code_service.check(user=user, purpose=self.PURPOSE, code=code)
 

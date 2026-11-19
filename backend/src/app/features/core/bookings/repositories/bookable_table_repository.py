@@ -20,7 +20,6 @@ class BookableTableRepository:
             select(DiningTable)
             .join(Location, Location.id == DiningTable.location_id)
             .where(DiningTable.capacity.between(min_capacity, max_capacity), *filters)
-            # By length first, so "Table 2" comes before "Table 10".
             .order_by(
                 *LocationRepository.ORDERING,
                 func.char_length(DiningTable.label),

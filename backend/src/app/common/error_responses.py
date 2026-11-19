@@ -91,7 +91,6 @@ def domain_error_response(
 ) -> JSONResponse:
     status_code = _status_of(type(error), statuses)
     if status_code is None:
-        # Often returned rather than raised, so the error is passed explicitly as exc_info.
         logger.error("Domain error %s has no HTTP status", error.code, exc_info=error)
         return server_error_response()
     return error_response(
@@ -127,7 +126,6 @@ def validation_error_response(error: RequestValidationError) -> JSONResponse:
 def _validation_detail(error: Mapping[str, Any]) -> ErrorDetail:
     error_type: str = error["type"]
     loc = tuple(error["loc"])
-    # Checked before loc: a JSON decode error carries a character offset in loc.
     if error_type == "json_invalid":
         return ErrorDetail(message=ErrorMessages.INVALID_JSON)
     if loc == ("body",):
@@ -144,7 +142,6 @@ def _validation_detail(error: Mapping[str, Any]) -> ErrorDetail:
 
 def _validation_message(error_type: str, ctx: Mapping[str, Any]) -> str:
     if error_type == "value_error":
-        # Own validators put their ValueError in ctx["error"]; EmailStr sets ctx["reason"].
         if "error" in ctx:
             return str(ctx["error"])
         return ErrorMessages.INVALID_EMAIL if "reason" in ctx else ErrorMessages.INVALID_VALUE

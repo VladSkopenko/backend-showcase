@@ -23,8 +23,6 @@ from app.features.core.bookings.enums import BookingStatus, ParticipantRole
 class Booking(Base):
     __tablename__ = "bookings"
     __table_args__ = (
-        # The naming convention has no key for exclusion constraints, so the name is explicit.
-        # tstzrange defaults to [) bounds: a booking ending at 13:30 and one starting then fit.
         ExcludeConstraint(
             (column("table_id"), "="),
             (func.tstzrange(column("starts_at"), column("ends_at")), "&&"),

@@ -1,8 +1,3 @@
-"""Imports every feature's models, so Base.metadata sees every table (ADR 11).
-
-Alembic's env.py loads this module. Add each new feature's models here.
-"""
-
 from app.common.database import Base
 from app.features.assistant.models import (
     AssistantAction,

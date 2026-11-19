@@ -10,8 +10,6 @@ from app.features.assistant.enums import AssistantEventName
 
 @dataclass(frozen=True)
 class AssistantEvent:
-    """One event of a streamed turn; the API layer encodes it for the wire."""
-
     name: AssistantEventName
     data: Mapping[str, Any]
 

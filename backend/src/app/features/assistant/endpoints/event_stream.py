@@ -7,12 +7,6 @@ from app.features.assistant.dto import AssistantEvent
 
 
 class EventStreamResponse(StreamingResponse):
-    """Server-Sent Events; the headers keep proxies from buffering the stream.
-
-    The media type is set per instance, not on the class: FastAPI would otherwise document every
-    response of the route with it, and the refusals before the stream are plain JSON.
-    """
-
     MEDIA_TYPE = "text/event-stream"
     HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 

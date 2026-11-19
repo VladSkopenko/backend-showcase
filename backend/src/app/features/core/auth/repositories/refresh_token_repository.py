@@ -17,8 +17,6 @@ class RefreshTokenRepository:
     ) -> RefreshToken | None:
         statement = select(RefreshToken).where(RefreshToken.token_hash == token_hash)
         if for_update:
-            # FOR UPDATE alone keeps the stale object already in the identity map; the re-read
-            # after locking must overwrite it with the row as it is now.
             statement = statement.with_for_update().execution_options(populate_existing=True)
         token: RefreshToken | None = await self._session.scalar(statement)
         return token

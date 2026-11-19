@@ -21,7 +21,6 @@ class MetricsServer:
         self._server, self._thread = start_http_server(self._port, registry=self._registry)
 
     def stop(self) -> None:
-        # start_http_server never closes its socket; shutdown alone leaves it open.
         if self._server is None or self._thread is None:
             return
         self._server.shutdown()

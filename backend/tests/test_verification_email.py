@@ -23,7 +23,6 @@ def test_html_part_has_the_code_and_the_prefilled_link() -> None:
 
     assert email.subject == "Confirm your email"
     assert "012345" in email.html
-    # Autoescape writes the query separator as &amp; inside the href attribute.
     assert LINK.replace("&", "&amp;") in email.html
     assert "Confirm email" in email.html
 

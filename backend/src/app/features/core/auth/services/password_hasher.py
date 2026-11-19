@@ -7,7 +7,6 @@ class PasswordHasher:
     def __init__(self) -> None:
         self._argon2 = PasswordHash((Argon2Hasher(),))
 
-    # Argon2 is deliberately slow, so it runs in a worker thread to keep the event loop free.
     async def hash(self, *, password: str) -> str:
         return await anyio.to_thread.run_sync(self._argon2.hash, password)
 

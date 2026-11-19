@@ -79,7 +79,6 @@ def unskipped_job(
     mailbox: FakeEmailSender,
     fake_clock: FakeClock,
 ) -> RequestExpiryJob:
-    # The shared fixture users live at example.com, which is skipped by default.
     settings = Settings(notifications=NotificationSettings(skip_email_domains=[]))
     return RequestExpiryJob(session_factory, settings=settings, email_sender=mailbox)
 
@@ -163,7 +162,6 @@ async def test_the_sweep_rejects_a_pending_request_inside_the_lead_and_emails_it
     await job.run()
 
     assert await stored_decision(connection, booking.id) == (BookingStatus.REJECTED, START, None)
-    # Ada lives at example.com, a skipped domain.
     assert mailbox.sent == [(LINUS, SUBJECT)]
 
 
@@ -220,8 +218,6 @@ async def test_the_sweep_rejects_a_request_starting_exactly_the_lead_away(
 async def test_the_sweep_skips_a_request_locked_by_a_concurrent_decision(
     engine: AsyncEngine, mailbox: FakeEmailSender, fake_clock: FakeClock
 ) -> None:
-    # SKIP LOCKED needs a second transaction that sees the row, so this test commits its rows and
-    # removes them afterwards instead of using the rolled-back test connection.
     sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
     job = RequestExpiryJob(sessionmaker, settings=Settings(), email_sender=mailbox)
     location = Location(
@@ -320,7 +316,6 @@ async def test_a_failing_run_is_rolled_back_and_logged_and_the_next_run_works(
     async def run_twice() -> None:
         runs.append(None)
         if len(runs) > 2:
-            # Holds the loop until stop, so no third run touches the shared test connection.
             await asyncio.Event().wait()
         try:
             await job.run()

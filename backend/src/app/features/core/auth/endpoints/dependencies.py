@@ -28,7 +28,6 @@ from app.features.core.auth.services.verification_email_service import Verificat
 from app.infrastructure.email import EmailSender, create_email_sender
 from app.infrastructure.oauth import OAuthClients
 
-# scope="function": the commit finishes before the response is sent and the background email runs.
 SessionDep = Annotated[AsyncSession, Depends(get_session, scope="function")]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
@@ -148,8 +147,6 @@ SessionCookiesDep = Annotated[SessionCookies, Depends(get_session_cookies)]
 OAUTH_PROVIDERS_BY_SLUG = {provider.slug: provider for provider in OAuthProvider}
 
 
-# The path carries the lowercase slug. An enum parameter would accept only "GOOGLE" and answer
-# 422, so the known slugs are only documented and an unknown one stays a 404.
 def get_oauth_provider(
     provider_slug: Annotated[
         str,
@@ -162,7 +159,6 @@ def get_oauth_provider(
     return provider
 
 
-# Built once in create_app: authlib caches provider metadata and keys on the client instance.
 def get_oauth_clients(request: Request) -> OAuthClients:
     clients: OAuthClients = request.app.state.oauth_clients
     return clients
@@ -191,7 +187,6 @@ OAuthRedirectsDep = Annotated[OAuthRedirects, Depends(get_oauth_redirects)]
 OAuthSignInServiceDep = Annotated[OAuthSignInService, Depends(get_oauth_sign_in_service)]
 
 
-# Typed as the response schema: endpoints may not import the User model (ADR 11).
 async def get_current_user(
     current_user: CurrentUserServiceDep,
     access_token: Annotated[str | None, Cookie(alias=SessionCookies.ACCESS_NAME)] = None,

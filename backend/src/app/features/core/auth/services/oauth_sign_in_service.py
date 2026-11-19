@@ -52,7 +52,6 @@ class OAuthSignInService:
         claims: Mapping[str, Any] | None = None,
         failure: OAuthExchangeError | None = None,
     ) -> OAuthSignInOutcome:
-        # Every failure is returned with nothing written, so the handler can redirect with its code.
         unavailable = self.start(provider=provider)
         if unavailable is not None:
             return OAuthSignInOutcome(error=unavailable)
@@ -94,7 +93,6 @@ class OAuthSignInService:
             if await self._account_repository.get_by_user(user_id=user.id, provider=provider):
                 return OAuthAccountConflictError()
             if user.email_verified_at is None:
-                # Whoever pre-registered the address loses its password; the owner can reset one.
                 user.email_verified_at = now
                 user.password_hash = None
         await self._account_repository.add(

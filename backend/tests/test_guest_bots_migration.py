@@ -19,7 +19,6 @@ async def bot_emails(connection: AsyncConnection) -> set[str]:
     return set(rows)
 
 
-# The outer test transaction is rolled back afterwards, so later tests see no bots.
 async def test_the_dev_upgrade_adds_named_verified_guest_bots(
     connection: AsyncConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:

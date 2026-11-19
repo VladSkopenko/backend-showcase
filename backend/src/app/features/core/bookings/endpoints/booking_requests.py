@@ -40,7 +40,6 @@ async def list_booking_requests(
     user: CurrentUserDep,
     requests: BookingRequestServiceDep,
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
-    # Bounded by PostgreSQL bigint: a larger offset overflows in asyncpg and would be a 500.
     offset: Annotated[int, Query(ge=0, le=2**63 - 1)] = 0,
 ) -> BookingRequestPageResponse:
     page = await requests.list_pending(staff_id=user.id, limit=limit, offset=offset)

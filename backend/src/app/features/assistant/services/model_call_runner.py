@@ -17,9 +17,6 @@ from app.features.assistant.services.usage_ledger import UsageLedger
 
 
 class ModelCallRunner:
-    """What a turn and an apply comment share: the wall-clock cap, the provider error mapping,
-    the usage ledger and short transactions."""
-
     def __init__(
         self,
         sessionmaker: async_sessionmaker[AsyncSession],

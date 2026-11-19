@@ -14,10 +14,8 @@ class S3FileStorage:
             aws_access_key_id=settings.access_key_id,
             aws_secret_access_key=settings.secret_access_key.get_secret_value(),
             config=Config(
-                # OCI's S3 Compatibility API serves path-style URLs and rejects SigV2.
                 signature_version="s3v4",
                 s3={"addressing_style": "path"},
-                # botocore 1.36+ adds CRC checksums to every request by default; OCI rejects them.
                 request_checksum_calculation="when_required",
                 response_checksum_validation="when_required",
             ),

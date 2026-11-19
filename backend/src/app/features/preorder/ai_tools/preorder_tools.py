@@ -192,7 +192,6 @@ class PreorderTools:
             await preorders.remove_item(
                 booking_id=booking_id, user_id=user_id, guest_token=None, dish_id=dish_id
             )
-        # Only a line added between the read and the service's lock gets here without a line.
         if removed is None:
             raise CartItemNotFoundError()
         card = Card(

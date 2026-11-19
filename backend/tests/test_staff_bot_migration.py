@@ -35,7 +35,6 @@ async def test_migrations_add_the_staff_bot_locally(connection: AsyncConnection)
     assert [tuple(row) for row in rows] == [("Waiter", "Bot", True, True, BOT_PASSWORD_HASH)]
 
 
-# The outer test transaction is rolled back afterwards, so later tests still see the bot.
 @pytest.mark.parametrize("environment", ["staging", "prod"])
 async def test_the_staff_bot_is_never_added_on_staging_or_prod(
     connection: AsyncConnection, monkeypatch: pytest.MonkeyPatch, environment: str

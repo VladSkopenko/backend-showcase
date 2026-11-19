@@ -8,8 +8,6 @@ from app.features.preorder.services.preorder_service import PreorderService
 
 
 class PreorderServices:
-    """Builds the services the pre-order tools use on a session, as the HTTP dependencies do."""
-
     def __init__(self, context: AiToolContext) -> None:
         self._context = context
 

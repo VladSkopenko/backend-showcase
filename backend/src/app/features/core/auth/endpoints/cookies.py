@@ -7,12 +7,6 @@ from app.features.core.auth.dto import IssuedSession
 
 
 class SessionCookies:
-    """Writes session cookies on the response a handler returns.
-
-    FastAPI drops headers set on an injected Response once a handler returns its own Response, so
-    every handler that changes cookies builds its response and passes it here.
-    """
-
     ACCESS_NAME = "access_token"
     REFRESH_NAME = "refresh_token"
 
@@ -41,8 +35,6 @@ class SessionCookies:
         )
 
     def clear(self, *, response: Response) -> None:
-        # Only when a cookie arrived: a cross-site top-level POST carries none (SameSite=Lax) and
-        # must not log the user out. delete_cookie defaults to path="/", so every attribute repeats.
         if (
             self.ACCESS_NAME not in self._request_cookies
             and self.REFRESH_NAME not in self._request_cookies

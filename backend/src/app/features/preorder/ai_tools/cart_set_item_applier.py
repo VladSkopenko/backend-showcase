@@ -8,8 +8,6 @@ from app.features.preorder.services.exceptions import CartChangedError
 
 
 class CartSetItemApplier:
-    """Applies a confirmed `cart.set_item` card, unless the line changed since the card."""
-
     KIND = "cart.set_item"
 
     def __init__(self, context: AiToolContext) -> None:
@@ -17,7 +15,6 @@ class CartSetItemApplier:
 
     @staticmethod
     def snapshot(line: CartLineView | None) -> dict[str, Any] | None:
-        """The line as the card saw it; None when the dish was not in the cart."""
         if line is None:
             return None
         return {"quantity": line.quantity, "note": line.note}
@@ -26,7 +23,6 @@ class CartSetItemApplier:
         payload = context.payload
         booking_id = uuid.UUID(payload["booking_id"])
         dish_id = uuid.UUID(payload["dish_id"])
-        # The same lock the cart's writes take, so no website change lands between check and write.
         await self._services.participants(context.session).lock_participant(
             booking_id=booking_id, user_id=context.user_id, guest_token=None
         )
