@@ -20,6 +20,7 @@ REST API для мережі ресторанів. Проєкт показує �
 | Документація API (Swagger) | https://backend-showcase-dev.duckdns.org/docs |
 | Фронтенд | https://family-rest.vercel.app, код у [LudSkop/family-rest](https://github.com/LudSkop/family-rest) |
 | Дашборди (Grafana, без облікового запису) | https://backend-showcase-grafana.duckdns.org |
+| Якість коду (SonarCloud) | https://sonarcloud.io/summary/overall?id=VladSkopenko_backend-showcase |
 
 Для staging і production уже є гілки (`rc`, `prod`) і домени. Вони запрацюють із першим релізом.
 
