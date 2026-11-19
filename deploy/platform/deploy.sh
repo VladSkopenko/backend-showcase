@@ -24,7 +24,9 @@ compose=(docker compose --project-name platform --file deploy/platform/compose.y
 # compose does not notice a changed Caddyfile, so Caddy reloads it explicitly.
 "${compose[@]}" exec -T caddy caddy reload --config /etc/caddy/Caddyfile
 # Nor a changed prometheus.yml; Prometheus rereads it on SIGHUP (lifecycle API stays off).
-"${compose[@]}" kill --signal SIGHUP prometheus
+# Sent from inside: docker kill marks the container manually stopped for any signal, and
+# restart: unless-stopped would then no longer bring Prometheus back. PID 1 is Prometheus.
+"${compose[@]}" exec -T prometheus kill -s HUP 1
 
 # Grafana's own healthcheck passes without the dev database, so its data source is probed here.
 # Reported, not enforced: the platform must deploy even when dev is down (ADR 19).

@@ -58,7 +58,7 @@ context:
 - [x] `deploy/app/compose.yml` -- `api` joins external `observability` with alias `app-<env>-api` -- Prometheus resolves the target by alias.
 - [x] `deploy/platform/prometheus/prometheus.yml` -- `global.scrape_interval: 15s`, job `api`, static target `app-dev-api:9000`, label `env: dev` -- CAP-2.
 - [x] `deploy/platform/compose.yml` -- init line; `prometheus` service: image, `restart: unless-stopped`, `mem_limit` from the dry run, `command` with `--config.file=/etc/prometheus/prometheus.yml`, `--storage.tsdb.path=/prometheus` (retention lives in `prometheus.yml`, see Spec Change Log); volumes `./prometheus:/etc/prometheus:ro` and `/srv/data/platform/prometheus:/prometheus`; healthcheck `wget` on `http://127.0.0.1:9090/-/ready`; `depends_on` init; networks `default`, `observability`; `observability` declared external.
-- [x] `deploy/platform/deploy.sh` -- create `observability` `--internal`; before `up`, `run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml > /dev/null`; after the Caddy reload, `kill -s SIGHUP prometheus`; the final line becomes `platform deployed, prometheus reloaded, grafana data source: $datasource`.
+- [x] `deploy/platform/deploy.sh` -- create `observability` `--internal`; before `up`, `run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml > /dev/null`; after the Caddy reload, `exec -T prometheus kill -s HUP 1` (Review Triage Log #21); the final line becomes `platform deployed, prometheus reloaded, grafana data source: $datasource`.
 - [x] `deploy/platform/tailscale/serve.json` -- 9090 HTTPS → `http://prometheus:9090`.
 - [x] `docs/adr/0022-prometheus-scrapes-dev.md` -- Prometheus in the platform stack scrapes dev only, `env` from the scrape config, one `observability` network for all environments' APIs, UI on the tailnet, config reload by promtool and SIGHUP with lifecycle off, holds API counters only, retention bound; metrics port reachable over `edge` too, so Caddy is the boundary, amending the spine's Metrics convention ("reachable only over `observability`").
 - [x] `docs/adr/0007-single-vm-platform-and-app-stacks.md` -- Status: amended by ADR 22.
@@ -106,6 +106,8 @@ context:
 | 18 | blind | README Platform row lacks the tailnet UI address that the n8n row gives | low | `README.md:33` gives n8n's address | patch |
 | 19 | blind | `.memlog.md` line reads as if the backend cleanup were story 2 | low | wording | patch |
 | 20 | blind | ADR 22 settles metrics retention, which the spine lists as open, without saying so | low | `ARCHITECTURE-SPINE.md:304` | patch: ADR 22 Consequences |
+| 21 | PR #54 CodeRabbit | `compose kill --signal SIGHUP` marks the container manually stopped, so `restart: unless-stopped` no longer restarts Prometheus | high | Reproduced: after `docker kill -s HUP` and a crash the container stays `exited`, restarts 0; with no signal or `docker exec ... kill -s HUP 1` it is `running`, restarts 1 | patch: `exec -T prometheus kill -s HUP 1` |
+| 22 | PR #54 CodeRabbit | Parallel deploys race creating `observability` | low | carried #8 | reject |
 
 ## Design Notes
 
