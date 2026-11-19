@@ -20,6 +20,7 @@ tiers.
 | API docs (Swagger) | https://backend-showcase-dev.duckdns.org/docs |
 | Frontend | https://family-rest.vercel.app, source in [LudSkop/family-rest](https://github.com/LudSkop/family-rest) |
 | Dashboards (Grafana, no account needed) | https://backend-showcase-grafana.duckdns.org |
+| Code quality (SonarCloud) | https://sonarcloud.io/summary/overall?id=VladSkopenko_backend-showcase |
 
 Staging and production already have their branches (`rc`, `prod`) and domains. They go live with
 the first release.
