@@ -156,22 +156,33 @@ services:
       init:
         condition: service_completed_successfully
     networks:
-      # Caddy reaches it on edge; dev PostgreSQL is on analytics-dev as app-dev-postgres.
+      # Caddy reaches it on edge; dev PostgreSQL is on analytics-dev as app-dev-postgres;
+      # Prometheus is on observability (ADR 22).
       - edge
       - analytics-dev
+      - observability
 
   # Scrapes the dev API's metrics port; UI only through the tailscale service on
   # https://<PLATFORM_HOST>:9090 (ADR 22).
   prometheus:
     image: prom/prometheus:v3.15.1
     restart: unless-stopped
-    # Measured idle in a local dry run: about 43 MB.
-    mem_limit: 256m
+    # Idle about 43 MB. Measured in a local dry run with 15 days of data: four queries at the
+    # sample limit at once finish in about 5 s at 512m, and take nearly the 10 s timeout at 256m.
+    mem_limit: 512m
     # Replaces the image's default arguments, so both paths are repeated here. No
     # --web.enable-lifecycle: deploy.sh reloads with SIGHUP, and nothing over HTTP can stop it.
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
+      # Anonymous Grafana Viewers can send any PromQL through the data source (ADR 22), so every
+      # query is bounded. The defaults (2m, 20 at once, 50 million samples) let one visitor
+      # exhaust the memory limit.
+      - --query.timeout=10s
+      - --query.max-concurrency=4
+      # About twice the p95 latency panel measured in the dry run (540 thousand), valid while the
+      # api dashboard's panels stay pinned to 500 data points.
+      - --query.max-samples=1000000
     volumes:
       # A directory, not the file, like Caddy's: git replaces files on checkout.
       - ./prometheus:/etc/prometheus:ro

@@ -209,3 +209,7 @@
 - source_spec: `_bmad_output/implementation-artifacts/spec-final-scope/stories/5a-assistant-confirmed-booking.md`
   summary: Concurrency tests for the confirmation mechanism: two parallel applies of one card (one booking), a turn superseding a card while it is applied, and two turns storing cards in one session (one pending).
   evidence: The test fixture binds every session to one connection inside a rolled-back transaction, so real parallel transactions need a separate engine fixture that commits; the guards are single conditional UPDATE statements and a partial unique index.
+
+- source_spec: `_bmad_output/implementation-artifacts/spec-gh-26-api-metrics/stories/3-the-public-grafana-shows-the-api-dashboard.md`
+  summary: Parse and evaluate the api dashboard's PromQL in CI (for example promtool check rules or test rules over the panel expressions), so a broken panel cannot merge with green tests.
+  evidence: The tests check api.json's expressions as text only; the spec review caught a parse error and an operator-precedence bug only by running them, and the dry run evaluated today's expressions once.

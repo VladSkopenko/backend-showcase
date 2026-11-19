@@ -6,7 +6,8 @@ Date: 2026-11-19
 
 Accepted. Tracked in [issue #26](https://github.com/VladSkopenko/backend-showcase/issues/26).
 Amends the architecture spine's Metrics convention: the API's metrics port is reachable over
-`edge` as well as `observability`, and Caddy is its boundary.
+`edge` as well as `observability`, and Caddy is its boundary. Amended 2026-11-19: the public
+Grafana reads Prometheus through a second data source, and every query is bounded.
 
 ## Context
 
@@ -48,6 +49,21 @@ container joins.
   fails the deploy before anything changes, and sends `SIGHUP` after `up`, because compose does
   not recreate a container for a changed mounted file. The lifecycle API stays off, so nothing
   over HTTP can reload or stop Prometheus.
+- **The public Grafana reads Prometheus.** A second data source, uid `prometheus`, not the default,
+  so the dev database stays the default for Explore and new panels. Grafana joins
+  `observability`. The dashboard `api` (requests per second by route, 5xx share, p50 and p95
+  latency by route, responses by status, an `env` variable) is a file next to the five SQL
+  dashboards and carries their tag, so their Dashboards menu lists it. Latency leaves out
+  `/health` and the two streamed assistant routes, whose duration is the length of a chat turn.
+- **Every query is bounded.** `--query.timeout=10s`, `--query.max-concurrency=4` and
+  `--query.max-samples=1000000`, with `mem_limit` 512m. The defaults (2 minutes, 20 at once,
+  50 million samples) let one visitor exhaust the memory limit. Sized in a local dry run with 15
+  days of history over 705 latency buckets: with every panel pinned to 500 data points, the
+  15-day p95 panel peaks at about 540 thousand samples, and four queries at the sample limit at
+  once finish in about 5 seconds at 512m but take nearly the timeout at 256m. Pinned points make
+  a query's size depend on the number of series rather than the range, so the default 3-hour view
+  is of the same order; the limit fits about 1,300 latency buckets, about 85 routes with
+  traffic.
 - **Retention is bounded by time and size.** 15 days or 1 GB, whichever is reached first, set in
   the config file: the 3.15 command-line flags for retention are deprecated. `/srv/data` is one
   volume shared with production.
@@ -61,6 +77,9 @@ container joins.
   platform's network layout.
 - **A network per environment, like `analytics-<env>`.** Prometheus would join three networks for
   one job each; one network matches AD-13 and one Prometheus for all environments.
+- **Block Prometheus's status endpoints in Caddy.** Would keep the version and config private. It
+  needs rules on both Grafana paths that forward to Prometheus, and nothing in those endpoints is
+  secret.
 - **`--web.enable-lifecycle` and `POST /-/reload`.** Opens reload and shutdown over HTTP to anyone
   who can reach the port, which Grafana's data source proxy will make public in effect.
 
@@ -80,3 +99,16 @@ container joins.
   the platform's `default` network.
 - Metrics retention, left open in the spine's deferred list, is settled here; log retention stays
   open.
+- Through the data source an anonymous visitor reads Prometheus's exact version, its whole
+  configuration, its flags and its targets (`app-dev-api:9000`), on both
+  `/api/datasources/proxy/uid/prometheus/` and `/api/datasources/uid/prometheus/resources/`. ADR 19
+  hides Grafana's own version; Prometheus's is disclosed here. None of it is secret.
+- One load of the dashboard sends five range queries and the variable query, more than the four
+  slots, so concurrent visitors queue behind each other, and a visitor holding the slots delays
+  everyone's panels until the 10-second timeout; the limits protect Prometheus, not the
+  dashboard's responsiveness.
+- If the API's routes grow past about 85 with traffic, the latency panel exceeds the sample limit
+  and shows an error in any range, and `--query.max-samples` with `mem_limit` need measuring
+  again. Changing the panels' 500 data points has the same effect.
+- `rate` needs two samples, so the first request of a new series, such as a route's first 5xx,
+  never shows; on a quiet dev rare errors can be missed.
