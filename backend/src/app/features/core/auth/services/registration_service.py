@@ -22,7 +22,6 @@ class RegistrationService:
         self._code_service = code_service
 
     async def register(self, *, command: RegistrationCommand) -> IssuedCode:
-        # The row lock serialises a re-registration with concurrent verify and resend calls.
         existing = await self._user_repository.get_by_email(email=command.email, for_update=True)
         if existing is None:
             return await self._register_new_user(command=command)
@@ -40,7 +39,6 @@ class RegistrationService:
         try:
             await self._user_repository.add(user=user)
         except IntegrityError as exc:
-            # A parallel registration inserted the same email after the lookup above.
             if "uq_users_email" in str(exc.orig):
                 raise EmailTakenError() from exc
             raise
@@ -51,7 +49,6 @@ class RegistrationService:
     async def _replace_unverified_user(
         self, *, user: User, command: RegistrationCommand
     ) -> IssuedCode:
-        # Issued first, so a refused code leaves the user untouched.
         issued = await self._code_service.issue(
             user=user, purpose=VerificationPurpose.EMAIL_VERIFICATION
         )

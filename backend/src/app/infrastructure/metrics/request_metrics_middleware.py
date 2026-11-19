@@ -34,8 +34,6 @@ class RequestMetricsMiddleware:
             await self._app(scope, receive, send)
             return
 
-        # The Exception handler runs outside user middleware: an unhandled error reaches here
-        # raw, before any http.response.start, and is counted as the 500 it becomes.
         status = self.SERVER_ERROR_STATUS
 
         async def send_with_status(message: Message) -> None:

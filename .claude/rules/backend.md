@@ -28,8 +28,9 @@ paths:
   injected session, because endpoints may not import repositories; every other collaborator is
   injected. Services receive only the settings values they use, not the whole `Settings`. Plain functions only for generic stateless helpers in
   `app/common`.
-- Code explains itself through names and structure. No comments or docstrings that restate the
-  code; a comment is allowed only for a reason the code cannot show, such as a library gotcha.
+- Code explains itself through names and structure. No comments or docstrings in `src` or
+  `tests`; only tool directives such as `# noqa` and `# type: ignore` stay. Reasons the
+  code cannot show go to the spec or an ADR.
 - `services`, `repositories` and `models` never import `fastapi` or `starlette`. Services raise
   domain exceptions; the API layer turns them into HTTP responses.
 - Regular features never import each other. Core features may be imported by anyone and import

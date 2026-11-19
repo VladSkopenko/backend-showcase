@@ -56,7 +56,6 @@ ERROR_STATUSES = {
     **ASSISTANT_ERROR_STATUSES,
 }
 
-# Included in this order; the metrics middleware takes each route's full template from here.
 ROUTERS: list[tuple[APIRouter, str]] = [
     (health_router, ""),
     (auth_router, "/api/v1"),
@@ -129,7 +128,6 @@ def create_app() -> FastAPI:
     app.state.settings = settings
     app.state.chat_model = build_chat_model(settings.openai)
     app.state.oauth_clients = OAuthClients(google=settings.google)
-    # Holds only the OAuth state, nonce and PKCE verifier between /login and /callback.
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.token.secret_key.get_secret_value(),
@@ -140,7 +138,6 @@ def create_app() -> FastAPI:
         https_only=True,
     )
     app.state.metrics_registry = CollectorRegistry()
-    # Added last, so it is the outermost user middleware and times the whole request.
     app.add_middleware(
         RequestMetricsMiddleware,
         registry=app.state.metrics_registry,
@@ -163,7 +160,6 @@ def create_app() -> FastAPI:
     async def handle_http_error(request: Request, exc: HTTPException) -> JSONResponse:
         return http_error_response(exc)
 
-    # Starlette re-raises the exception after sending this response, and the server logs it.
     @app.exception_handler(Exception)
     async def handle_unhandled_error(request: Request, exc: Exception) -> JSONResponse:
         return server_error_response()

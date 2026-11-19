@@ -12,8 +12,6 @@ from app.features.assistant.services.assistant_action_service import AssistantAc
 
 
 class ModelHistoryBuilder:
-    """The session's latest messages as the model sees them, each proposal's status appended."""
-
     def __init__(self, session: AsyncSession, *, action_ttl_hours: int) -> None:
         self._messages = AssistantMessageRepository(session)
         self._actions = AssistantActionService(session, action_ttl_hours=action_ttl_hours)

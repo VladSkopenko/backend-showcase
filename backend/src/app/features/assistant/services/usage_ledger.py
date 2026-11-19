@@ -23,14 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 class UsageLedger:
-    """Records what every model call cost and refuses a new turn past the global limits.
-
-    The limits are soft: a turn checks them before it starts and reserves nothing, so the turns
-    already running finish even when they take the spend past the budget.
-    """
-
-    # One key for the whole system: the check and the caller's insert of the user message run
-    # under it until the caller's transaction ends, so parallel turns cannot all pass the cap.
     LIMITS_LOCK_KEY = 4_300_000_001
     TURNS_WINDOW = timedelta(minutes=1)
     MICRO_USD_PER_USD = 1_000_000
@@ -86,7 +78,6 @@ class UsageLedger:
         input_tokens = usage["input_tokens"]
         cached_input_tokens = usage.get("input_token_details", {}).get("cache_read", 0)
         output_tokens = usage["output_tokens"]
-        # A price per million tokens is the price of one token in micro-dollars.
         cost = (
             (input_tokens - cached_input_tokens) * self._prices.input_per_million_usd
             + cached_input_tokens * self._prices.cached_input_per_million_usd

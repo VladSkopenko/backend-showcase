@@ -22,8 +22,6 @@ class EmailVerificationService:
         self._session_service = session_service
 
     async def verify(self, *, email: str, code: str) -> VerificationOutcome:
-        # A wrong or expired code is returned, not raised: raising would roll back the counted
-        # attempt together with the request.
         user = await self._lock_unverified_user(email=email)
         error = await self._code_service.consume(
             user=user, purpose=VerificationPurpose.EMAIL_VERIFICATION, code=code

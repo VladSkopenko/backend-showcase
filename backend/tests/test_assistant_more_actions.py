@@ -124,7 +124,6 @@ async def turn(
 async def call_tools(
     client: httpx2.AsyncClient, models: Models, session_id: str, *calls: Call
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-    """One turn with these tool calls; the tool results and the action the turn streamed."""
     first_call = len(models.turn.received)
     events = await turn(client, models, session_id, list(calls), [Text(ANSWER)])
     actions = [data for name, data in events if name == "action"]

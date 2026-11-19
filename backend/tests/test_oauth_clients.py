@@ -35,8 +35,6 @@ OTHER_KEY = RSAKey.generate_key(2048, parameters={"kid": "signing"}, private=Tru
 
 @dataclass
 class FakeGoogle:
-    """Token endpoint behind an httpx2.MockTransport; signs an ID token for the authorize nonce."""
-
     nonce: str | None = None
     code_challenge: str | None = None
     key: RSAKey = field(default_factory=lambda: SIGNING_KEY)

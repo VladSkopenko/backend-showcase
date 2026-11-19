@@ -21,12 +21,6 @@ from app.features.assistant.services.exceptions import (
 
 
 class AssistantActionService:
-    """Stores the proposals of turns and shows, reads and cancels them.
-
-    Expiry is derived on read: a pending row past `expires_at` is shown as expired and only a
-    newer proposal writes `EXPIRED`, so a refusing path writes nothing.
-    """
-
     def __init__(self, session: AsyncSession, *, action_ttl_hours: int) -> None:
         self._actions = AssistantActionRepository(session)
         self._sessions = AssistantSessionRepository(session)
@@ -44,7 +38,6 @@ class AssistantActionService:
         await self._sessions.lock(session_id=session_id)
         previous = await self._actions.get_pending_for_session(session_id=session_id)
         if previous is not None:
-            # Conditional, so a card an apply claimed meanwhile stays applied.
             await self._actions.supersede(
                 action_id=previous.id,
                 status=(

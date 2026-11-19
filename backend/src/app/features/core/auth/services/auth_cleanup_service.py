@@ -16,9 +16,7 @@ class AuthCleanupService:
 
     async def delete_stale(self) -> DeletedAuthRows:
         now = clock.now()
-        # A rotated token stays until it expires, so presenting it again is still caught as reuse.
         refresh_tokens = await self._token_repository.delete_expired(now=now)
-        # Codes inside the daily window still count toward the issue limits.
         verification_codes = await self._code_repository.delete_superseded(
             now=now, created_at_or_before=now - VerificationCodeService.DAILY_LIMIT_WINDOW
         )

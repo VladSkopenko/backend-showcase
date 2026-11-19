@@ -18,12 +18,6 @@ from app.features.assistant.services.exceptions import (
 
 
 class ActionApplyExecutor:
-    """Claims a pending action and runs its applier in the caller's transaction.
-
-    The applier runs inside a savepoint: a domain error that aborted a flush rolls back to it,
-    and the transaction still records the action as failed.
-    """
-
     UNKNOWN_ACTION_CODE = "UNKNOWN_ACTION"
     UNKNOWN_ACTION_MESSAGE = "This kind of card can no longer be applied."
 

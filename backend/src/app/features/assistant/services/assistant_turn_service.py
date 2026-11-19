@@ -40,12 +40,6 @@ logger = logging.getLogger(__name__)
 
 
 class AssistantTurnService:
-    """One turn: `start()` stores the question in a short transaction, `stream()` answers it.
-
-    No transaction is open during a model call: tools open their own per call, the usage of
-    every call is recorded in its own, and the answer is stored in one more at the end.
-    """
-
     TIMEOUT_CODE = "ASSISTANT_TIMEOUT"
     TIMEOUT_MESSAGE = "The assistant took too long to answer."
     PROVIDER_ERROR_CODE = "ASSISTANT_PROVIDER_ERROR"
@@ -140,7 +134,6 @@ class AssistantTurnService:
             )
 
     async def _run(self) -> AsyncIterator[AssistantEvent]:
-        # Everything sent as a chunk is what gets saved, so the read-back matches what was seen.
         sent: list[str] = []
         calls_made = 0
         answered = False

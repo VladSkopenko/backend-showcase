@@ -16,7 +16,6 @@ class Dish(Base):
         CheckConstraint("calories >= 0", name="calories_non_negative"),
         CheckConstraint("popularity >= 0", name="popularity_non_negative"),
         CheckConstraint("prep_minutes > 0", name="prep_minutes_positive"),
-        # Named explicitly: the ix naming convention would name it after the first column only.
         Index("ix_dishes_category_popularity", "category", "popularity"),
     )
 
@@ -36,7 +35,6 @@ class Dish(Base):
     popularity: Mapped[int] = mapped_column(server_default=text("0"), index=True)
     prep_minutes: Mapped[int]
     image_key: Mapped[str] = mapped_column(String(300))
-    # No server default: the seed spreads created_at by file position via app.common.clock.
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

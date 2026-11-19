@@ -9,8 +9,6 @@ from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 from sqlalchemy import URL
 
-# backend/.env, read when it exists (local runs only: containers get real environment variables).
-# extra="ignore" everywhere, because the shared .env holds every prefix's keys.
 ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 Environment = Literal["local", "dev", "staging", "prod"]
@@ -31,7 +29,6 @@ class DatabaseSettings(BaseSettings):
     user: str = "app"
     password: SecretStr = SecretStr("app")
     name: str = "app"
-    # Must stay under the 2 s urlopen timeout of the Dockerfile HEALTHCHECK.
     probe_timeout_seconds: float = 1.0
 
     @property
@@ -63,9 +60,7 @@ class AuthSettings(BaseSettings):
 class TokenSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="TOKEN_", env_file=ENV_FILE, extra="ignore")
 
-    # Required: a missing or short key fails at startup instead of signing tokens weakly.
     secret_key: SecretStr = Field(min_length=32)
-    # HMAC only: an asymmetric algorithm needs a key pair, not a shared secret.
     algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
     access_ttl_minutes: int = 15
     refresh_ttl_days: int = 30
@@ -101,13 +96,11 @@ class GoogleSettings(BaseSettings):
 class MediaSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MEDIA_", env_file=ENV_FILE, extra="ignore")
 
-    # Write access through the S3 Compatibility API; only the local seed uses it.
     s3_endpoint_url: str = ""
     region: str = ""
     bucket: str = ""
     access_key_id: str = ""
     secret_access_key: SecretStr = SecretStr("")
-    # Required: every image_url is built from it, so a missing value fails at startup.
     public_base_url: str = Field(min_length=1)
 
     @field_validator("public_base_url")
@@ -136,18 +129,13 @@ class BookingSettings(BaseSettings):
     duration_minutes: int = 90
     horizon_days: int = 30
     cancel_cutoff_minutes: int = 30
-    # Caps both the party and the table capacity of an instant booking; larger parties send a
-    # request that staff confirm.
     max_online_party_size: int = 4
-    # The CHECK on bookings.party_size stores at most 8 people.
     max_request_party_size: int = Field(default=8, le=8)
     max_duration_minutes: int = 180
     closing_time: time = time(23, 0)
     preorder_lock_minutes: int = 30
     guest_token_ttl_days: int = 31
     guest_cookie_path: str = "/"
-    # A request still pending this close to its start is rejected automatically; inside this lead
-    # a request can be neither created nor approved.
     auto_reject_lead_minutes: int = Field(default=120, ge=0)
     auto_reject_interval_seconds: int = Field(default=60, gt=0)
 
@@ -163,28 +151,22 @@ class NotificationSettings(BaseSettings):
         env_prefix="NOTIFICATIONS_", env_file=ENV_FILE, extra="ignore"
     )
 
-    # Addresses there get no decision email; the bots and test accounts live there.
     skip_email_domains: list[str] = ["example.com"]
 
 
 class CleanupSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CLEANUP_", env_file=ENV_FILE, extra="ignore")
 
-    # How often the API process deletes expired refresh tokens and superseded verification codes
-    # (the newest code of a user and purpose always stays).
     interval_seconds: int = Field(default=3600, gt=0)
 
 
 class OpenAISettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OPENAI_", env_file=ENV_FILE, extra="ignore")
 
-    # Empty means the assistant routes are unavailable; the rest of the API runs.
     api_key: SecretStr = SecretStr("")
-    # assistant_model_calls.model is String(100).
     model: str = Field(default="gpt-4.1-mini", min_length=1, max_length=100)
     max_output_tokens: int = Field(default=1024, gt=0)
     request_timeout_seconds: int = Field(default=60, gt=0)
-    # USD per million tokens of OPENAI_MODEL; the assistant's daily budget counts usage with them.
     input_price_per_million_usd: Decimal = Field(default=Decimal("0.40"), ge=0)
     cached_input_price_per_million_usd: Decimal = Field(default=Decimal("0.10"), ge=0)
     output_price_per_million_usd: Decimal = Field(default=Decimal("1.60"), ge=0)
@@ -197,28 +179,20 @@ class OpenAISettings(BaseSettings):
 class AssistantSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ASSISTANT_", env_file=ENV_FILE, extra="ignore")
 
-    # A chat session without a new message for this long is deleted by the cleanup job.
     session_ttl_days: int = Field(default=7, gt=0)
-    # The model sees this many of the session's latest messages, the new one included.
     history_messages: int = Field(default=20, gt=0)
-    # Caps of one turn: model calls, tool calls across them, and wall-clock time.
     max_rounds: int = Field(default=5, gt=0)
     max_tool_calls: int = Field(default=15, gt=0)
     turn_timeout_seconds: int = Field(default=240, gt=0)
-    # A longer tool result is cut before it reaches the model.
     tool_result_max_chars: int = Field(default=8000, gt=0)
-    # Global limits, checked before a turn starts: a soft daily spend in the restaurant's local
-    # day (a running turn finishes) and the user messages of the last minute.
     daily_budget_usd: Decimal = Field(default=Decimal("1.0"), gt=0)
     turns_per_minute: int = Field(default=10, gt=0)
-    # A card the guest neither applied nor cancelled reads as expired after this long.
     action_ttl_hours: int = Field(default=24, gt=0, le=720)
 
 
 class MetricsSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="METRICS_", env_file=ENV_FILE, extra="ignore")
 
-    # Prometheus scrapes this port; Caddy never proxies it (ADR 7).
     port: int = 9000
 
 
@@ -230,7 +204,6 @@ class Settings(BaseSettings):
     auth: AuthSettings = Field(default_factory=AuthSettings)
     email: EmailSettings = Field(default_factory=EmailSettings)
     google: GoogleSettings = Field(default_factory=GoogleSettings)
-    # mypy sees the required secret_key argument; pydantic-settings fills it from the environment.
     token: TokenSettings = Field(default_factory=TokenSettings)  # type: ignore[arg-type]
     media: MediaSettings = Field(default_factory=MediaSettings)  # type: ignore[arg-type]
     booking: BookingSettings = Field(default_factory=BookingSettings)
@@ -250,8 +223,6 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # Each block reads its own prefixed variables. The root reads none, so an unrelated
-        # shell variable such as EMAIL is never parsed as a whole block.
         return (init_settings,)
 
 

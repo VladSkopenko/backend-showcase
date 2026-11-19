@@ -332,7 +332,6 @@ async def test_the_newest_code_of_a_user_and_purpose_is_kept_and_still_answers_c
             created_at=START - 2 * DAY,
             plain_code="654321",
         ),
-        # Newer codes of another purpose or another user do not replace it.
         await add_code(session_factory, user=users[ADA], purpose=EMAIL, created_at=START),
         await add_code(session_factory, user=users[GRACE], purpose=RESET, created_at=START),
     }

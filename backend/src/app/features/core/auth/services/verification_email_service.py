@@ -15,7 +15,6 @@ class VerificationEmailService:
         self._renderer = renderer
 
     async def send(self, *, issued: IssuedCode) -> None:
-        # Runs as a background task after the response, so a failure is logged, never raised.
         to = issued.user.email
         try:
             email = self._renderer.render(

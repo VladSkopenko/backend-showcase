@@ -29,7 +29,6 @@ async def list_dishes(
     category: DishCategory | None = None,
     sort: DishSort = DishSort.POPULAR,
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
-    # Bounded by PostgreSQL bigint: a larger offset overflows in asyncpg and would be a 500.
     offset: Annotated[int, Query(ge=0, le=2**63 - 1)] = 0,
 ) -> DishPageResponse:
     page = await catalog.list_page(category=category, sort=sort, limit=limit, offset=offset)

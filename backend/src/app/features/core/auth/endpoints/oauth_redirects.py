@@ -2,8 +2,6 @@ from urllib.parse import urlencode
 
 
 class OAuthRedirects:
-    """Frontend URLs for the OAuth round trip; never built from the request host (AD-19)."""
-
     ERROR_PARAMETER = "auth_error"
     CALLBACK_ROUTE = "complete_oauth_sign_in"
 

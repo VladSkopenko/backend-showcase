@@ -8,8 +8,6 @@ from app.features.core.locations.services.location_catalog_service import Locati
 
 
 class BookingCreateApplier:
-    """Applies a confirmed `booking.create` card through the route's own service."""
-
     KIND = "booking.create"
 
     def __init__(self, context: AiToolContext) -> None:

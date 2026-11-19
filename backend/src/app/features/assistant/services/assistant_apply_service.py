@@ -29,12 +29,6 @@ logger = logging.getLogger(__name__)
 
 
 class AssistantApplyService:
-    """Applying a card: `start()` decides the outcome and commits it, `stream()` comments on it.
-
-    The comment comes from the model with no tools bound; with the day's budget spent it is a
-    fixed text and the model is not called. The per-minute cap does not apply.
-    """
-
     APPLIED_TEXT = "Done."
     FAILED_TEXT = "That did not work: {message}"
 

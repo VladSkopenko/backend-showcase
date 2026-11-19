@@ -153,7 +153,6 @@ async def public_may_write_to_disk(connection: AsyncConnection) -> set[bool]:
     return set(row)
 
 
-# The outer test transaction is rolled back afterwards, so the role never outlives a test.
 async def test_the_dev_upgrade_creates_a_limited_login_role(
     connection: AsyncConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:

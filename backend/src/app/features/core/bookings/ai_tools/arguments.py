@@ -5,8 +5,6 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class LocalTimeArguments(BaseModel):
-    """Arguments whose `time` is restaurant-local: an offset would be dropped silently."""
-
     @field_validator("time", check_fields=False)
     @classmethod
     def time_without_offset(cls, value: datetime.time | None) -> datetime.time | None:

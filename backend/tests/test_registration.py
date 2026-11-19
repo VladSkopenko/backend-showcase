@@ -292,7 +292,6 @@ async def test_the_daily_reset_cap_does_not_limit_verification_codes(
     client: httpx2.AsyncClient, connection: AsyncConnection, fake_clock: FakeClock
 ) -> None:
     await register(client)
-    # Four codes an hour stay under the hourly limit, so only a daily cap could refuse.
     for _ in range(10):
         fake_clock.advance(minutes=15)
         assert (await resend(client)).status_code == 202
@@ -310,7 +309,6 @@ async def test_register_maps_a_concurrent_unique_violation_to_email_taken(
     async def nobody(*args: Any, **kwargs: Any) -> None:
         return None
 
-    # Simulates a parallel request that inserted the same email after this one's lookup.
     monkeypatch.setattr(UserRepository, "get_by_email", nobody)
     response = await client.post("/api/v1/auth/register", json=registration())
 
@@ -512,7 +510,6 @@ async def test_unconfigured_email_is_logged_without_the_code(
     caplog: pytest.LogCaptureFixture,
     generated_codes: Callable[..., None],
 ) -> None:
-    # The test defaults leave email unconfigured.
     del app.dependency_overrides[get_email_sender]
     generated_codes("987654")
 

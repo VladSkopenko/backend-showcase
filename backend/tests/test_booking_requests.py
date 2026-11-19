@@ -136,7 +136,6 @@ async def test_a_request_must_start_beyond_the_auto_reject_lead(
     minute: int,
     expected: str,
 ) -> None:
-    # 15:00 is exactly the default lead of 120 minutes away.
     fake_clock.current = at(TODAY, 13)
     await sign_in(client, ADA)
 

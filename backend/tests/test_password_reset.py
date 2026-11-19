@@ -117,7 +117,6 @@ async def register(client: httpx2.AsyncClient) -> str:
 
 
 async def create_verified_user(client: httpx2.AsyncClient) -> None:
-    """Registers and verifies Ada; verification starts a session that stays active in the DB."""
     code = await register(client)
     response = await client.post(f"{AUTH}/verify-email", json={"email": EMAIL, "code": code})
     assert response.status_code == 200, response.text
@@ -285,7 +284,6 @@ async def test_eleventh_reset_code_within_a_day_returns_429_until_the_oldest_lea
 ) -> None:
     await create_verified_user(client)
     mailbox.sent.clear()
-    # Four codes an hour stay under the hourly limit, so only the daily cap can refuse.
     for _ in range(10):
         assert (await request_reset(client)).status_code == 202
         fake_clock.advance(minutes=15)

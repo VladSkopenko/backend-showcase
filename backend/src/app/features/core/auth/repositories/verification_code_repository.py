@@ -44,7 +44,6 @@ class VerificationCodeRepository:
         return list(creation_times)
 
     async def increment_attempts(self, *, code_id: uuid.UUID) -> None:
-        # Incremented in SQL, not in Python, so concurrent wrong guesses never overwrite each other.
         await self._session.execute(
             update(VerificationCode)
             .where(VerificationCode.id == code_id)
@@ -52,7 +51,6 @@ class VerificationCodeRepository:
         )
 
     async def delete_superseded(self, *, now: datetime, created_at_or_before: datetime) -> int:
-        # The newest code of a user and purpose always stays: verify reads only that one.
         newer = aliased(VerificationCode)
         result = await self._session.execute(
             delete(VerificationCode)

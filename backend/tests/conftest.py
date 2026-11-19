@@ -26,7 +26,6 @@ pytest_plugins = ["support.booking_fixtures", "support.preorder_fixtures"]
 
 TEST_DATABASE_NAME = "app_test"
 
-# Set before any test module builds the app, which reads the settings at import and caches them.
 for name in list(os.environ):
     if name.startswith("TOKEN_"):
         del os.environ[name]
@@ -38,11 +37,8 @@ for name in list(os.environ):
     if name.startswith("MEDIA_"):
         del os.environ[name]
 os.environ["MEDIA_PUBLIC_BASE_URL"] = TEST_MEDIA_PUBLIC_BASE_URL
-# The cached settings of every app the tests build bind a free port, never the real 9000.
 os.environ["METRICS_PORT"] = "0"
 
-# A developer's backend/.env must never change test behaviour or send mail. Runs at collection,
-# before any test module builds the app and fills the cached get_settings().
 for value in vars(settings_module).values():
     if isinstance(value, type) and issubclass(value, BaseSettings) and value is not BaseSettings:
         value.model_config["env_file"] = None
@@ -50,7 +46,6 @@ for value in vars(settings_module).values():
 
 @pytest.fixture(autouse=True)
 def isolated_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    # DATABASE_ variables stay, so a test run can point at another server; the name is forced above.
     for name in list(os.environ):
         if name.startswith(
             (
@@ -69,7 +64,6 @@ def isolated_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
             )
         ):
             monkeypatch.delenv(name)
-    # Required by the settings; the write keys stay unset, so nothing can reach a bucket.
     monkeypatch.setenv("MEDIA_PUBLIC_BASE_URL", TEST_MEDIA_PUBLIC_BASE_URL)
 
 
@@ -79,8 +73,6 @@ def anyio_backend() -> str:
 
 
 async def recreate_test_database() -> None:
-    # Dropped and recreated per run, so two runs on one server break each other.
-    # DROP DATABASE and CREATE DATABASE refuse to run inside a transaction block.
     engine = create_async_engine(
         get_settings().database.url.set(database="postgres"),
         poolclass=NullPool,
@@ -96,7 +88,6 @@ async def recreate_test_database() -> None:
         await engine.dispose()
 
 
-# Sync on purpose: the async env.py calls asyncio.run, which cannot run inside a test's event loop.
 @pytest.fixture(scope="session")
 def migrated_database() -> None:
     database_name = get_settings().database.name
@@ -118,7 +109,6 @@ async def engine(migrated_database: None) -> AsyncIterator[AsyncEngine]:
 
 @pytest.fixture
 async def connection(engine: AsyncEngine) -> AsyncIterator[AsyncConnection]:
-    """A connection inside an outer transaction that is rolled back after each test."""
     async with engine.connect() as connection:
         transaction = await connection.begin()
         yield connection
@@ -129,7 +119,6 @@ async def connection(engine: AsyncEngine) -> AsyncIterator[AsyncConnection]:
 def session_factory(
     connection: AsyncConnection, monkeypatch: pytest.MonkeyPatch
 ) -> async_sessionmaker[AsyncSession]:
-    """Points get_session at the test connection; its commits only release a savepoint."""
     factory = async_sessionmaker(
         bind=connection,
         join_transaction_mode="create_savepoint",

@@ -46,7 +46,6 @@ class VerificationCodeService:
                 expires_at=now + timedelta(minutes=self._auth.verification_code_ttl_minutes),
             )
         )
-        # Deployed environments are reachable from the internet, so only `local` echoes the code.
         debug_code = plain_code if self._environment == "local" else None
         return IssuedCode(user=user, purpose=purpose, plain_code=plain_code, debug_code=debug_code)
 

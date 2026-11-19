@@ -10,12 +10,6 @@ from app.infrastructure.oauth.oauth_exchange_error import OAuthExchangeError
 
 
 class OAuthClients:
-    """Authlib clients for the configured providers; state, nonce and PKCE live in request.session.
-
-    `server` replaces a provider's metadata URL with inline metadata and `client_kwargs` reach the
-    httpx2 client (e.g. a transport); both exist so tests run the real flow without a network.
-    """
-
     GOOGLE_SLUG = "google"
     GOOGLE_METADATA_URL = "https://accounts.google.com/.well-known/openid-configuration"
     SCOPE = "openid email profile"
@@ -56,8 +50,6 @@ class OAuthClients:
         return response
 
     async def fetch_claims(self, *, request: Request, provider_slug: str) -> dict[str, Any]:
-        # authlib raises on a provider error before it clears its state data, so the session is
-        # emptied here on every exit and the oauth_state cookie is deleted.
         try:
             token = await self._client(provider_slug).authorize_access_token(request)
             userinfo = token.get("userinfo")

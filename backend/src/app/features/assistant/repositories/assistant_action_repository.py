@@ -44,7 +44,6 @@ class AssistantActionRepository:
                 AssistantAction.session_id == session_id,
                 AssistantAction.user_id == user_id,
             )
-            # The claim updates the row behind the ORM's back, so a re-read must refresh it.
             .execution_options(populate_existing=True)
         )
         if for_update:

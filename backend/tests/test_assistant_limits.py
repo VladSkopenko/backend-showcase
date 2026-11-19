@@ -29,7 +29,6 @@ SESSIONS = "/api/v1/assistant/sessions"
 QUESTION = "What desserts do you have?"
 MODEL = "gpt-4.1-mini"
 MICRO_USD = 1_000_000
-# Today starts at local midnight, which is the evening of the day before in UTC.
 LOCAL_MIDNIGHT = at(TODAY, 0)
 NEXT_LOCAL_MIDNIGHT = at(TODAY + timedelta(days=1), 0)
 
@@ -167,7 +166,6 @@ async def test_every_model_call_records_its_usage_and_cost(
     events = await stream(client, session_id)
 
     assert [name for name, _ in events] == ["thinking", "thinking", "chunk", "done"]
-    # 2000 * 0.40 + 1000 * 0.10 + 120 * 1.60 = 800 + 100 + 192
     assert await model_calls(session_factory) == [
         (MODEL, 1000, 200, 50, 420),
         (MODEL, 3000, 1000, 120, 1092),
@@ -212,7 +210,6 @@ async def test_once_todays_spend_reaches_the_budget_a_turn_is_refused_until_loca
     fake: FakeChatModel,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    # Half an hour into the local day is still the day before in UTC: it counts all the same.
     await add_model_call(
         session_factory, cost_micro_usd=600_000, created_at=LOCAL_MIDNIGHT + timedelta(minutes=30)
     )
@@ -281,7 +278,6 @@ async def test_too_many_turns_in_the_last_minute_make_the_assistant_busy(
     fake: FakeChatModel,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    # The cap is global: another user's messages count as well.
     await add_user_messages(
         session_factory,
         user=users[GRACE],
@@ -312,7 +308,6 @@ async def test_a_usage_without_cached_tokens_records_none_cached(
 
     await stream(client, session_id)
 
-    # 1000 * 0.40 + 50 * 1.60
     assert await model_calls(session_factory) == [(MODEL, 1000, 0, 50, 480)]
 
 

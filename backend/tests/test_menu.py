@@ -58,13 +58,11 @@ def make_dish(slug: str, **overrides: Any) -> Dish:
 
 @pytest.fixture(autouse=True)
 async def empty_menu(connection: AsyncConnection) -> None:
-    # Migration 0007 fills the menu; these tests build their own dishes.
     await connection.execute(text("DELETE FROM dishes"))
 
 
 @pytest.fixture
 def app(monkeypatch: pytest.MonkeyPatch) -> FastAPI:
-    # A trailing slash in the setting must not double the slash in image_url.
     monkeypatch.setenv("MEDIA_PUBLIC_BASE_URL", f"{MEDIA_BASE_URL}/")
     app = create_app()
     settings = Settings()
@@ -178,7 +176,6 @@ async def test_each_sort_orders_and_breaks_ties_by_id(
         make_dish(
             "b-popular", price_cents=900, popularity=9, created_at=START - timedelta(hours=2)
         ),
-        # The ties share every sort value; inserted in reverse to prove the order comes from id.
         make_dish(
             "tie-2",
             id=second_tie,

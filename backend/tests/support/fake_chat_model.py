@@ -23,7 +23,6 @@ class Text:
 @dataclass(frozen=True)
 class Call:
     name: str
-    # A string is streamed as it is, so one that is not JSON makes an invalid tool call.
     args: dict[str, Any] | str
     id: str
 
@@ -45,10 +44,7 @@ class Act:
 
 @dataclass(frozen=True)
 class Usage:
-    """The provider's reported usage, sent as one empty chunk the way langchain-openai does."""
-
     input_tokens: int
-    # None leaves input_token_details out, as langchain-openai does when nothing was cached.
     cached_input_tokens: int | None
     output_tokens: int
 
@@ -62,8 +58,6 @@ class ScriptExhaustedError(Exception):
 
 
 class FakeChatModel(BaseChatModel):
-    """Plays one script per model call: text, tool calls, usage, a failure or a stall."""
-
     scripts: Sequence[Script]
     received: list[list[BaseMessage]] = Field(default_factory=list)
     bound_tools: list[BaseTool] = Field(default_factory=list)

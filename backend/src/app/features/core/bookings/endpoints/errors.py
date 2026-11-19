@@ -61,7 +61,6 @@ ERROR_STATUSES: dict[type[DomainError], int] = {
     RequestTooLateError: status.HTTP_409_CONFLICT,
 }
 
-# The routes also document errors raised by the auth and locations features they build on.
 DOCUMENTED_ERROR_STATUSES: dict[type[DomainError], int] = {
     **ERROR_STATUSES,
     NotAuthenticatedError: AUTH_ERROR_STATUSES[NotAuthenticatedError],

@@ -6,8 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.features.core.menu.repositories import DishRepository
 from app.features.core.menu.services.exceptions import MenuSeedFileError
 
-# boto3 is a dev dependency and the runtime image lacks it, so the storage type is imported only
-# for type checking: importing this module must never pull boto3 in.
 if TYPE_CHECKING:
     from app.infrastructure.storage import S3FileStorage
 

@@ -31,8 +31,6 @@ class LoginService:
         self._auth = auth
 
     async def log_in(self, *, email: str, password: str) -> LoginOutcome:
-        # Failures that change the counter are returned, not raised: raising would roll back the
-        # counted attempt or the reset together with the request.
         user = await self._user_repository.get_by_email(email=email, for_update=True)
         if user is None or user.password_hash is None:
             raise InvalidCredentialsError()

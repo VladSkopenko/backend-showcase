@@ -59,9 +59,6 @@ def assistant_overrides() -> dict[str, Any]:
 
 @dataclass
 class Models:
-    """The turn and the apply each get their own fake, so the tools one binds never show in
-    the other."""
-
     turn: FakeChatModel
     comment: FakeChatModel
     current: FakeChatModel
@@ -122,7 +119,6 @@ async def turn(
     client: httpx2.AsyncClient, models: Models, session_id: str, *scripts: list[Any]
 ) -> list[tuple[str, Any]]:
     models.current = models.turn
-    # Each message gets its own moment, so the read-back order never falls to the random ids.
     first, *rest = scripts
     tick = Act(lambda: models.clock.advance(seconds=1))
     models.turn.scripts = [*models.turn.scripts, [tick, *first], *rest]

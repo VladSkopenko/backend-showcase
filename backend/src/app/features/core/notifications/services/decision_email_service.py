@@ -34,7 +34,6 @@ class DecisionEmailService:
         return email.rpartition("@")[2].lower() in self._skipped_domains
 
     async def _send_one(self, *, notice: DecisionNotice, recipient: NoticeRecipient) -> None:
-        # Runs after the decision is committed, so a failure is logged, never raised.
         try:
             email = self._renderer.render(notice=notice, recipient=recipient)
             await self._sender.send(

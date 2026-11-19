@@ -8,8 +8,6 @@ from app.features.preorder.ai_tools import PreorderTools
 
 
 class ToolkitBuilder:
-    """The composition root of every feature's ai_tools and action appliers (ADR 20)."""
-
     def __init__(self, context: AiToolContext) -> None:
         self._context = context
 

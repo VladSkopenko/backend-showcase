@@ -147,7 +147,6 @@ async def test_migrated_refresh_tokens_table_has_the_expected_shape(
     assert foreign_key["referred_table"] == "users"
     assert foreign_key["options"]["ondelete"] == "CASCADE"
     assert [constraint["column_names"] for constraint in shape["unique"]] == [["token_hash"]]
-    # PostgreSQL backs the unique constraint with an index of its own.
     indexes = [index for index in shape["indexes"] if not index.get("duplicates_constraint")]
     assert [index["column_names"] for index in indexes] == [["user_id"]]
 
@@ -468,7 +467,6 @@ async def test_bookings_status_defaults_to_confirmed(connection: AsyncConnection
 async def test_bookings_exclusion_constraint_covers_confirmed_rows_per_table(
     connection: AsyncConnection,
 ) -> None:
-    # alembic check cannot reflect exclusion constraints, so this pins the definition.
     definition = await connection.scalar(
         text(
             "SELECT pg_get_constraintdef(oid) FROM pg_constraint "

@@ -19,11 +19,9 @@ class RegisterRequest(BaseModel):
     first_name: Name
     last_name: Name
     email: EmailStr
-    # The only server-side rule; any further rules from the design are enforced by the frontend.
     password: str = Field(min_length=8, max_length=128)
     password_confirmation: str = Field(max_length=128)
 
-    # A password that failed its own checks is absent from info.data, so it gets one error only.
     @field_validator("password_confirmation")
     @classmethod
     def passwords_match(cls, value: str, info: ValidationInfo) -> str:
@@ -35,7 +33,6 @@ class RegisterRequest(BaseModel):
 class RegisterResponse(BaseModel):
     id: uuid.UUID
     email: str
-    # Set only in `local`, so local testing needs no inbox.
     debug_code: str | None = None
 
 
@@ -75,7 +72,6 @@ class PasswordResetConfirmRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     password_confirmation: str = Field(max_length=128)
 
-    # A password that failed its own checks is absent from info.data, so it gets one error only.
     @field_validator("password_confirmation")
     @classmethod
     def passwords_match(cls, value: str, info: ValidationInfo) -> str:

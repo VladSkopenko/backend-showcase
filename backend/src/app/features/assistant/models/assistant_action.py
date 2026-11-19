@@ -13,7 +13,6 @@ from app.features.assistant.enums import AssistantActionStatus
 class AssistantAction(Base):
     __tablename__ = "assistant_actions"
     __table_args__ = (
-        # A backstop: the turn supersedes the previous pending card under a session row lock.
         Index(
             "uq_assistant_actions_session_id_pending",
             "session_id",
