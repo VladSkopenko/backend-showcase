@@ -5,7 +5,9 @@ Date: 2026-10-28
 ## Status
 
 Accepted. Amended by [ADR 19](0019-public-grafana-reads-dev.md): Grafana reads dev, not
-production, and every environment's PostgreSQL joins an analytics network of its own.
+production, and every environment's PostgreSQL joins an analytics network of its own. Amended by
+[ADR 22](0022-prometheus-scrapes-dev.md): the API's metrics port is also reachable over `edge`,
+so Caddy, which never proxies it, is its boundary.
 
 ## Context
 

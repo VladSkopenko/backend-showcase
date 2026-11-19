@@ -1,0 +1,23 @@
+# Read at start and on SIGHUP, which deploy.sh sends after every platform deploy (ADR 22).
+global:
+  # The default is 1m.
+  scrape_interval: 15s
+
+# Here rather than as --storage.tsdb.retention.* flags, which 3.15 deprecates; reloaded on SIGHUP.
+storage:
+  tsdb:
+    retention:
+      # Set explicitly: with only size set, the 15d default no longer applies.
+      time: 15d
+      # /srv/data is one volume shared with prod; whichever limit is reached first applies.
+      size: 1GB
+
+scrape_configs:
+  # API counters only: Grafana's anonymous Viewers can query everything stored here (ADR 22).
+  - job_name: api
+    static_configs:
+      # The dev API's metrics port over the observability network; metrics_path defaults to /metrics.
+      - targets: ["app-dev-api:9000"]
+        # The app never sets env: one image is promoted by digest across environments.
+        labels:
+          env: dev

@@ -29,12 +29,12 @@ A vision to realize and a gap to close: the showcase's public Grafana shows only
 
 ## Constraints
 
-- The metrics port (`METRICS_PORT`, default 9000) is never proxied by Caddy and port 8000 gains no `/metrics` (ADR 7, AD-13). The port is also reachable over `edge`, so Caddy is the real boundary; ADR 21 records this and amends the spine's Metrics convention.
+- The metrics port (`METRICS_PORT`, default 9000) is never proxied by Caddy and port 8000 gains no `/metrics` (ADR 7, AD-13). The port is also reachable over `edge`, so Caddy is the real boundary; ADR 22 records this and amends the spine's Metrics convention.
 - Labels are only `method`, `route`, `status`. `route` is the full template or `unmatched` (no API route handled the request: unknown paths and the docs pages), taken from an explicit table built in `create_app` from the (router, prefix) list, with `prometheus-client` (Vlad, option a, 2026-11-18). FastAPI 0.162's `scope["route"]` lacks the include prefix, and its private effective-route context is not used.
 - No ids, raw paths, query strings or personal data in any series.
 - `env` comes from the Prometheus scrape config, never from the app: one image is promoted by digest across environments.
 - Apps never depend on the platform (AD-14): the API serves when nothing scrapes it, and a dev deploy works with the platform down.
-- Anonymous Grafana Viewers can send any PromQL through the data source proxy, as with SQL in ADR 19. Prometheus therefore holds API counters only, its query timeout and max samples are lowered, and ADR 21 records this.
+- Anonymous Grafana Viewers can send any PromQL through the data source proxy, as with SQL in ADR 19. Prometheus therefore holds API counters only, its query timeout and max samples are lowered, and ADR 22 records this.
 - Fixed values:
   - Prometheus 3.15.x, per the spine's version table.
   - Its UI is on the tailnet at port 9090.
