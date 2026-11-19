@@ -1,6 +1,6 @@
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.constraint_errors import ConstraintErrors
 from app.features.core.auth.dto import IssuedCode, RegistrationCommand
 from app.features.core.auth.enums import VerificationPurpose
 from app.features.core.auth.services.exceptions import EmailTakenError
@@ -36,12 +36,8 @@ class RegistrationService:
             email=command.email,
             password_hash=await self._password_hasher.hash(password=command.password),
         )
-        try:
+        with ConstraintErrors({User.EMAIL_UNIQUE: EmailTakenError}):
             await self._user_repository.add(user=user)
-        except IntegrityError as exc:
-            if "uq_users_email" in str(exc.orig):
-                raise EmailTakenError() from exc
-            raise
         return await self._code_service.issue(
             user=user, purpose=VerificationPurpose.EMAIL_VERIFICATION
         )

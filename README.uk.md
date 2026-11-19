@@ -122,7 +122,7 @@ Staging і production отримуватимуть той самий образ 
 uv sync
 docker compose up -d                       # PostgreSQL на 127.0.0.1:5433
 uv run alembic upgrade head
-uv run uvicorn app.main:app --port 8000    # http://127.0.0.1:8000/docs
+uv run uvicorn app.main:create_app --factory --port 8000    # http://127.0.0.1:8000/docs
 uv run pytest
 ```
 

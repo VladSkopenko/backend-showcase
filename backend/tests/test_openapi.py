@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from app.main import app
+from app.main import create_app
 
 FLOWS = {
     "Registration": [
@@ -77,7 +77,7 @@ FLOWS = {
 
 @pytest.fixture(scope="module")
 def schema() -> dict[str, Any]:
-    return app.openapi()
+    return create_app().openapi()
 
 
 def test_tags_follow_the_user_flows_in_order_with_descriptions(schema: dict[str, Any]) -> None:
