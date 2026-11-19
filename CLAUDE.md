@@ -1,7 +1,8 @@
 # Backend Showcase
 
-Public pet project of Vlad Skopenko: a REST API backend with CI/CD across three environments,
-containers, observability and infrastructure as code, running for $0. The roadmap is in README.md.
+Public pet project of Vlad Skopenko: a REST API backend with CI/CD to a dev environment, containers,
+observability and infrastructure as code, running for $0. It ends on dev (ADR 24); the roadmap is in
+docs/roadmap.md.
 
 ## Who does what
 

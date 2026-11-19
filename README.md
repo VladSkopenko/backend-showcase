@@ -34,8 +34,8 @@ the point is the whole path from a pull request to a monitored server.
 | Dashboards (Grafana, no account needed) | https://backend-showcase-grafana.duckdns.org |
 | Code quality (SonarCloud) | https://sonarcloud.io/summary/overall?id=VladSkopenko_backend-showcase |
 
-Staging and production already have their branches (`rc`, `prod`) and domains. They go live with
-the first release.
+The project runs one environment, dev, and ends there
+([ADR 24](docs/adr/0024-the-project-ends-on-dev.md)).
 
 ## What is built
 
@@ -82,10 +82,6 @@ flowchart LR
 4. The entrypoint checks that the commit is on `main`, pulls the image, runs `alembic upgrade head`,
    and starts the API, waiting for its healthcheck.
 
-Staging and production will receive the same image by digest, through pull requests from `main` to
-`rc` and from `rc` to `prod` ([ADR 4](docs/adr/0004-image-identity-and-promotion.md)). Their
-deploy jobs come with the first release.
-
 ## Backend design
 
 - Python 3.14, FastAPI, Pydantic v2, SQLAlchemy 2 async, Alembic, uv.
@@ -110,10 +106,10 @@ Each non-obvious choice has a short record in [docs/adr](docs/adr):
 |---|---|
 | [2](docs/adr/0002-ci-access-through-tailscale.md) | CI reaches the server only through Tailscale |
 | [3](docs/adr/0003-deploy-entrypoint-verifies-commit.md) | The deploy entrypoint takes a commit and verifies it |
-| [4](docs/adr/0004-image-identity-and-promotion.md) | Images are identified by tree hash and promoted by digest |
-| [5](docs/adr/0005-migration-rollback-with-alembic.md) | Failed deploys roll back migrations with Alembic |
-| [6](docs/adr/0006-data-stack-per-environment.md) | Each environment runs its own PostgreSQL and Redis |
-| [7](docs/adr/0007-single-vm-platform-and-app-stacks.md) | One VM runs a platform stack and an app stack per environment |
+| [4](docs/adr/0004-image-identity-and-promotion.md) | Images are identified by tree hash and deployed by digest; amended by ADR 24 to dev only |
+| [5](docs/adr/0005-migration-rollback-with-alembic.md) | Superseded by ADR 24. Failed deploys roll back migrations with Alembic |
+| [6](docs/adr/0006-data-stack-per-environment.md) | Each environment runs its own PostgreSQL; amended by ADR 24 to dev only, without Redis |
+| [7](docs/adr/0007-single-vm-platform-and-app-stacks.md) | One VM runs a platform stack and an app stack; amended by ADR 24 to one app stack, dev |
 | [8](docs/adr/0008-terraform-and-immutable-server.md) | Terraform from the start, and the server is immutable |
 | [9](docs/adr/0009-alerting-from-outside-the-vm.md) | Superseded by ADR 23. Alerting must work when the VM does not |
 | [10](docs/adr/0010-frontend-in-a-separate-repository.md) | The frontend lives in a separate repository |
@@ -130,6 +126,7 @@ Each non-obvious choice has a short record in [docs/adr](docs/adr):
 | [21](docs/adr/0021-decisions-by-email-only.md) | Staff decisions reach guests by email only; the in-app notification list is removed |
 | [22](docs/adr/0022-prometheus-scrapes-dev.md) | Prometheus in the platform stack scrapes dev with `env` from its config, UI on the tailnet; Caddy is the metrics port's boundary |
 | [23](docs/adr/0023-observability-ends-with-logs.md) | Observability ends with logs: no alerting, watchdog, traces or Redis exporter |
+| [24](docs/adr/0024-the-project-ends-on-dev.md) | The project ends on dev: no staging or production, migration rollback, Redis, backups or load tests |
 
 ## Run it locally
 
@@ -150,7 +147,7 @@ uv run pytest
 | Server | Oracle Cloud Always Free, one Ampere A1 VM (Arm) |
 | CI/CD and registry | GitHub Actions and GHCR in a public repository |
 | Domains and HTTPS | DuckDNS subdomains, Caddy with Let's Encrypt |
-| State, backups, pictures | OCI Object Storage |
+| Terraform state, pictures | OCI Object Storage |
 | Private access | Tailscale |
 
 ## How it is built
@@ -174,10 +171,10 @@ and I review every change before it merges.
 - I learned the infrastructure on this project, building it together with the agent: CI/CD, Docker,
   Terraform, Tailscale, Prometheus and Grafana.
 
-## What is next
+## What is left
 
-- Observability: server and dev database metrics, then logs in VictoriaLogs
-- Staging and production live, with migration rollback on a failed deploy
-- Load tests with k6 and published numbers
+- Metrics of the dev PostgreSQL, then logs in VictoriaLogs. After that the project is finished
+  ([ADR 23](docs/adr/0023-observability-ends-with-logs.md),
+  [ADR 24](docs/adr/0024-the-project-ends-on-dev.md)).
 
-The full plan is in [docs/roadmap.md](docs/roadmap.md).
+The plan, with what was built and what was dropped, is in [docs/roadmap.md](docs/roadmap.md).
