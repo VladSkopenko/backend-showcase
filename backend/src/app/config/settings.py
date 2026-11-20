@@ -55,6 +55,7 @@ class AuthSettings(BaseSettings):
     login_lockout_minutes: int = 5
     oauth_state_max_age_seconds: int = 600
     oauth_state_cookie_path: str = "/api/v1/auth"
+    max_concurrent_password_hashes: int = Field(default=1, gt=0)
 
 
 class TokenSettings(BaseSettings):
