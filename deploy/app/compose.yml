@@ -68,6 +68,44 @@ services:
         aliases:
           - app-${APP_ENV:?APP_ENV is written by deploy.sh}-api
 
+  # Dev only: deploy.sh starts it after the API. Prometheus scrapes it as
+  # app-<env>-postgres-exporter:9187 (ADR 22); no published port, never on edge.
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.21.1
+    restart: unless-stopped
+    # Measured in a local dry run: about 11 MB.
+    mem_limit: 32m
+    command:
+      # A flag, not DATA_SOURCE_URI: the variable is deprecated in 0.21 and removed in 0.22.
+      - --datasource.uri=postgres:5432/app?sslmode=disable
+      # The plain login role may not call pg_ls_waldir, so this collector would only fail.
+      - --no-collector.wal
+      # Anonymous Grafana Viewers can query every stored series (ADR 22): no server settings
+      # and none of the exporter's own Go, process and build metrics.
+      - --no-collector.settings
+      - --web.disable-exporter-metrics
+    environment:
+      DATA_SOURCE_USER: postgres_exporter
+      # Optional: compose interpolates every service, also the ones a deploy does not start.
+      # Hex like POSTGRES_PASSWORD; the role's SCRAM verifier is in migration 0026.
+      DATA_SOURCE_PASS: ${POSTGRES_EXPORTER_PASSWORD:-}
+    healthcheck:
+      # /metrics answers with pg_up 0 when the login fails, so reachability alone proves nothing.
+      # Every check is a full scrape of the database, hence the long interval.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9187/metrics | grep -qx 'pg_up 1'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      # Reaches postgres by service name here.
+      default:
+      observability:
+        aliases:
+          - app-${APP_ENV:?APP_ENV is written by deploy.sh}-postgres-exporter
+
 networks:
   edge:
     external: true

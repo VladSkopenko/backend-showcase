@@ -10,7 +10,8 @@ Amends the architecture spine's Metrics convention: the API's metrics port is re
 Grafana reads Prometheus through a second data source, and every query is bounded. Amended
 2026-11-19 again, following [ADR 23](0023-observability-ends-with-logs.md): Prometheus also
 scrapes the host's node exporter. Amended by [ADR 24](0024-the-project-ends-on-dev.md): there are
-no staging or production targets to add.
+no staging or production targets to add. Amended 2026-11-20: Prometheus also scrapes the dev
+database through postgres_exporter.
 
 ## Context
 
@@ -45,8 +46,9 @@ container joins.
   `/metrics` is not served on any public host. Over `edge`, Caddy, Grafana and the other
   environments' APIs can reach port 9000, as they already reach port 8000; the series hold no
   ids, paths or personal data.
-- **API and host series only.** Prometheus scrapes the dev API (job `api`) and the host's node
-  exporter (job `node`), nothing else, itself included. Once Grafana reads it, an anonymous Viewer
+- **API, host and dev database series only.** Prometheus scrapes the dev API (job `api`), the
+  host's node exporter (job `node`) and the dev database's exporter (job `postgres`), nothing
+  else, itself included. Once Grafana reads it, an anonymous Viewer
   can send any PromQL to it, as with SQL in ADR 19.
 - **The host through node_exporter.** `prom/node-exporter:v1.13.1` in the platform stack, on
   `observability` only, reads the host's root mounted read-only at `/host`. Only the `cpu`,
@@ -55,6 +57,19 @@ container joins.
   `env`: one VM serves every environment. The data source keeps its name "API metrics
   (Prometheus)": renaming a provisioned source with the same uid stops Grafana at its next start,
   and provisioning is read only at start.
+- **Dev PostgreSQL through postgres_exporter.**
+  `quay.io/prometheuscommunity/postgres-exporter:v0.21.1` runs in the dev app project, on its
+  `default` network and on `observability` as `app-dev-postgres-exporter`. It logs in as
+  `postgres_exporter`, a plain LOGIN role without `pg_monitor`, created by the dev-only migration
+  0026 with a committed SCRAM verifier, as `grafana_reader` is (ADR 19); the password is the secret
+  `POSTGRES_EXPORTER_PASSWORD` in the GitHub Environment `dev`, set before the migration merges;
+  rotating it takes a new migration with the new verifier. The `wal` and `settings` collectors and
+  the exporter's Go, process and HTTP metrics and build info are off, and no statement statistics
+  are collected. Without `pg_read_all_stats` the `pg_stat_activity` series see only the
+  exporter's own session; connections are counted by `pg_stat_database_numbackends`. The app
+  deploy starts it on dev only, after the API; its healthcheck requires `pg_up 1`, so a missing
+  secret or a wrong verifier fails the dev deploy and leaves the running API untouched. The job
+  sets `env: dev`.
 - **Config reloads by signal.** `prometheus.yml` is mounted read-only from the repository. The
   platform deploy checks it with `promtool` in a throwaway container before `up`, so a bad file
   fails the deploy before anything changes, and sends `SIGHUP` after `up`, because compose does
@@ -111,7 +126,8 @@ container joins.
 - Metrics retention, left open in the spine's deferred list, is settled here; log retention stays
   open.
 - Through the data source an anonymous visitor reads Prometheus's exact version, its whole
-  configuration, its flags and its targets (`app-dev-api:9000`, `node-exporter:9100`), on both
+  configuration, its flags and its targets (`app-dev-api:9000`, `node-exporter:9100`,
+  `app-dev-postgres-exporter:9187`), on both
   `/api/datasources/proxy/uid/prometheus/` and `/api/datasources/uid/prometheus/resources/`. ADR 19
   hides Grafana's own version; Prometheus's is disclosed here. None of it is secret.
 - One load of the dashboard sends five range queries and the variable query, more than the four
@@ -128,3 +144,8 @@ container joins.
   models and serials stay empty: the exporter has no udev data.
 - node-exporter:9100 answers without authentication to every container on `observability`,
   every environment's API included.
+- An anonymous visitor reads the PostgreSQL version (`pg_static`), the names of the databases,
+  roles and tables, their sizes and their row and lock statistics. No query text: statement
+  statistics are off.
+- app-dev-postgres-exporter:9187 answers without authentication to every container on
+  `observability`.
