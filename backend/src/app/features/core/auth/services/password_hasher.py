@@ -5,10 +5,12 @@ from pwdlib import PasswordHash
 from pwdlib.hashers.argon2 import Argon2Hasher
 
 
+
+
 class PasswordHasher:
-    def __init__(self) -> None:
+    def __init__(self, max_concurrent: int = 1) -> None:
         self._argon2 = PasswordHash((Argon2Hasher(memory_cost=19456, time_cost=2),))
-        self._slots = asyncio.Semaphore(1)
+        self._slots = asyncio.Semaphore(max_concurrent)
 
     async def hash(self, *, password: str) -> str:
         async with self._slots:

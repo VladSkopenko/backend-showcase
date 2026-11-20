@@ -38,7 +38,7 @@ def get_email_sender(settings: SettingsDep) -> EmailSender:
 
 @lru_cache
 def get_password_hasher() -> PasswordHasher:
-    return PasswordHasher()
+    return PasswordHasher(max_concurrent=get_settings().auth.max_concurrent_password_hashes)
 
 
 def get_verification_email_renderer(settings: SettingsDep) -> VerificationEmailRenderer:
