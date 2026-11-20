@@ -18,6 +18,7 @@ class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="APP_", env_file=ENV_FILE, extra="ignore")
 
     environment: Environment = "local"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "WARNING"
     frontend_url: str = "https://family-rest.vercel.app"
 
 

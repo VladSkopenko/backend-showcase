@@ -17,6 +17,7 @@ from app.common.error_responses import (
 )
 from app.common.errors import DomainError
 from app.config.settings import Settings, get_settings
+from app.config.log_setup import configure_logging
 from app.features.assistant.endpoints import ERROR_STATUSES as ASSISTANT_ERROR_STATUSES
 from app.features.assistant.endpoints import AssistantOpenApiTags
 from app.features.assistant.endpoints import router as assistant_router
@@ -110,6 +111,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_logging(settings.app.log_level)
     app = FastAPI(
         title="backend-showcase",
         lifespan=lifespan,
