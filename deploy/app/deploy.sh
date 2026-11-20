@@ -34,5 +34,10 @@ compose=(docker compose --project-name "$project" --file deploy/app/compose.yml 
 # transaction and stops the deploy here, leaving the running API untouched (ADR 5).
 "${compose[@]}" run --rm --no-deps api alembic upgrade head
 "${compose[@]}" up --detach --wait --wait-timeout 120 api
+# The exporter's role exists only on dev (migration 0026). Started after the API, so a missing
+# secret or a wrong password fails the deploy here and leaves the running API untouched.
+if [[ "$env" == dev ]]; then
+  "${compose[@]}" up --detach --wait --wait-timeout 120 postgres-exporter
+fi
 
 echo "deployed $digest"

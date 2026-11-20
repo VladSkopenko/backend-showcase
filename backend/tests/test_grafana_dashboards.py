@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection
-from support.migrations import run_revision
+from support.migrations import load_revision, run_revision
 
 from app.infrastructure.metrics import RouteTemplates
 from app.main import ROUTERS
@@ -17,8 +17,10 @@ from app.main import ROUTERS
 pytestmark = pytest.mark.anyio
 
 PLATFORM = Path(__file__).resolve().parents[2] / "deploy" / "platform"
+APP = Path(__file__).resolve().parents[2] / "deploy" / "app"
 DASHBOARDS = PLATFORM / "grafana" / "dashboards"
 GRAFANA_READER = "0021_add_grafana_reader_role.py"
+POSTGRES_EXPORTER = "0026_add_postgres_exporter_role.py"
 ROLE = "grafana_reader"
 DATA_SOURCE = {"type": "grafana-postgresql-datasource", "uid": "restaurant-dev"}
 SHARED_TAG = "restaurant"
@@ -608,3 +610,60 @@ def test_node_exporter_runs_only_the_collectors_the_dashboard_needs() -> None:
         "--collector.diskstats",
     }
     assert "--web.disable-exporter-metrics" in flags
+
+
+def postgres_exporter_service() -> str:
+    compose = (APP / "compose.yml").read_text()
+    services: list[str] = re.findall(
+        r"^  postgres-exporter:\n(.*?)(?=^  \S|^\S)", compose, re.MULTILINE | re.DOTALL
+    )
+    (service,) = services
+    return service
+
+
+def test_postgres_exporter_runs_without_the_collectors_the_dashboard_does_not_need() -> None:
+    service = postgres_exporter_service()
+    flags = set(re.findall(r"^\s+- (--[a-z.-]+)", service, re.MULTILINE))
+
+    assert {flag for flag in flags if re.match(r"--(no-)?collector\.", flag)} == {
+        "--no-collector.wal",
+        "--no-collector.settings",
+    }
+    assert "--web.disable-exporter-metrics" in flags
+    assert "- --datasource.uri=postgres:5432/app?sslmode=disable\n" in service
+    assert "DATA_SOURCE_PASS: ${POSTGRES_EXPORTER_PASSWORD:-}\n" in service
+
+
+def test_postgres_exporter_logs_in_as_the_role_of_its_migration_and_needs_pg_up() -> None:
+    service = postgres_exporter_service()
+    (user,) = re.findall(r"DATA_SOURCE_USER: (\S+)\n", service)
+
+    assert user == load_revision(POSTGRES_EXPORTER).ROLE
+    assert (
+        'test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9187/metrics | grep -qx \'pg_up 1\'"]'
+        in service
+    )
+
+
+def test_postgres_exporter_publishes_no_port_and_stays_off_edge() -> None:
+    service = postgres_exporter_service()
+
+    assert "ports:" not in service
+    assert "edge" not in service
+    assert "analytics" not in service
+
+
+def test_prometheus_scrapes_the_dev_postgres_exporter_as_job_postgres() -> None:
+    (alias,) = re.findall(
+        r"^      observability:\n        aliases:\n          - (.+)\n",
+        postgres_exporter_service(),
+        re.MULTILINE,
+    )
+    dev_alias = re.sub(r"\$\{APP_ENV:\?[^}]*\}", "dev", alias)
+    config = (PLATFORM / "prometheus" / "prometheus.yml").read_text()
+    (job,) = re.findall(
+        r"^  - job_name: postgres\n(.*?)(?=^  - |\Z)", config, re.MULTILINE | re.DOTALL
+    )
+
+    assert f'- targets: ["{dev_alias}:9187"]' in job
+    assert re.search(r"labels:\n\s+env: dev\n", job)

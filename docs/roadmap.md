@@ -105,7 +105,7 @@ following [ADR 15](adr/0015-platform-as-code.md).
 - [x] `/metrics` with request rate, errors and latency per endpoint
 - [x] Platform stack deployed separately from the app stacks
 - [x] Prometheus scraping the dev API and the host's node exporter
-- [ ] Postgres exporter for the dev database
+- [x] Postgres exporter for the dev database
 - [x] Grafana dashboards provisioned from the repo, with an environment selector
 - [ ] Structured JSON logs in VictoriaLogs
 - [x] n8n in the platform stack; Prometheus and n8n reachable only through Tailscale
