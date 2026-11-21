@@ -32,10 +32,12 @@ class ErrorCodes:
     METHOD_NOT_ALLOWED = "METHOD_NOT_ALLOWED"
     HTTP_ERROR = "HTTP_ERROR"
     SERVER_ERROR = "SERVER_ERROR"
+    RATE_LIMITED = "RATE_LIMITED"
 
 
 class ErrorMessages:
     SERVER_ERROR = "Something went wrong."
+    RATE_LIMITED = "Too many requests. Try again later."
     HTTP_LAYER = {
         status.HTTP_404_NOT_FOUND: (ErrorCodes.NOT_FOUND, "Not found."),
         status.HTTP_405_METHOD_NOT_ALLOWED: (ErrorCodes.METHOD_NOT_ALLOWED, "Method not allowed."),
@@ -83,6 +85,15 @@ def server_error_response() -> JSONResponse:
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         code=ErrorCodes.SERVER_ERROR,
         message=ErrorMessages.SERVER_ERROR,
+    )
+
+
+def rate_limited_response(*, retry_after: int) -> JSONResponse:
+    return error_response(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        code=ErrorCodes.RATE_LIMITED,
+        message=ErrorMessages.RATE_LIMITED,
+        retry_after=retry_after,
     )
 
 

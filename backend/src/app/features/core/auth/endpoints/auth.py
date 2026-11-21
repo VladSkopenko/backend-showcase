@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Cookie, Response, status
+from fastapi import APIRouter, BackgroundTasks, Cookie, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from app.common.error_responses import domain_error_response, error_responses
@@ -44,9 +44,9 @@ from app.features.core.auth.services.exceptions import (
     SessionInvalidError,
     UserNotFoundError,
 )
+from app.infrastructure.rate_limit import limiter
 
 RefreshTokenCookie = Annotated[str | None, Cookie(alias=SessionCookies.REFRESH_NAME)]
-
 router = APIRouter(prefix="/auth")
 
 
@@ -68,7 +68,9 @@ router = APIRouter(prefix="/auth")
         "local."
     ),
 )
+@limiter.limit("15/minute")
 async def register_user(
+    request: Request,
     body: RegisterRequest,
     background_tasks: BackgroundTasks,
     registration: RegistrationServiceDep,
