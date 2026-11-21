@@ -268,7 +268,8 @@ async def test_one_failing_email_does_not_stop_the_others(
     assert sorted(sender.attempted) == sorted([ADA, GRACE])
     assert sender.sent == others
     [record] = [record for record in caplog.records if record.levelno >= logging.ERROR]
-    assert failed in record.getMessage()
+    assert str(users[failed].id) in record.getMessage()
+    assert failed not in record.getMessage()
 
 
 async def test_names_are_escaped_in_the_html_email(
@@ -355,7 +356,8 @@ async def test_a_failing_email_keeps_the_decision(
     status = await connection.scalar(select(Booking.status).where(Booking.id == uuid.UUID(pending)))
     assert status == BookingStatus.CONFIRMED
     [record] = [record for record in caplog.records if record.levelno >= logging.ERROR]
-    assert ADA in record.getMessage()
+    assert str(users[ADA].id) in record.getMessage()
+    assert ADA not in record.getMessage()
     assert record.exc_info is not None
 
 

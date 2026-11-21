@@ -10,6 +10,4 @@ class LoggingEmailSender:
         self._level = logging.WARNING if environment == "local" else logging.ERROR
 
     async def send(self, *, to: str, subject: str, html: str, text: str) -> None:
-        logger.log(
-            self._level, "Email not sent, email is not configured: to=%s subject=%r", to, subject
-        )
+        logger.log(self._level, "Email not sent, email is not configured: subject=%r", subject)

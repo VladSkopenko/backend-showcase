@@ -33,7 +33,7 @@ services:
     networks:
       # Listing any network drops the implicit default, so it is named here: the API reaches postgres on it.
       default:
-      # Grafana reads dev here as app-dev-postgres. On staging and prod nothing else joins yet.
+      # Grafana reads dev here as app-dev-postgres.
       analytics:
         aliases:
           - app-${APP_ENV:?APP_ENV is written by deploy.sh}-postgres

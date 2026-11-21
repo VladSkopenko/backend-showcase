@@ -1,7 +1,6 @@
 # Dish pictures and other media live in Object Storage, one bucket per environment, so they
 # survive the VM and stay isolated between environments. The API writes through the S3
 # Compatibility API with a Customer Secret Key of a dedicated user that may touch only its bucket.
-# Add "staging" and "prod" to media_environments when those environments go live.
 
 locals {
   media_environments = toset(["dev"])

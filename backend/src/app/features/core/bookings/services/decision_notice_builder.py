@@ -39,7 +39,6 @@ class DecisionNoticeBuilder:
             notices.append(
                 DecisionNotice(
                     kind=kind,
-                    booking_id=booking.id,
                     starts_at=self._schedule.to_local(booking.starts_at),
                     location_address=location.address,
                     party_size=booking.party_size,
