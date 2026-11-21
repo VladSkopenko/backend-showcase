@@ -73,7 +73,7 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: uv run --locked --no-build lint-imports
 
-      # Every migration must downgrade cleanly (ADR 5). `head`, not `heads`: a second head fails here.
+      # Every migration must downgrade cleanly. `head`, not `heads`: a second head fails here.
       - name: Run migration round-trip
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |

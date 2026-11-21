@@ -18,9 +18,13 @@
 | Документація API (Swagger) | https://backend-showcase-dev.duckdns.org/docs |
 | Дашборди, без акаунта | https://backend-showcase-grafana.duckdns.org |
 | Якість коду | https://sonarcloud.io/summary/overall?id=VladSkopenko_backend-showcase |
+| Prometheus, лише через Tailscale | https://backend-showcase-platform.tail88eb36.ts.net:9090 |
+| Логи (VictoriaLogs), лише через Tailscale | https://backend-showcase-platform.tail88eb36.ts.net:9428/select/vmui/ |
 
 Боти в n8n цілодобово грають ресторан: гості бронюють, роблять передзамовлення та скасовують, а бот
 офіціанта вирішує запити великих компаній, тож дашборди завжди живі.
+
+![Дашборд бронювань у публічній Grafana](docs/images/grafana-bookings.png)
 
 ---
 
@@ -50,15 +54,15 @@ flowchart LR
 - Python 3.14, FastAPI, SQLAlchemy 2 async, Alembic.
 - Feature-sliced структура: core-фічі (users, auth, menu, locations, bookings) спільні, звичайні фічі
   ніколи не імпортують одна одну, а виклики йдуть в один бік: endpoints, потім services, потім
-  repositories. import-linter перевіряє це в CI ([ADR 11](docs/adr/0011-feature-sliced-backend-layout.md)).
-- Один формат помилок для всього API ([ADR 12](docs/adr/0012-unified-error-response.md)).
+  repositories. import-linter перевіряє це в CI.
+- Один формат помилок для всього API.
 - Тести йдуть на справжньому PostgreSQL, бо важливі правила тримаються на блокуваннях рядків і обмеженнях.
 
 ### Куди дивитися в коді
 
 | Що | Де |
 |---|---|
-| Подвійне бронювання за одночасних запитів: блокування рядків плюс exclusion constraint ([ADR 13](docs/adr/0013-table-booking-slots-and-double-booking.md)) | [booking_service.py](backend/src/app/features/core/bookings/services/booking_service.py) |
+| Подвійне бронювання за одночасних запитів: блокування рядків плюс exclusion constraint | [booking_service.py](backend/src/app/features/core/bookings/services/booking_service.py) |
 | Тест, у якому змагаються дві справжні транзакції | [test_booking_concurrency.py](backend/tests/test_booking_concurrency.py) |
 | Ротація refresh-токенів; повторно використаний токен відкликає всі сесії | [session_service.py](backend/src/app/features/core/auth/services/session_service.py) |
 | Помилки бази перетворюються на доменні за назвою обмеження | [constraint_errors.py](backend/src/app/common/constraint_errors.py) |
@@ -88,29 +92,40 @@ flowchart LR
 | Частина | Як |
 |---|---|
 | CI | ruff, mypy, import-linter, перевірка міграцій туди й назад і pytest на справжньому PostgreSQL для кожного pull request |
-| Доставка | Один образ на кожне дерево git, перевірений Trivy, деплой за digest; CI дістається сервера лише через Tailscale ([ADR 2](docs/adr/0002-ci-access-through-tailscale.md), [ADR 4](docs/adr/0004-image-identity-and-promotion.md)) |
-| Сервер | VM в Oracle Cloud, мережа та сховище в Terraform; сервер замінюють, а не латають ([ADR 8](docs/adr/0008-terraform-and-immutable-server.md)) |
-| Платформа | Caddy, n8n, Prometheus і Grafana як код, деплой на кожен merge ([ADR 15](docs/adr/0015-platform-as-code.md)) |
-| Моніторинг | Prometheus збирає метрики API, сервера та бази; публічна Grafana їх показує ([ADR 22](docs/adr/0022-prometheus-scrapes-dev.md)) |
+| Доставка | Один образ на кожне дерево git, перевірений Trivy, деплой за digest; CI дістається сервера лише через Tailscale |
+| Сервер | VM в Oracle Cloud, мережа та сховище в Terraform; сервер замінюють, а не латають |
+| Платформа | Caddy, n8n, Prometheus, Grafana і VictoriaLogs як код, деплой на кожен merge |
+| Моніторинг | Prometheus збирає метрики API, сервера та бази; публічна Grafana показує трафік API та цифри ресторану |
+| Логи | Fluent Bit відправляє логи всіх контейнерів у VictoriaLogs, доступний лише через Tailscale |
 | Вартість | $0: Oracle Always Free, GitHub Actions і GHCR, DuckDNS, Tailscale |
 
+### Як це виглядає
+
+<details>
+<summary>n8n: симулятор гостей, бот офіціанта та їхні запуски</summary>
+
+![Workflow симулятора бронювань у n8n](docs/images/n8n-booking-simulator.png)
+![Workflow бота офіціанта в n8n](docs/images/n8n-waiter-bot.png)
+![Запуски workflow у n8n](docs/images/n8n-executions.png)
+
+</details>
+
+<details>
+<summary>Prometheus: три цілі збору та запити до API за маршрутами</summary>
+
+![Цілі Prometheus: API, сервер і база, усі працюють](docs/images/prometheus-targets.png)
+![Запити до API за секунду за маршрутами](docs/images/prometheus-api-requests.png)
+
+</details>
+
+<details>
+<summary>VictoriaLogs: логи API у вигляді структурованого JSON</summary>
+
+![Рядки логів API у VictoriaLogs з полями level і logger](docs/images/victorialogs-api-logs.png)
+
+</details>
+
 ---
-
-## Як я працюю
-
-Я проєктую систему та ухвалюю рішення; Claude Code пише більшість коду за правилами, які я задаю, а
-кожну зміну я переглядаю перед merge.
-
-- Правила лежать у [`CLAUDE.md`](CLAUDE.md) і [`.claude/rules/`](.claude/rules): спершу специфікація,
-  спершу тести, що падають, кожен ключ конфігурації звіряється з офіційною документацією.
-- [`_bmad_output/`](_bmad_output/implementation-artifacts) містить специфікації фіч у тому порядку, в
-  якому їх будували: у кожній описано задачу, мої рішення (з підписом "Decision (Vlad, date)"), тести,
-  написані першими, і журнал рев'ю.
-- Я виправляю агента, коли він помиляється: він пропонував прийняти справжні зауваження SonarCloud
-  замість виправити їх ([6469d44](https://github.com/VladSkopenko/backend-showcase/commit/6469d443e3d70c825addd68847c85af33775926f)
-  виправив усі), і заглушив правило "магічними" рядками
-  ([#58](https://github.com/VladSkopenko/backend-showcase/pull/58) замінив їх на enum).
-- Архітектурні рішення лежать у [docs/adr](docs/adr).
 
 ## Локальний запуск
 
@@ -123,8 +138,3 @@ uv run alembic upgrade head
 uv run uvicorn app.main:create_app --factory --port 8000    # http://127.0.0.1:8000/docs
 uv run pytest
 ```
-
-## Стан
-
-Проєкт працює в одному середовищі, dev ([ADR 24](docs/adr/0024-the-project-ends-on-dev.md)).
-Останній крок: логи у VictoriaLogs; план лежить у [docs/roadmap.md](docs/roadmap.md).

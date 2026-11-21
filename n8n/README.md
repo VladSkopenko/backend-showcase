@@ -2,7 +2,7 @@
 
 n8n plays the restaurant's guests through the REST API: they book tables, ask for large tables,
 pre-order food and cancel, with the time, day and party patterns of a real restaurant, so dev
-fills with data worth a dashboard ([ADR 14](../docs/adr/0014-booking-simulator-on-dev.md)). A
+fills with data worth a dashboard. A
 second workflow plays a waiter who approves or rejects the large-party requests. Both workflows
 drive the public dev API only. This folder also runs n8n on the developer machine, to try the
 workflows before they go to the n8n on the VM.
@@ -149,7 +149,7 @@ which exactly one passes, so the order does not depend on where the nodes sit on
   are free and still ahead. A run that draws today after the last start (21:30) books nothing. A
   regular books at their favourite location 80% of the time, an occasional guest anywhere.
 - **Instant booking, 1 to 4 people.** Only where at least 4 fitting tables are free at that
-  location and start, so real guests always keep a choice (ADR 14). The answer is `CONFIRMED`.
+  location and start, so real guests always keep a choice. The answer is `CONFIRMED`.
 - **Large-party request, 5 to 8 people.** Only for starts more than 2 hours ahead, since the API
   refuses closer ones; a run that draws today with no start that far ahead sends nothing. A
   request holds no table, so one free fitting table is enough and the 4-free-tables rule does not
@@ -213,8 +213,7 @@ key" into a pick weighted by `startWeights` among whichever starts the search fi
 ## Simulator CONFIG
 
 Every number that tunes the bots lives in the `CONFIG` object at the top of `Plan the visit`, with
-the starting weights of
-[patterns.md](../_bmad_output/implementation-artifacts/spec-restaurant-simulation/patterns.md);
+the starting weights of the simulation patterns;
 the later nodes read it from the plan.
 
 | Key | What it tunes |
@@ -244,7 +243,7 @@ node --test tests/booking-simulator.test.mjs    # the simulator only
 Runs the workflow's own Code nodes from the JSON on simulated clocks with stub inputs, without the
 API. Over 10 000 plans it checks that the persona split, cancel share, lead times, booking dates
 per weekday (by the day weights) and party sizes for weekdays, weekends and each holiday follow
-patterns.md, and that start hours, the request party split and the approved pre-order chance
+the `PATTERNS` table, and that start hours, the request party split and the approved pre-order chance
 follow `CONFIG`, with every lunch and dinner peak start above every low-hour start. A share passes
 within 4 standard errors of its expected value. It also checks that `apiBaseUrl` is the dev API,
 that requests are sent exactly when a start beyond 2 hours exists and never closer, the
@@ -254,8 +253,8 @@ pre-order for a request or a start within 30 minutes), the approved-request filt
 page guard.
 
 Every run prints its seed and every failing test names it; `SIMULATOR_SEED=<seed> npm test` repeats
-a run exactly. It exits non-zero on a failed check. After tuning `CONFIG`, update patterns.md and
-the `PATTERNS` table in `tests/booking-simulator.test.mjs` together.
+a run exactly. It exits non-zero on a failed check. After tuning `CONFIG`, update
+the `PATTERNS` table in `tests/booking-simulator.test.mjs` with it.
 
 ## The waiter bot
 
@@ -311,8 +310,7 @@ order does not depend on where the nodes sit on the canvas.
 ### Waiter CONFIG
 
 Every number that tunes the waiter lives in the `CONFIG` object at the top of `Plan the round`,
-with the waiter weights of
-[patterns.md](../_bmad_output/implementation-artifacts/spec-restaurant-simulation/patterns.md).
+with the waiter weights of the simulation patterns.
 
 | Key | What it tunes |
 |---|---|
@@ -342,5 +340,5 @@ page of 50 is decided, in the API's order. It also checks the workflow id, the 5
 and time zone, that `apiBaseUrl` is the dev API and that no Code node keeps workflow static data.
 
 Every run prints its seed and every failing test names it; `WAITER_SEED=<seed> npm test` repeats a
-run exactly. It exits non-zero on a failed check. After tuning `CONFIG`, update patterns.md and the
-`EXPECTED` table in `tests/waiter-bot.test.mjs` together.
+run exactly. It exits non-zero on a failed check. After tuning `CONFIG`, update the
+`EXPECTED` table in `tests/waiter-bot.test.mjs` with it.

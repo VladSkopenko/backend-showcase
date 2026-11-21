@@ -1,7 +1,7 @@
 # Platform stack
 
 One compose project with the platform services, deployed by the `deploy-platform` job on every push
-to `main` ([ADR 15](../../docs/adr/0015-platform-as-code.md)).
+to `main`.
 
 ## Secrets
 
@@ -37,6 +37,6 @@ Running it again without arguments is safe: existing secrets, including `N8N_ENC
 3. If it has a private UI: a port in `tailscale/serve.json` and the same port in the tailnet policy grant.
    If it is public: the `edge` network, a site block in `caddy/Caddyfile` and its DuckDNS name in
    `deploy/terraform/cloud-init.yaml.tftpl`. Check what the service lets an anonymous visitor read
-   and write before it goes public ([ADR 19](../../docs/adr/0019-public-grafana-reads-dev.md)).
+   and write before it goes public.
 4. If it needs a secret: a block in `secrets.sh`, the name in the `deploy-platform` job's `env` and
    `printf` in `.github/workflows/delivery.yml`, then run `secrets.sh` without arguments before the merge.

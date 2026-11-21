@@ -1,4 +1,4 @@
-# Read at start and on SIGHUP, which deploy.sh sends after every platform deploy (ADR 22).
+# Read at start and on SIGHUP, which deploy.sh sends after every platform deploy.
 global:
   # The default is 1m.
   scrape_interval: 15s
@@ -14,7 +14,7 @@ storage:
 
 scrape_configs:
   # Grafana's anonymous Viewers can query everything stored here: API, host and dev Postgres
-  # series only (ADR 22).
+  # series only.
   - job_name: api
     static_configs:
       # The dev API's metrics port over the observability network; metrics_path defaults to /metrics.

@@ -1,4 +1,4 @@
-# Grafana reads this on start: where the dashboards of the repository live (ADR 15, ADR 19).
+# Grafana reads this on start: where the dashboards of the repository live.
 apiVersion: 1
 
 providers:
