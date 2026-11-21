@@ -1,17 +1,11 @@
-# Platform stack, deployed once and changed only by its own deploys (AD-1).
 services:
-  # One-shot: creates every service's data directory with the owner that service runs as (ADR 15).
-  # A new service with a data directory adds one line here and depends on init like the others.
   init:
-    image: busybox:1.38.0
-    # Must not restart: up --wait treats it as done only while it sits exited with code 0.
+    image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
     restart: "no"
     mem_limit: 32m
     network_mode: none
     volumes:
       - /srv/data/platform:/data
-    # install -d creates missing parents and re-applies owner and mode on every deploy.
-    # Owners come from each image's USER (uid:gid).
     command:
       - sh
       - -euc
@@ -21,9 +15,11 @@ services:
         install -d -o 1000  -g 1000  -m 700 /data/n8n
         install -d -o 472   -g 0     -m 700 /data/grafana
         install -d -o 65534 -g 65534 -m 700 /data/prometheus
+        install -d -o 0     -g 0     -m 700 /data/victorialogs
+        install -d -o 0     -g 0     -m 700 /data/fluent-bit
 
   caddy:
-    image: caddy:2.11
+    image: caddy:2.11@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
     restart: unless-stopped
     mem_limit: 128m
     depends_on:
@@ -33,33 +29,24 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      # A directory, not the file: git replaces files on checkout, and a single-file mount would keep the old one.
       - ./caddy:/etc/caddy:ro
-      # Certificates live on the data volume, so a VM replacement does not re-issue them (AD-11).
       - /srv/data/platform/caddy/data:/data
       - /srv/data/platform/caddy/config:/config
     networks:
       - edge
 
-  # Private entry: joins the tailnet as its own node and serves each internal UI on its own HTTPS
-  # port with a *.ts.net certificate (ADR 15). Reaches the UIs by service name on the default network.
   tailscale:
-    image: tailscale/tailscale:v1.104.7
+    image: tailscale/tailscale:v1.104.7@sha256:72c1e19e0aedca96b8533bbb0b4368564410ff20b17e53b804eb6c1f04a31be4
     restart: unless-stopped
     mem_limit: 128m
     environment:
-      # OAuth client secret with ?ephemeral=false&preauthorized=true; the secrets script appends them.
       TS_AUTHKEY: ${TS_AUTHKEY:?TS_AUTHKEY comes from the GitHub Environment}
       TS_EXTRA_ARGS: --advertise-tags=tag:platform
       TS_HOSTNAME: backend-showcase-platform
-      # Userspace networking needs no extra capabilities and no /dev/net/tun.
       TS_USERSPACE: "true"
-      # State on the data volume and login only when there is none, so the node keeps its name.
       TS_STATE_DIR: /var/lib/tailscale
       TS_AUTH_ONCE: "true"
-      # Watched for changes; ${TS_CERT_DOMAIN} inside it becomes the node's ts.net name.
       TS_SERVE_CONFIG: /config/serve.json
-      # /healthz on port 9002 answers 200 once the node has a tailnet address.
       TS_ENABLE_HEALTH_CHECK: "true"
     volumes:
       - ./tailscale:/config:ro
@@ -73,36 +60,27 @@ services:
       init:
         condition: service_completed_successfully
 
-  # Reached only through the tailscale service on https://<PLATFORM_HOST>:5678 (AD-3).
   n8n:
-    image: n8nio/n8n:2.47.7
+    image: n8nio/n8n:2.47.7@sha256:b4b90747b81fcda7e76550c0d3aa7f0f64917a1e9573cff40d6834eaf2e0f8ea
     restart: unless-stopped
     mem_limit: 768m
     environment:
-      # Encrypts saved credentials; losing or changing it makes them unreadable, so it is never rotated.
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY comes from the GitHub Environment}
-      # The owner account is (re)written from these on every start and locked in the UI.
       N8N_INSTANCE_OWNER_MANAGED_BY_ENV: "true"
       N8N_INSTANCE_OWNER_EMAIL: ${N8N_OWNER_EMAIL:?N8N_OWNER_EMAIL comes from the GitHub Environment}
-      # bcrypt; single-quoted in the .env, otherwise compose eats the $-separated salt.
       N8N_INSTANCE_OWNER_PASSWORD_HASH: ${N8N_OWNER_PASSWORD_HASH:?N8N_OWNER_PASSWORD_HASH comes from the GitHub Environment}
       N8N_INSTANCE_OWNER_FIRST_NAME: Vlad
       N8N_INSTANCE_OWNER_LAST_NAME: Skopenko
-      # n8n itself listens on plain HTTP; these describe the URL browsers use through the tailscale proxy.
       N8N_HOST: ${PLATFORM_HOST:?PLATFORM_HOST comes from the GitHub Environment}
       N8N_PROTOCOL: https
       N8N_EDITOR_BASE_URL: https://${PLATFORM_HOST:?PLATFORM_HOST comes from the GitHub Environment}:5678
       N8N_PROXY_HOPS: "1"
-      # Schedule triggers fire in this zone, the same zone the booking grid uses.
       GENERIC_TIMEZONE: Asia/Tbilisi
       TZ: Asia/Tbilisi
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
     volumes:
-      # SQLite database and n8n's settings file.
       - /srv/data/platform/n8n:/home/node/.n8n
     healthcheck:
-      # Readiness, not liveness: 200 only once the database is connected and migrated; ADR 23
-      # keeps this healthcheck.
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5678/healthz/readiness"]
       interval: 10s
       timeout: 3s
@@ -111,44 +89,27 @@ services:
       init:
         condition: service_completed_successfully
 
-  # Public at https://backend-showcase-grafana.duckdns.org through Caddy, anonymous Viewer, reads dev (ADR 19).
   grafana:
-    image: grafana/grafana:13.2.6
+    image: grafana/grafana:13.2.6@sha256:b21409d7951ddcfd63a4b49083e4ef2cc35bc1437d071813bf82bfb238b00bca
     restart: unless-stopped
-    # Measured idle: about 260 MB in 14 processes, Grafana and one backend per bundled data source plugin.
     mem_limit: 768m
     environment:
-      # The address browsers use; Grafana builds its links and redirects from it.
       GF_SERVER_ROOT_URL: https://backend-showcase-grafana.duckdns.org
-      # Anyone opens the dashboards without signing in. A Viewer can still send any SQL to the data
-      # source, so the database role is the boundary (ADR 19).
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
       GF_AUTH_ANONYMOUS_HIDE_VERSION: "true"
-      # Applies only when Grafana creates its database on the first start; the login is admin.
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD comes from the GitHub Environment}
-      # The admin's session cookie travels over HTTPS only.
       GF_SECURITY_COOKIE_SECURE: "true"
-      # /metrics would be public through Caddy and shows the exact version (ADR 7 keeps metrics off the public host).
       GF_METRICS_ENABLED: "false"
-      # Otherwise every start downloads unpinned app plugins from grafana.com. The data source
-      # plugins bundled in the image stay available.
       GF_PLUGINS_PREINSTALL_DISABLED: "true"
-      # The start page: a visitor who opens the host sees this dashboard file instead of the welcome page.
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/bookings.json
-      # Not a Grafana setting: the data source provisioning file reads it as $GRAFANA_DB_PASSWORD.
       GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?GRAFANA_DB_PASSWORD comes from the GitHub Environment}
     volumes:
-      # Provisioning subdirectories, not their parent: mounting the parent hides the image's other
-      # provisioning directories, and Grafana logs an error for each missing one.
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      # The dashboards themselves; the provider polls this directory, so a changed file needs no restart.
       - ./grafana/dashboards:/etc/grafana/dashboards:ro
-      # Grafana's own SQLite database and the bundled plugins it unpacks on the first start.
       - /srv/data/platform/grafana:/var/lib/grafana
     healthcheck:
-      # 200 once Grafana's own database answers.
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
       interval: 10s
       timeout: 3s
@@ -157,40 +118,24 @@ services:
       init:
         condition: service_completed_successfully
     networks:
-      # Caddy reaches it on edge; dev PostgreSQL is on analytics-dev as app-dev-postgres;
-      # Prometheus is on observability (ADR 22).
       - edge
       - analytics-dev
       - observability
 
-  # Scrapes the dev API's metrics port and the host's node exporter; UI only through the tailscale
-  # service on https://<PLATFORM_HOST>:9090 (ADR 22).
   prometheus:
-    image: prom/prometheus:v3.15.1
+    image: prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2
     restart: unless-stopped
-    # Idle about 43 MB. Measured in a local dry run with 15 days of data: four queries at the
-    # sample limit at once finish in about 5 s at 512m, and take nearly the 10 s timeout at 256m.
     mem_limit: 512m
-    # Replaces the image's default arguments, so both paths are repeated here. No
-    # --web.enable-lifecycle: deploy.sh reloads with SIGHUP, and nothing over HTTP can stop it.
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      # Anonymous Grafana Viewers can send any PromQL through the data source (ADR 22), so every
-      # query is bounded. The defaults (2m, 20 at once, 50 million samples) let one visitor
-      # exhaust the memory limit.
       - --query.timeout=10s
       - --query.max-concurrency=4
-      # About twice the p95 latency panel measured in the dry run (540 thousand), valid while the
-      # api dashboard's panels stay pinned to 500 data points.
       - --query.max-samples=1000000
     volumes:
-      # A directory, not the file, like Caddy's: git replaces files on checkout.
       - ./prometheus:/etc/prometheus:ro
-      # The image declares VOLUME /prometheus; the bind mount keeps the TSDB on the data volume.
       - /srv/data/platform/prometheus:/prometheus
     healthcheck:
-      # 200 once Prometheus is ready to answer queries.
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
       interval: 10s
       timeout: 3s
@@ -199,50 +144,76 @@ services:
       init:
         condition: service_completed_successfully
     networks:
-      # Listing any network drops the implicit default, where the tailscale service reaches the UI.
       - default
-      # The APIs are here as app-<env>-api, the node exporter as node-exporter.
       - observability
 
-  # The VM's CPU, memory, load and disks for Prometheus, read through the host's root (ADR 22, 23).
-  # No host network or pid namespace, so no network traffic metrics; no data directory.
   node-exporter:
-    image: prom/node-exporter:v1.13.1
+    image: prom/node-exporter:v1.13.1@sha256:7296504d4ada44b7d7ab4431e27e9f9900d8488f8d55842f4b12ae2704e16dfe
     restart: unless-stopped
-    # Measured in a local dry run while Prometheus scraped it every 15 s: about 8 MB.
     mem_limit: 32m
     command:
-      # The host's filesystems are read under /host; mountpoints are reported without the prefix.
       - --path.rootfs=/host
-      # Anonymous Grafana Viewers can query every stored series (ADR 22), so only what the
-      # dashboard needs: no uname, os, network or process collectors.
       - --collector.disable-defaults
       - --collector.cpu
       - --collector.meminfo
       - --collector.loadavg
       - --collector.filesystem
       - --collector.diskstats
-      # Drops the exporter's own Go and process metrics; its build info stays.
       - --web.disable-exporter-metrics
     volumes:
-      # Read-only, as the node_exporter README mounts it; rslave passes on mounts the host makes later.
       - /:/host:ro,rslave
     healthcheck:
-      # The landing page answers 200 without running the collectors.
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9100/"]
       interval: 10s
       timeout: 3s
       retries: 12
     networks:
-      # Prometheus reaches it here by service name; never edge, no published port.
+      - observability
+
+  victorialogs:
+    image: victoriametrics/victoria-logs:v1.54.0@sha256:ee4e820cac3721f5f5d91641b950c22439593adc4224f9655e5333d5a84c1dfe
+    restart: unless-stopped
+    mem_limit: 256m
+    command:
+      - -storageDataPath=/victoria-logs-data
+      - -retentionPeriod=7d
+      - -retention.maxDiskSpaceUsageBytes=5GiB
+    volumes:
+      - /srv/data/platform/victorialogs:/victoria-logs-data
+    healthcheck:
+      test: ["CMD", "/victoria-logs-prod", "-healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    networks:
+      - default
+      - observability
+
+  fluent-bit:
+    image: fluent/fluent-bit:5.1.5@sha256:25435e66b8da34975a615979e1297163f93690011d4d1900b6fa542e84ffb35f
+    restart: unless-stopped
+    mem_limit: 64m
+    entrypoint: ["/fluent-bit/bin/fluent-bit"]
+    command: ["-c", "/fluent-bit/etc/fluent-bit.yaml"]
+    volumes:
+      - ./fluent-bit/fluent-bit.yaml:/fluent-bit/etc/fluent-bit.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /srv/data/platform/fluent-bit:/fluent-bit/state
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      victorialogs:
+        condition: service_healthy
+    networks:
       - observability
 
 networks:
   edge:
     external: true
-  # Internal, created by the deploy scripts (ADR 19).
   analytics-dev:
     external: true
-  # Internal, created by both deploy scripts (ADR 22).
   observability:
     external: true

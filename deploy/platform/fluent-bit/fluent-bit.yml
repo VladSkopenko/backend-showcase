@@ -1,0 +1,30 @@
+service:
+  flush: 5
+
+parsers:
+  - name: app_json
+    format: json
+
+pipeline:
+  inputs:
+    - name: tail
+      path: /var/lib/docker/containers/*/*-json.log
+      multiline.parser: docker
+      tag: docker.*
+      db: /fluent-bit/state/tail.db
+
+  filters:
+    - name: parser
+      match: docker.*
+      key_name: log
+      parser: app_json
+      reserve_data: on
+
+  outputs:
+    - name: http
+      match: "*"
+      host: victorialogs
+      port: 9428
+      uri: /insert/jsonline?_stream_fields=stream&_msg_field=message,log&_time_field=date
+      format: json_lines
+      json_date_format: iso8601
