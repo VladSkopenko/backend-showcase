@@ -1,11 +1,18 @@
 # One compose file for every environment; only /srv/app/<env>/.env differs.
 # deploy.sh runs it as project app-<env> and writes APP_ENV, IMAGE and the stdin secrets into that .env.
 # That .env feeds interpolation only: a container gets a value only when it is declared under environment.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # On the project's default network and its own analytics network, never on edge.
   postgres:
     image: postgres:18
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 512m
     command: postgres -c shared_buffers=128MB
     environment:
@@ -34,6 +41,7 @@ services:
   api:
     image: ${IMAGE:?IMAGE is written by deploy.sh}
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 256m
     environment:
       APP_ENVIRONMENT: ${APP_ENV:?APP_ENV is written by deploy.sh}
@@ -73,6 +81,7 @@ services:
   postgres-exporter:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.21.1
     restart: unless-stopped
+    logging: *default-logging
     # Measured in a local dry run: about 11 MB.
     mem_limit: 32m
     command:
