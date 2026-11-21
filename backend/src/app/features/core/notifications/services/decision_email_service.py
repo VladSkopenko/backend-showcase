@@ -41,5 +41,5 @@ class DecisionEmailService:
             )
         except Exception:
             logger.exception(
-                "Sending the %s email to %s failed", notice.kind.value, recipient.email
+                "Sending the %s email to user %s failed", notice.kind.value, recipient.user_id
             )

@@ -25,4 +25,6 @@ class VerificationEmailService:
             )
             await self._sender.send(to=to, subject=email.subject, html=email.html, text=email.text)
         except Exception:
-            logger.exception("Sending the %s email to %s failed", issued.purpose.value, to)
+            logger.exception(
+                "Sending the %s email to user %s failed", issued.purpose.value, issued.user.id
+            )

@@ -517,8 +517,9 @@ async def test_unconfigured_email_is_logged_without_the_code(
         response = await client.post("/api/v1/auth/register", json=registration())
 
     assert response.status_code == 201
-    records = [record for record in caplog.records if "ada@example.com" in record.getMessage()]
+    records = [record for record in caplog.records if "Email not sent" in record.getMessage()]
     assert records
+    assert "ada@example.com" not in caplog.text
     expected_level = logging.WARNING if environment == "local" else logging.ERROR
     assert all(record.levelno == expected_level for record in records)
     assert "987654" not in caplog.text

@@ -1,7 +1,14 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   init:
     image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
     restart: "no"
+    logging: *default-logging
     mem_limit: 32m
     network_mode: none
     volumes:
@@ -21,6 +28,7 @@ services:
   caddy:
     image: caddy:2.11@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 128m
     depends_on:
       init:
@@ -38,6 +46,7 @@ services:
   tailscale:
     image: tailscale/tailscale:v1.104.7@sha256:72c1e19e0aedca96b8533bbb0b4368564410ff20b17e53b804eb6c1f04a31be4
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 128m
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY:?TS_AUTHKEY comes from the GitHub Environment}
@@ -63,6 +72,7 @@ services:
   n8n:
     image: n8nio/n8n:2.47.7@sha256:b4b90747b81fcda7e76550c0d3aa7f0f64917a1e9573cff40d6834eaf2e0f8ea
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 768m
     environment:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY comes from the GitHub Environment}
@@ -92,6 +102,7 @@ services:
   grafana:
     image: grafana/grafana:13.2.6@sha256:b21409d7951ddcfd63a4b49083e4ef2cc35bc1437d071813bf82bfb238b00bca
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 768m
     environment:
       GF_SERVER_ROOT_URL: https://backend-showcase-grafana.duckdns.org
@@ -125,6 +136,7 @@ services:
   prometheus:
     image: prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 512m
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -150,6 +162,7 @@ services:
   node-exporter:
     image: prom/node-exporter:v1.13.1@sha256:7296504d4ada44b7d7ab4431e27e9f9900d8488f8d55842f4b12ae2704e16dfe
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 32m
     command:
       - --path.rootfs=/host
@@ -173,6 +186,7 @@ services:
   victorialogs:
     image: victoriametrics/victoria-logs:v1.54.0@sha256:ee4e820cac3721f5f5d91641b950c22439593adc4224f9655e5333d5a84c1dfe
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 256m
     command:
       - -storageDataPath=/victoria-logs-data
@@ -195,6 +209,7 @@ services:
   fluent-bit:
     image: fluent/fluent-bit:5.1.5@sha256:25435e66b8da34975a615979e1297163f93690011d4d1900b6fa542e84ffb35f
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 64m
     entrypoint: ["/fluent-bit/bin/fluent-bit"]
     command: ["-c", "/fluent-bit/etc/fluent-bit.yaml"]
