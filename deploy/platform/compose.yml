@@ -199,7 +199,7 @@ services:
     entrypoint: ["/fluent-bit/bin/fluent-bit"]
     command: ["-c", "/fluent-bit/etc/fluent-bit.yaml"]
     volumes:
-      - ./fluent-bit/fluent-bit.yaml:/fluent-bit/etc/fluent-bit.yaml:ro
+      - ./fluent-bit:/fluent-bit/etc:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /srv/data/platform/fluent-bit:/fluent-bit/state
     depends_on:
