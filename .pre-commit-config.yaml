@@ -1,0 +1,19 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  - repo: local
+    hooks:
+      - id: backend-checks
+        name: backend checks (mypy, import-linter, pytest)
+        entry: bash -c 'cd backend && uv run mypy src tests && uv run lint-imports && uv run pytest -q'
+        language: system
+        pass_filenames: false
+        files: ^backend/
+        stages: [pre-push]

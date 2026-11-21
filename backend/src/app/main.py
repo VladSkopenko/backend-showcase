@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, Request
@@ -16,8 +16,8 @@ from app.common.error_responses import (
     validation_error_response,
 )
 from app.common.errors import DomainError
-from app.config.settings import Settings, get_settings
 from app.config.log_setup import configure_logging
+from app.config.settings import Settings, get_settings
 from app.features.assistant.endpoints import ERROR_STATUSES as ASSISTANT_ERROR_STATUSES
 from app.features.assistant.endpoints import AssistantOpenApiTags
 from app.features.assistant.endpoints import router as assistant_router
@@ -72,7 +72,7 @@ ROUTERS: list[tuple[APIRouter, str]] = [
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings: Settings = app.state.settings
     metrics_server = MetricsServer(port=settings.metrics.port, registry=app.state.metrics_registry)
     metrics_server.start()
