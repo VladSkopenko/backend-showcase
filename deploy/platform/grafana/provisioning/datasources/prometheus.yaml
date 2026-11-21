@@ -1,9 +1,9 @@
-# Grafana reads this on every start and makes the data source match it (ADR 15).
+# Grafana reads this on every start and makes the data source match it.
 apiVersion: 1
 
 datasources:
   # The API's request metrics and the host's node exporter. Anonymous Viewers can send any PromQL
-  # through it, so Prometheus holds only those series and limits every query (ADR 22).
+  # through it, so Prometheus holds only those series and limits every query.
   # The name stays: renaming a provisioned source with the same uid stops Grafana at its next start.
   - name: API metrics (Prometheus)
     # Fixed, so the api dashboard provisioned from the repository can refer to it.

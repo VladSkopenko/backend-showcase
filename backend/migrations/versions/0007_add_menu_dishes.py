@@ -18,7 +18,7 @@ down_revision: str | Sequence[str] | None = "0006"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# Deploys cannot run the seed script (no human path to the server, ADR 2), so the menu ships as
+# Deploys cannot run the seed script (no human path to the server), so the menu ships as
 # data. The pictures are already in the bucket under dishes/<slug>.jpg.
 NEWEST = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
 

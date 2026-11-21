@@ -4,8 +4,6 @@
 !.env.example
 *.tfvars
 !*.tfvars.example
-CLAUDE.local.md
-.claude/settings.local.json
 
 # Python
 __pycache__/
@@ -41,7 +39,3 @@ backend/seed/
 
 # Local n8n state: its database, encryption key and saved credentials
 n8n/data/
-
-# The BMAD method install (installer-managed); the specs it produces stay in _bmad_output/
-_bmad/
-.claude/skills/

@@ -101,8 +101,8 @@ jobs:
             if [ "$FOUND" = "true" ]; then echo "- Reused an existing image"; else echo "- Built, scanned and pushed"; fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # CI reaches the VM only through the tailnet, as an ephemeral tag:ci node (ADR 2).
-  # The server runs the deploy entrypoint for the key's target and verifies the commit (ADR 3).
+  # CI reaches the VM only through the tailnet, as an ephemeral tag:ci node.
+  # The server runs the deploy entrypoint for the key's target and verifies the commit.
   deploy-dev:
     name: Deploy dev
     needs: image
@@ -154,7 +154,7 @@ jobs:
           echo "$out"
           echo "### Dev: $out" >> "$GITHUB_STEP_SUMMARY"
 
-  # The platform has no environments to promote between, so every push to main deploys it (ADR 15).
+  # The platform has no environments to promote between, so every push to main deploys it.
   # No path filter: its inputs also live outside deploy/platform/, and compose restarts only changed services.
   deploy-platform:
     name: Deploy platform

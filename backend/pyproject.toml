@@ -53,7 +53,7 @@ filterwarnings = [
     "ignore:'asyncio.iscoroutinefunction' is deprecated:DeprecationWarning",
 ]
 
-# Import rules from docs/adr/0011-feature-sliced-backend-layout.md.
+# Import rules of the feature-sliced layout.
 # `*` matches one module level, `**` any depth; a wildcard that matches nothing passes.
 # A plain module name must exist, so packages not created yet use `.**`. When such a package
 # appears, drop the `.**` so its own __init__ is checked too.
@@ -62,7 +62,7 @@ root_package = "app"
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-# ai_tools sits beside endpoints as a second adapter over services (ADR 20).
+# ai_tools sits beside endpoints as a second adapter over services.
 name = "Feature layers: endpoints > services > repositories > models"
 type = "layers"
 containers = ["app.features.*", "app.features.core.*"]
@@ -136,7 +136,7 @@ ignore_imports = [
     "app.features.** -> app.features.core",
     "app.features.** -> app.features.application_services",
     "app.features.application_services -> app.features.**",
-    # The assistant composes every feature's model-facing tools (ADR 20).
+    # The assistant composes every feature's model-facing tools.
     "app.features.assistant.** -> app.features.*.ai_tools",
     "app.features.assistant.** -> app.features.*.ai_tools.**",
 ]
@@ -150,7 +150,7 @@ source_modules = ["app.common", "app.features.core"]
 forbidden_modules = ["app.features.*"]
 
 [[tool.importlinter.contracts]]
-# Bookings hands the decision emails their notices one way (ADR 21); the reverse would make a core
+# Bookings hands the decision emails their notices one way; the reverse would make a core
 # cycle.
 name = "Notifications import nothing from bookings"
 type = "forbidden"

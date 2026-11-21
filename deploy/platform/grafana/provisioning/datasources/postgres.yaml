@@ -1,8 +1,8 @@
-# Grafana reads this on every start and makes the data source match it (ADR 15).
+# Grafana reads this on every start and makes the data source match it.
 apiVersion: 1
 
 datasources:
-  # The dev database through the role that sees no emails, hashes or tokens (ADR 19).
+  # The dev database through the role that sees no emails, hashes or tokens.
   - name: Restaurant (dev)
     # Fixed, so the dashboards provisioned from the repository can refer to it.
     uid: restaurant-dev

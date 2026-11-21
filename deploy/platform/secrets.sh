@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stores the platform secrets in the GitHub Environment "platform" (ADR 15). Run it locally from the
+# Stores the platform secrets in the GitHub Environment "platform". Run it locally from the
 # repository: with no arguments it sets only the secrets that are missing; with names it (re)sets
 # exactly those, e.g. `deploy/platform/secrets.sh TS_AUTHKEY` to rotate one.
 # Needs: gh (signed in with access to the repo), openssl, docker (for the bcrypt hash and the SCRAM verifier).
@@ -49,7 +49,7 @@ if wanted N8N_OWNER_PASSWORD_HASH; then
   store N8N_OWNER_PASSWORD_HASH "$hash"
 fi
 
-# Grafana's read-only database role on dev (ADR 19). The password goes only to GitHub; its
+# Grafana's read-only database role on dev. The password goes only to GitHub; its
 # SCRAM verifier is public and goes into the migration that creates the role. postgres:18
 # computes it in single-user mode with the password on stdin. stderr is dropped: a failing
 # statement would be logged together with the password.

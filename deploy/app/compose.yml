@@ -1,8 +1,8 @@
-# One compose file for every environment; only /srv/app/<env>/.env differs (ADR 6).
+# One compose file for every environment; only /srv/app/<env>/.env differs.
 # deploy.sh runs it as project app-<env> and writes APP_ENV, IMAGE and the stdin secrets into that .env.
 # That .env feeds interpolation only: a container gets a value only when it is declared under environment.
 services:
-  # On the project's default network and its own analytics network, never on edge (AD-13, ADR 19).
+  # On the project's default network and its own analytics network, never on edge.
   postgres:
     image: postgres:18
     restart: unless-stopped
@@ -15,7 +15,7 @@ services:
       # Must be alphanumeric (openssl rand -hex 32): .env values are unquoted, so $, " #" or a newline get mangled.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD comes from the GitHub Environment}
     volumes:
-      # PostgreSQL 18 keeps PGDATA under /var/lib/postgresql/18/docker; the data volume survives VM replacement (AD-11).
+      # PostgreSQL 18 keeps PGDATA under /var/lib/postgresql/18/docker; the data volume survives VM replacement.
       - /srv/data/${APP_ENV:?APP_ENV is written by deploy.sh}/postgres:/var/lib/postgresql
     healthcheck:
       # TCP, not the socket: during first init the temporary server listens only on the unix socket.
@@ -26,7 +26,7 @@ services:
     networks:
       # Listing any network drops the implicit default, so it is named here: the API reaches postgres on it.
       default:
-      # Grafana reads dev here as app-dev-postgres (ADR 19). On staging and prod nothing else joins yet.
+      # Grafana reads dev here as app-dev-postgres. On staging and prod nothing else joins yet.
       analytics:
         aliases:
           - app-${APP_ENV:?APP_ENV is written by deploy.sh}-postgres
@@ -59,17 +59,17 @@ services:
         condition: service_healthy
     networks:
       default:
-      # Caddy and n8n reach each environment's API as app-<env>-api (AD-13, AD-15).
+      # Caddy and n8n reach each environment's API as app-<env>-api.
       edge:
         aliases:
           - app-${APP_ENV:?APP_ENV is written by deploy.sh}-api
-      # Prometheus scrapes the metrics port as app-<env>-api:9000 (ADR 22).
+      # Prometheus scrapes the metrics port as app-<env>-api:9000.
       observability:
         aliases:
           - app-${APP_ENV:?APP_ENV is written by deploy.sh}-api
 
   # Dev only: deploy.sh starts it after the API. Prometheus scrapes it as
-  # app-<env>-postgres-exporter:9187 (ADR 22); no published port, never on edge.
+  # app-<env>-postgres-exporter:9187; no published port, never on edge.
   postgres-exporter:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.21.1
     restart: unless-stopped
@@ -80,7 +80,7 @@ services:
       - --datasource.uri=postgres:5432/app?sslmode=disable
       # The plain login role may not call pg_ls_waldir, so this collector would only fail.
       - --no-collector.wal
-      # Anonymous Grafana Viewers can query every stored series (ADR 22): no server settings
+      # Anonymous Grafana Viewers can query every stored series: no server settings
       # and none of the exporter's own Go, process and build metrics.
       - --no-collector.settings
       - --web.disable-exporter-metrics
