@@ -20,6 +20,7 @@ from sqlalchemy.pool import NullPool
 from app.common import database
 from app.config import settings as settings_module
 from app.config.settings import get_settings
+from app.infrastructure.rate_limit import limiter
 
 pytest.register_assert_rewrite("support")
 pytest_plugins = ["support.booking_fixtures", "support.preorder_fixtures"]
@@ -61,10 +62,16 @@ def isolated_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
                 "OPENAI_",
                 "ASSISTANT_",
                 "METRICS_",
+                "RATE_LIMIT_",
             )
         ):
             monkeypatch.delenv(name)
     monkeypatch.setenv("MEDIA_PUBLIC_BASE_URL", TEST_MEDIA_PUBLIC_BASE_URL)
+
+
+@pytest.fixture(autouse=True)
+def rate_limits_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(limiter, "enabled", False)
 
 
 @pytest.fixture

@@ -198,6 +198,12 @@ class MetricsSettings(BaseSettings):
     port: int = 9000
 
 
+class RateLimitSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="RATE_LIMIT_", env_file=ENV_FILE, extra="ignore")
+
+    storage_uri: str = "memory://"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -215,6 +221,7 @@ class Settings(BaseSettings):
     openai: OpenAISettings = Field(default_factory=OpenAISettings)
     assistant: AssistantSettings = Field(default_factory=AssistantSettings)
     metrics: MetricsSettings = Field(default_factory=MetricsSettings)
+    rate_limit: RateLimitSettings = Field(default_factory=RateLimitSettings)
 
     @classmethod
     def settings_customise_sources(

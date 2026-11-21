@@ -5,6 +5,7 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from prometheus_client import CollectorRegistry
+from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -12,6 +13,7 @@ from app.common.database import get_engine, get_sessionmaker
 from app.common.error_responses import (
     domain_error_response,
     http_error_response,
+    rate_limited_response,
     server_error_response,
     validation_error_response,
 )
@@ -46,6 +48,7 @@ from app.infrastructure.background_tasks import CleanupJob, PeriodicTask, Reques
 from app.infrastructure.email import create_email_sender
 from app.infrastructure.metrics import MetricsServer, RequestMetricsMiddleware, RouteTemplates
 from app.infrastructure.oauth import OAuthClients
+from app.infrastructure.rate_limit import RateLimitMiddleware, limiter, retry_after_seconds
 
 ERROR_STATUSES = {
     **AUTH_ERROR_STATUSES,
@@ -139,6 +142,8 @@ def create_app() -> FastAPI:
         same_site="lax",
         https_only=True,
     )
+    app.state.limiter = limiter
+    app.add_middleware(RateLimitMiddleware)
     app.state.metrics_registry = CollectorRegistry()
     app.add_middleware(
         RequestMetricsMiddleware,
@@ -157,6 +162,10 @@ def create_app() -> FastAPI:
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         return validation_error_response(exc)
+
+    @app.exception_handler(RateLimitExceeded)
+    def handle_rate_limit(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+        return rate_limited_response(retry_after=retry_after_seconds(request))
 
     @app.exception_handler(HTTPException)
     async def handle_http_error(request: Request, exc: HTTPException) -> JSONResponse:
