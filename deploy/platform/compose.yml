@@ -16,6 +16,7 @@ services:
         install -d -o 472   -g 0     -m 700 /data/grafana
         install -d -o 65534 -g 65534 -m 700 /data/prometheus
         install -d -o 0     -g 0     -m 700 /data/victorialogs
+        install -d -o 0     -g 0     -m 700 /data/fluent-bit
 
   caddy:
     image: caddy:2.11@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
@@ -189,6 +190,24 @@ services:
         condition: service_completed_successfully
     networks:
       - default
+      - observability
+
+  fluent-bit:
+    image: fluent/fluent-bit:5.1.5@sha256:25435e66b8da34975a615979e1297163f93690011d4d1900b6fa542e84ffb35f
+    restart: unless-stopped
+    mem_limit: 64m
+    entrypoint: ["/fluent-bit/bin/fluent-bit"]
+    command: ["-c", "/fluent-bit/etc/fluent-bit.yaml"]
+    volumes:
+      - ./fluent-bit/fluent-bit.yaml:/fluent-bit/etc/fluent-bit.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /srv/data/platform/fluent-bit:/fluent-bit/state
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      victorialogs:
+        condition: service_healthy
+    networks:
       - observability
 
 networks:
